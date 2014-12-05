@@ -208,7 +208,7 @@ function GameScene(){
 	
 	this.getPointOnFloor = function(x, y){
 		var screenPoint = new THREE.Vector3((x / (window.innerWidth) ) * 2 - 1, -(y / (window.innerHeight) ) * 2 + 1, 1.0);
-		this.projector.unprojectVector(screenPoint, this.camera );
+		screenPoint.unproject(this.camera); //this.projector.unprojectVector(screenPoint, this.camera );
 		this.raycaster.set(this.camera.position, screenPoint.sub(this.camera.position).normalize());
 
 		// mouse coord on floor plane

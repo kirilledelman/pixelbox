@@ -1128,28 +1128,24 @@ THREE.PixelBox.updateLights = function(scene, updateAllMaterials){
 		}		
 	}
 
-	var numLights = scene.__lights.length;
 	var shadowMapIndex = 0;
-	for(var i = 0; i < numLights; i++){
-		var light = scene.__lights[i];
-		if(light.visible) {
-			if (light instanceof THREE.SpotLight){
-				uniforms.actualSpotLights.value++;
-				if(light.castShadow && renderer.webgl.shadowMapEnabled) { 
-					uniforms.spotLightShadowMap.value.push(++shadowMapIndex);
-				} else uniforms.spotLightShadowMap.value.push(0);
-			} else if(light instanceof THREE.DirectionalLight){
-				uniforms.actualDirLights.value++;
-				if(light.castShadow && renderer.webgl.shadowMapEnabled) { 
-					uniforms.directionalLightShadowMap.value.push(++shadowMapIndex);
-				} else uniforms.directionalLightShadowMap.value.push(0);
-			} else if(light instanceof THREE.HemisphereLight){
-				uniforms.actualHemiLights.value++;
-			} else if(light instanceof THREE.PointLight){
-				uniforms.actualPointLights.value++;
-			}
+	scene.traverseVisible(function(light){
+		if (light instanceof THREE.SpotLight){
+			uniforms.actualSpotLights.value++;
+			if(light.castShadow && renderer.webgl.shadowMapEnabled) { 
+				uniforms.spotLightShadowMap.value.push(++shadowMapIndex);
+			} else uniforms.spotLightShadowMap.value.push(0);
+		} else if(light instanceof THREE.DirectionalLight){
+			uniforms.actualDirLights.value++;
+			if(light.castShadow && renderer.webgl.shadowMapEnabled) { 
+				uniforms.directionalLightShadowMap.value.push(++shadowMapIndex);
+			} else uniforms.directionalLightShadowMap.value.push(0);
+		} else if(light instanceof THREE.HemisphereLight){
+			uniforms.actualHemiLights.value++;
+		} else if(light instanceof THREE.PointLight){
+			uniforms.actualPointLights.value++;
 		}
-	}
+	});
 };
 
 /* 

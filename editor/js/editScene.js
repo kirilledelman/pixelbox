@@ -392,7 +392,7 @@ EditScene.prototype = {
 		
 		// set up projection
 		var screenPoint = new THREE.Vector3((this.mouseCoord.x / window.innerWidth ) * 2 - 1, -(this.mouseCoord.y / window.innerHeight ) * 2 + 1, 1.0);
-		this.projector.unprojectVector(screenPoint, this.camera );
+		screenPoint.unproject(this.camera); //this.projector.unprojectVector(screenPoint, this.camera );
 		this.raycaster.set(this.camera.position, screenPoint.sub(this.camera.position).normalize());
 		this.raycaster.camRight = new THREE.Vector3(1,0,0);
 		this.raycaster.camUp = new THREE.Vector3(0,1,0);
@@ -798,7 +798,7 @@ EditScene.prototype = {
 
 		// trace ray to determine if mouse is over model
 		var screenPoint = new THREE.Vector3((this.mouseCoord.x / window.innerWidth ) * 2 - 1, -(this.mouseCoord.y / window.innerHeight ) * 2 + 1, 1.0);
-		this.projector.unprojectVector(screenPoint, this.camera );
+		screenPoint.unproject(this.camera);//this.projector.unprojectVector(screenPoint, this.camera );
 		this.raycaster.set(this.camera.position, screenPoint.sub(this.camera.position).normalize());
 
 		// mask intersection
@@ -966,7 +966,7 @@ EditScene.prototype = {
 		this.origPastePosition = this.paste.position.clone();
 		
 		// create drag plane
-		this.dragPlane = new THREE.Mesh(new THREE.PlaneGeometry(500,500,4,4), new THREE.MeshBasicMaterial({color:0xff0000, wireframe:true, side: THREE.DoubleSide }));
+		this.dragPlane = new THREE.Mesh(new THREE.PlaneBufferGeometry(500,500,4,4), new THREE.MeshBasicMaterial({color:0xff0000, wireframe:true, side: THREE.DoubleSide }));
 		this.scene.add(this.dragPlane);
 		this.dragPlane.visible = false;
 		
@@ -1437,7 +1437,7 @@ EditScene.prototype = {
 		this.origMaskSize = this.maskSize.clone();
 		
 		// create drag plane
-		this.dragPlane = new THREE.Mesh(new THREE.PlaneGeometry(300,300,4,4), new THREE.MeshBasicMaterial({color:0xff0000, wireframe:true, side: THREE.DoubleSide }));
+		this.dragPlane = new THREE.Mesh(new THREE.PlaneBufferGeometry(300,300,4,4), new THREE.MeshBasicMaterial({color:0xff0000, wireframe:true, side: THREE.DoubleSide }));
 		this.scene.add(this.dragPlane);
 		this.dragPlane.visible = false;
 		
@@ -1562,7 +1562,7 @@ EditScene.prototype = {
 			// create drag handles
 			this.maskHandles = [];
 			var handle;
-			geom = new THREE.PlaneGeometry(1,1,1);
+			geom = new THREE.PlaneBufferGeometry(1,1,1);
 			mat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF, transparent: true, opacity: 0.5 });
 			handle = new THREE.Mesh(geom, mat);
 			handle.position.set(0,0,0.5);
@@ -4979,7 +4979,7 @@ EditScene.prototype = {
 		this.geomCube.computeBoundingBox();
 		
 		// shadow preview plane
-		this.shadowPreviewPlane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1, 10, 10), new THREE.MeshPixelBoxMaterial({color: 0x333333}));
+		this.shadowPreviewPlane = new THREE.Mesh(new THREE.PlaneBufferGeometry(1, 1, 10, 10), new THREE.MeshPixelBoxMaterial({color: 0x333333}));
 		this.shadowPreviewPlane.rotation.x = -Math.PI * 0.5;
 		this.shadowPreviewPlane.receiveShadow = true;
 		this.shadowPreviewPlane.visible = (localStorage.getItem('floorHidden') !== 'true');

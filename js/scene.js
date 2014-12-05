@@ -188,7 +188,7 @@ Scene.prototype = {
 					break;					
 				case 'Plane':
 					if(!obj3d) {
-						var geom = new THREE.PlaneGeometry(1,1,2,2);
+						var geom = new THREE.PlaneBufferGeometry(1,1,2,2);
 						var mat = new THREE.MeshPixelBoxMaterial({ color: new THREE.Color(layer.color != undefined ? parseInt(layer.color,16) : 0xffffff) });
 						obj3d = new THREE.Mesh(geom, mat);
 					} else {
@@ -411,7 +411,7 @@ Scene.prototype = {
 	
 	/* convert 3d pos to 2d for html */
 	getScreenCoord:function(pos){
-		var vector = this.projector.projectVector(pos, this.camera);
+		var vector = pos.project(this.camera); // this.projector.projectVector(pos, this.camera);
         vector.x = (vector.x + 1) * window.innerWidth * 0.5;
         vector.y = (1.0 - vector.y) * window.innerHeight * 0.5;
         return vector;
