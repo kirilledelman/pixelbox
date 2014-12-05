@@ -1,8 +1,6 @@
 /*
 
 
-	Make identical frames use same framebuffers internally - for long mostly empty anims (decodeFrame)
-
 
 	Events:
 		frame
@@ -859,6 +857,22 @@ THREE.PixelBox = function(data){
 	var pc = new THREE.PointCloud(geometry, material);
 	pc.customDepthMaterial = depthMaterial;
 	pc.castShadow = pc.receiveShadow = true;
+	pc.pixelBox = true;
+	
+	// create anchors
+	pc.anchors = {};
+	if(data.anchors){
+		for(var aname in data.anchors){
+			var obj3d = new THREE.Object3D();
+			obj3d.isContainer = true;
+			obj3d.name = aname;
+			obj3d.visible = false;
+			pc.add(obj3d);
+			pc.anchors[aname] = obj3d;
+		}
+	} else {
+		data.anchors = {};
+	}
 	
 	// create frame setter on pointcloud
 	geometry.data = data;
@@ -875,26 +889,39 @@ THREE.PixelBox = function(data){
 		f = f % data.frameData.length;
 		geom._frame = f;
 		
-		// apply buffers
+		// init buffer if needed
 		var fd = data.frameData[f];
-		geom.addAttribute( 'position', fd.p);
-		geom.addAttribute( 'color', fd.c);
-		geom.addAttribute( 'normal', fd.n);
-		geom.addAttribute( 'occlude', fd.o);
-		//geom.computeBoundingSphere();
-
-		// create buffers if needed
-		if(!fd.p.buffer){
-			var _gl = renderer.webgl.context;
-			for (var name in geom.attributes) {
-				var bufferType = ( name === 'index' ) ? _gl.ELEMENT_ARRAY_BUFFER : _gl.ARRAY_BUFFER;
-				var attribute = geom.attributes[ name ];
-				if(!attribute.buffer){
-					attribute.buffer = _gl.createBuffer();
-					var res = _gl.bindBuffer( bufferType, attribute.buffer );
-					_gl.bufferData( bufferType, attribute.array, _gl.STATIC_DRAW );
+		if(fd.p){
+			// add attributes
+			geom.addAttribute( 'position', fd.p);
+			geom.addAttribute( 'color', fd.c);
+			geom.addAttribute( 'normal', fd.n);
+			geom.addAttribute( 'occlude', fd.o);
+			
+			// create buffers if needed
+			if(!fd.p.buffer){
+				var _gl = renderer.webgl.context;
+				for (var name in geom.attributes) {
+					var bufferType = ( name === 'index' ) ? _gl.ELEMENT_ARRAY_BUFFER : _gl.ARRAY_BUFFER;
+					var attribute = geom.attributes[ name ];
+					if(!attribute.buffer){
+						attribute.buffer = _gl.createBuffer();
+						var res = _gl.bindBuffer( bufferType, attribute.buffer );
+						_gl.bufferData( bufferType, attribute.array, _gl.STATIC_DRAW );
+					}
 				}
 			}
+		}
+		
+		// set offset/length
+		// regular frame
+		if(fd.s != undefined){
+			this.vertexBufferStart = fd.s;
+			this.vertexBufferLength = fd.l;
+		// no offsets stored, use full range (editor)
+		} else if(fd.o){
+			this.vertexBufferStart = 0;
+			this.vertexBufferLength = fd.o.array.length;
 		}
 		
 		var ev = {type:'frame', frame: f};
@@ -919,22 +946,9 @@ THREE.PixelBox = function(data){
 		}),
 	});	
 	
-	// create anchors
-	pc.anchors = {};
-		if(data.anchors){
-		for(var aname in data.anchors){
-			var obj3d = new THREE.Object3D();
-			obj3d.isContainer = true;
-			obj3d.name = aname;
-			obj3d.visible = false;
-			pc.add(obj3d);
-			pc.anchors[aname] = obj3d;
-		}
-	} else {
-		data.anchors = {};
-	}
-	
 	// set frame / anim params
+	pc.vertexBufferStart = 0;
+	pc.vertexBufferLength = 0;
 	pc.frame = 0;
 	pc.totalFrames = data.frameData.length;
 	
@@ -1089,6 +1103,7 @@ THREE.PixelBox.prototype.processPixelBoxFrames = function(data){
 			for(var f = 0; f < data.frames.length; f++){
 				data.frameData[f] = THREE.PixelBox.decodeFrame(data, f);
 			}
+			THREE.PixelBox.finalizeFrames(data);
 		}
 		
 		// change anims to an object
@@ -1231,6 +1246,8 @@ THREE.PointCloud.prototype.advanceTweenFrame = function(){
 		this._tweenInterval = setTimeout(this.advanceTweenFrame, nextFrameIn * 1000);
 	}
 };
+
+THREE.PointCloud.prototype.pixelBox = false;
 
 THREE.PointCloud.prototype.tween = function(obj){
 	if(!_.isArray(obj)) obj = [obj];
@@ -1424,13 +1441,11 @@ THREE.PointCloud.prototype.stopAnim = function(){
 	of elements { c: hexcolor, a: floatAlpha, b: floatBrightness }
 	
 	
-	returns {p:posAttr, c:colorAttr, n:normAttr, o:occlusionAttr }; (all BufferAttributes)
-	to be stored in dataObject.frameData array during PixelBox's initialization
 		
 */
 
 THREE.PixelBox.decodeFrame = function(dataObject, frameIndex){
-	var startTime = new Date();
+	//var startTime = new Date();
 	var smoothNormals = dataObject.smoothNormals != undefined ? dataObject.smoothNormals : 1.0;
 	var floor = dataObject.floor != undefined ? dataObject.floor : false;
 	var optimize = dataObject.optimize != undefined ? dataObject.optimize : true;
@@ -1512,7 +1527,7 @@ THREE.PixelBox.decodeFrame = function(dataObject, frameIndex){
 		dataObject.frames[frameIndex] = assembledFrameData;
 		
 		if(sameAsLast){
-			return dataObject.frameData[frameIndex - 1];
+			return null;//dataObject.frameData[frameIndex - 1];
 		}
 	
 		// helper
@@ -1690,16 +1705,63 @@ THREE.PixelBox.decodeFrame = function(dataObject, frameIndex){
 	// if(optimize) console.log("Optimized "+(normals.length / 3)+" from "+(normals.length / 3 + optimizeRemoved) +" with smoothNormals = "+smoothNormals);
 	
 	// return buffers
-	var posAttr = new THREE.BufferAttribute(new Float32Array(positions), 3);
-	var colorAttr = new THREE.BufferAttribute(new Float32Array(colors), 4);
-	var normAttr = new THREE.BufferAttribute(new Float32Array(normals), 3);
-	var occAttr = new THREE.BufferAttribute(new Float32Array(occlusion), 1);
+	//var posAttr = new THREE.BufferAttribute(new Float32Array(positions), 3);
+	//var colorAttr = new THREE.BufferAttribute(new Float32Array(colors), 4);
+	//var normAttr = new THREE.BufferAttribute(new Float32Array(normals), 3);
+	//var occAttr = new THREE.BufferAttribute(new Float32Array(occlusion), 1);
 	
-	var elapsedMs = (new Date()).getTime() - startTime.getTime();
-	THREE.PixelBox.lastDecodeMs = elapsedMs;
+	//var elapsedMs = (new Date()).getTime() - startTime.getTime();
+	//THREE.PixelBox.lastDecodeMs = elapsedMs;
 	//console.log("decode took "+elapsedMs+"ms");
 	
-	return {p:posAttr, c:colorAttr, n:normAttr, o:occAttr};
+	return {p:positions, c:colors, n:normals, o:occlusion};
+}
+
+/*
+	Finalizes loaded frames by concatenating frameData entries and creating BufferAttribute 
+	objects in first frame + storing frame offsets.
+	
+	Called after all decodeFrame have been completed.
+	
+	end result - dataObject.frameData[] contains
+	{p:posAttr, c:colorAttr, n:normAttr, o:occlusionAttr, s:startOffset, l:length }; (all BufferAttributes)
+	for the first frame and { s:startOffset, l:length } for consecutive frames (referring to 0 frame)
+
+*/
+THREE.PixelBox.finalizeFrames = function(dataObject){
+	var ffd = dataObject.frameData[0];
+	var curOffset = 0;
+	var lastNonEmpty = 0;
+	for(var f = 0; f < dataObject.frameData.length; f++){
+		var fd = dataObject.frameData[f];
+		// store offset
+		// non-empty
+		if(fd){
+			lastNonEmpty = f;
+			fd.s = curOffset;
+			fd.l = fd.o.length;
+			curOffset += fd.o.length;
+		// empty (same as previous)
+		} else {
+			dataObject.frameData[f] = dataObject.frameData[lastNonEmpty];
+		}
+		// concat arrays
+		if(f && fd){
+			ffd.p = ffd.p.concat(fd.p);
+			ffd.c = ffd.c.concat(fd.c);
+			ffd.n = ffd.n.concat(fd.n);
+			ffd.o = ffd.o.concat(fd.o);
+			delete fd.p;
+			delete fd.c;
+			delete fd.n;
+			delete fd.o;
+		}
+	}
+	// create buffers
+	ffd.p = new THREE.BufferAttribute(new Float32Array(ffd.p), 3);
+	ffd.c = new THREE.BufferAttribute(new Float32Array(ffd.c), 4);
+	ffd.n = new THREE.BufferAttribute(new Float32Array(ffd.n), 3);
+	ffd.o = new THREE.BufferAttribute(new Float32Array(ffd.o), 1);
 }
 
 /* 
@@ -1720,7 +1782,7 @@ THREE.PixelBox.decodeFrame = function(dataObject, frameIndex){
 */
 
 THREE.PixelBox.encodeFrame = function(frameData, dataObject){
-	var startTime = new Date();
+	//var startTime = new Date();
 	
 	// current frame number
 	var frameIndex = dataObject.frames.length;
@@ -1761,8 +1823,8 @@ THREE.PixelBox.encodeFrame = function(frameData, dataObject){
 	dataObject.frames.push(combine.join(''));
 	
 	// finished
-	var elapsedMs = (new Date()).getTime() - startTime.getTime();
-	THREE.PixelBox.lastEncodeMs = elapsedMs;
+	//var elapsedMs = (new Date()).getTime() - startTime.getTime();
+	//THREE.PixelBox.lastEncodeMs = elapsedMs;
 	// console.log("encode took "+elapsedMs+"ms");
 }
 

@@ -172,7 +172,7 @@ function GameScene(){
 		if(!this.touchDown || this.levelComplete) return;
 		
 		var touch;
-		if(e.type == 'mousemove'){
+		if(e.type == 'mousemove' || e.type == 'mousedown'){
 			touch = e;
 		} else {
 			touch = e.originalEvent.targetTouches[0];	

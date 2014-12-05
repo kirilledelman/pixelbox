@@ -20429,11 +20429,25 @@ THREE.WebGLRenderer = function ( parameters ) {
 			var position = geometry.attributes.position;
 
 			// render particles
-
-			_gl.drawArrays( _gl.POINTS, 0, position.array.length / 3 );
-
+			/* 	Kirill Edelman:
+				To support PixelBox multi-frame rendering
+				replaced 
+					_gl.drawArrays( _gl.POINTS, 0, position.array.length / 3 );
+					_this.info.render.calls ++;
+					_this.info.render.points += position.array.length / 3;
+				with the following:
+			*/
+			
+			if(object.pixelBox){
+				_gl.drawArrays( _gl.POINTS, object.vertexBufferStart, object.vertexBufferLength);//position.array.length / 3);
+				_this.info.render.points += object.vertexBufferLength;
+			} else {
+				_gl.drawArrays( _gl.POINTS, 0, position.array.length / 3 );
+				_this.info.render.points += position.array.length / 3;
+			}
 			_this.info.render.calls ++;
-			_this.info.render.points += position.array.length / 3;
+			
+			/* end replace */
 
 		} else if ( object instanceof THREE.Line ) {
 

@@ -4,35 +4,24 @@
 	
 	upon load optimize, smooth, and other "preview" values arent populated
 
-	Next:
-
-	Enter key should hit default confirm button in dialogs (import)
-
-	Never start stroke if controls.state != none
+	Export options aren't remembered
 
 	# Improvements
-	
-	automaticColors could be based on hashes of the anim name - to avoid color jumping
-	
-	Save camera position with hold doc
-	
-	Export - download as file (open in new tab as data)
-			- download as file with higher compression?	
 
-	Only redraw screen when needed. Maybe skip rendering in renderer's render(), and just return after requesting anim frame?
+	Alt+click in fill mode should "delete fill"
+	
+	Shift+click in fill mode should "surface fill"
+	
+	Enter key should hit default confirm button in dialogs (import)
 
+	
 	# Minor bugs
 	
-	Deleting frames doesnt update range slider min/max and values
+	Resizing doc should reset selection
+	
 	
 	# Ideas / far future
 	
-	
-	Brush color op - normal, brighten, darken, opacity...
-	
-	Ghost model or brush - load a 3d model and use as a ghost for sculpting, or fill pixelbox / model intersection with current color 
-	
-	Encode option as PNG - send a picture 
 	
 */
 
