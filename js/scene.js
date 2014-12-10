@@ -8,7 +8,7 @@ function Scene(){
 	this.scene = new THREE.Scene();
 
 	// add fog
-	this.scene.fog = new THREE.Fog(0x0, 100000, 100000 );
+	this.scene.fog = new THREE.Fog(0x0, 100000, 10000000 );
 	
 	// camera & control
 	this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 2000000 );
@@ -93,9 +93,10 @@ Scene.prototype = {
 	},
 	
 	/* recursively populates object by adding layers */
-	populateObject:function(object, layers){
+	populateObject:function(object, layers, options){
 		var degToRad = Math.PI / 180;
 		var objectsCreated = [];
+		options = options ? options : {};
 		
 		// create layers
 		for(var i = 0; i < layers.length; i++){
@@ -103,129 +104,150 @@ Scene.prototype = {
 			// construct object
 			var obj3d = null;
 			var prevObj3d = null;
+			var helper = null;
 			
-			switch(layer.name){
-			case 'camera':
-				obj3d = this.camera; // only one camera - link to scene's camera
-				break;
-			
-			default:
-				// check if already added
-				if(layer.name){
-					if(object[layer.name]){
-						obj3d = object[layer.name];
-					}
-				}
-				
-				// try to get an object of the same type from pool
-				var objType = (typeof(layer.asset) == 'string') ? layer.asset : (this.assets[layer.asset].name);
-				if(!obj3d) obj3d = this.getObjectFromPool(objType);
-				prevObj3d = obj3d;
-				
-				// Special types of layers - lights, etc
-				switch(layer.asset){
-				case 'DirectionalLight':
-					if(!obj3d) obj3d = new THREE.DirectionalLight(0xffffff, 1.0);
-				    obj3d.shadowMapWidth = obj3d.shadowMapHeight = 1024;
-				    obj3d.shadowCameraNear = 5;
-				    //obj3d.shadowCameraVisible = true; 
-					obj3d.shadowCameraFar = 10000;
-					obj3d.shadowCameraRight = (layer.shadowVolumeWidth != undefined ? layer.shadowVolumeWidth : 256) * 0.5;
-				    obj3d.shadowCameraLeft = -obj3d.shadowCameraRight;
-					obj3d.shadowCameraTop = (layer.shadowVolumeHeight != undefined ? layer.shadowVolumeHeight : (obj3d.shadowCameraRight * 2)) * 0.5;
-					obj3d.shadowCameraBottom = -obj3d.shadowCameraTop;
-					obj3d.shadowBias = -0.0005;
-											
-					if(layer.shadowBias != undefined) obj3d.shadowBias = layer.shadowBias;
-					if(layer.color != undefined) obj3d.color.set(parseInt(layer.color, 16));
-					if(layer.intensity != undefined) obj3d.intensity = layer.intensity;
-					if(layer.shadowMapWidth != undefined) obj3d.shadowMapWidth = obj3d.shadowMapHeight = layer.shadowMapWidth;
-					
-					break;						
-				case 'SpotLight':
-					if(!obj3d) obj3d = new THREE.SpotLight(0xffffff, 1.0, 100, Math.PI / 3, 70);
-				    obj3d.shadowMapWidth = obj3d.shadowMapHeight = 1024;
-				    //obj3d.shadowCameraVisible = true; 
-				    obj3d.shadowCameraNear = 5;
-					obj3d.shadowCameraFar = obj3d.distance;
-					obj3d.shadowCameraRight = (layer.shadowVolumeWidth != undefined ? layer.shadowVolumeWidth : 256) * 0.5;
-				    obj3d.shadowCameraLeft = -obj3d.shadowCameraRight;
-					obj3d.shadowCameraTop = (layer.shadowVolumeHeight != undefined ? layer.shadowVolumeHeight : (obj3d.shadowCameraRight * 2)) * 0.5;
-					obj3d.shadowCameraBottom = -obj3d.shadowCameraTop;
-					obj3d.shadowBias = -0.0005;
-											
-					if(layer.shadowBias != undefined) obj3d.shadowBias = layer.shadowBias;
-					if(layer.color != undefined) obj3d.color.set(parseInt(layer.color, 16));
-					if(layer.intensity != undefined) obj3d.intensity = layer.intensity;
-					if(layer.distance != undefined) obj3d.shadowCameraFar = obj3d.distance = layer.distance;
-					if(layer.exponent != undefined) obj3d.exponent = layer.exponent;
-					if(layer.angle != undefined){
-						obj3d.angle = layer.angle * degToRad;
-						obj3d.shadowCameraFov = layer.angle;
-					}
-					if(layer.shadowMapWidth != undefined) obj3d.shadowMapWidth = obj3d.shadowMapHeight = layer.shadowMapWidth;
-					
-					if(layer.target != undefined) obj3d.target = object.anchors[layer.target];
-					
-					break;								
-				case 'PointLight':
-					if(!obj3d) obj3d = new THREE.PointLight(0xffffff, 1.0);
-					if(layer.color != undefined) obj3d.color.set(parseInt(layer.color, 16));
-					if(layer.intensity != undefined) obj3d.intensity = layer.intensity;
-					if(layer.distance != undefined) obj3d.distance = layer.distance;
-					
-					break;						
-				case 'HemisphereLight':
-					if(!obj3d) obj3d = new THREE.HemisphereLight(0xffffff, 0x003366, 0.5);
-					
-					if(layer.colors) { obj3d.color.set(parseInt(layer.colors[0], 16)); obj3d.groundColor.set(parseInt(layer.colors[1], 16)); }
-					if(layer.intensity != undefined) obj3d.intensity = layer.intensity;
-					
-					break;
-				case 'Object3D':
-					if(!obj3d) obj3d = new THREE.Object3D();
-					obj3d.isContainer = true;
-					break;					
-				case 'Plane':
-					if(!obj3d) {
-						var geom = new THREE.PlaneBufferGeometry(1,1,2,2);
-						var mat = new THREE.MeshPixelBoxMaterial({ color: new THREE.Color(layer.color != undefined ? parseInt(layer.color,16) : 0xffffff) });
-						obj3d = new THREE.Mesh(geom, mat);
-					} else {
-						obj3d.material.color = (layer.color != undefined ? parseInt(layer.color, 16) : 0xffffff);
-					}
-					break;
-				
-				// lookup asset by name
-				default:
-					var asset = assets.cache.get(layer.asset);
-					if(asset){
-						if(!obj3d) obj3d = new THREE.PixelBox(asset);
-					} else {
-						console.log("Asset not found - "+layer.asset);
-						if(!obj3d) obj3d = new THREE.Object3D();
-					}
-					break;	
-				}					
-					
-				if(layer.name){
-					obj3d.name = layer.name;
+			// check if already added
+			if(layer.name){
+				if(object[layer.name]){
+					obj3d = object[layer.name];
 				}
 			}
 			
-			//if(prevObj3d != obj3d && obj3d != this.camera){ console.log("Object "+layer.asset+" was created"); }
+			// try to get an object of the same type from pool
+			var objType = (typeof(layer.asset) == 'string') ? layer.asset : (this.assets[layer.asset].name);
+			if(!obj3d) obj3d = this.getObjectFromPool(objType);
+			prevObj3d = obj3d;
+			
+			// Special types of layers - lights, etc
+			switch(layer.asset){
+			case 'Camera':
+				if(options.createCameras){
+					obj3d = new THREE.PerspectiveCamera(60, 1, 1, 1000);
+					if(layer.fov != undefined) obj3d.fov = layer.fov;
+					if(layer.near != undefined) obj3d.near = layer.near;
+					if(layer.far != undefined) obj3d.far = layer.far;
+				} else {
+					obj3d = this.camera; // only one camera - link to scene's camera
+				}
+				if(options.helpers){
+					helper = new THREE.CameraHelper(obj3d);
+				}
+				break;
+			case 'DirectionalLight':
+				if(!obj3d) obj3d = new THREE.DirectionalLight(0xffffff, 1.0);
+			    obj3d.shadowMapWidth = obj3d.shadowMapHeight = 1024;
+			    obj3d.shadowCameraNear = 5;
+				obj3d.shadowCameraFar = 10000;
+				obj3d.shadowCameraRight = (layer.shadowVolumeWidth != undefined ? layer.shadowVolumeWidth : 256) * 0.5;
+			    obj3d.shadowCameraLeft = -obj3d.shadowCameraRight;
+				obj3d.shadowCameraTop = (layer.shadowVolumeHeight != undefined ? layer.shadowVolumeHeight : (obj3d.shadowCameraRight * 2)) * 0.5;
+				obj3d.shadowCameraBottom = -obj3d.shadowCameraTop;
+				obj3d.shadowBias = (layer.shadowBias != undefined ? layer.shadowBias : -0.0005);
+										
+				if(layer.color != undefined) obj3d.color.set(parseInt(layer.color, 16));
+				if(layer.intensity != undefined) obj3d.intensity = layer.intensity;
+				if(layer.shadowMapWidth != undefined) obj3d.shadowMapWidth = obj3d.shadowMapHeight = layer.shadowMapWidth;
+			    if(options.helpers) { 
+			    	helper = new THREE.DirectionalLightHelper(obj3d, 5);
+			    	obj3d.shadowCameraVisible = true;
+			    }
+				break;						
+			case 'SpotLight':
+				if(!obj3d) obj3d = new THREE.SpotLight(0xffffff, 1.0, 100, Math.PI / 3, 70);
+			    obj3d.shadowMapWidth = obj3d.shadowMapHeight = 1024;
+			    if(options.helpers) obj3d.shadowCameraVisible = true;
+			    obj3d.shadowCameraNear = 5;
+				obj3d.shadowCameraFar = obj3d.distance;
+				obj3d.shadowCameraRight = (layer.shadowVolumeWidth != undefined ? layer.shadowVolumeWidth : 256) * 0.5;
+			    obj3d.shadowCameraLeft = -obj3d.shadowCameraRight;
+				obj3d.shadowCameraTop = (layer.shadowVolumeHeight != undefined ? layer.shadowVolumeHeight : (obj3d.shadowCameraRight * 2)) * 0.5;
+				obj3d.shadowCameraBottom = -obj3d.shadowCameraTop;
+				obj3d.shadowBias = (layer.shadowBias != undefined ? layer.shadowBias : -0.0005);
+										
+				if(layer.color != undefined) obj3d.color.set(parseInt(layer.color, 16));
+				if(layer.intensity != undefined) obj3d.intensity = layer.intensity;
+				if(layer.distance != undefined) obj3d.shadowCameraFar = obj3d.distance = layer.distance;
+				if(layer.exponent != undefined) obj3d.exponent = layer.exponent;
+				if(layer.angle != undefined){
+					obj3d.angle = layer.angle * degToRad;
+					obj3d.shadowCameraFov = layer.angle;
+				}
+				if(layer.shadowMapWidth != undefined) obj3d.shadowMapWidth = obj3d.shadowMapHeight = layer.shadowMapWidth;
+				if(layer.target != undefined && object.anchors && object.anchors[layer.target]) obj3d.target = object.anchors[layer.target];
+				if(options.helpers) { 
+			    	helper = new THREE.SpotLightHelper(obj3d, 5);
+			    	obj3d.shadowCameraVisible = true;
+			    }
+				
+				break;								
+			case 'PointLight':
+				if(!obj3d) obj3d = new THREE.PointLight(0xffffff, 1.0);
+				if(layer.color != undefined) obj3d.color.set(parseInt(layer.color, 16));
+				if(layer.intensity != undefined) obj3d.intensity = layer.intensity;
+				if(layer.distance != undefined) obj3d.distance = layer.distance;
+				if(options.helpers) { 
+					helper = new THREE.PointLightHelper(obj3d, 5);
+				}
+				break;						
+			case 'HemisphereLight':
+				if(!obj3d) obj3d = new THREE.HemisphereLight(0xffffff, 0x003366, 0.5);
+				
+				if(layer.colors) { obj3d.color.set(parseInt(layer.colors[0], 16)); obj3d.groundColor.set(parseInt(layer.colors[1], 16)); }
+				if(layer.intensity != undefined) obj3d.intensity = layer.intensity;
+				
+				break;
+			case 'Object3D':
+				if(!obj3d) obj3d = new THREE.Object3D();
+				obj3d.isContainer = true;
+				break;					
+			case 'Plane':
+				if(!obj3d) {
+					var geom = new THREE.PlaneBufferGeometry(1,1,2,2);
+					var mat = new THREE.MeshPixelBoxMaterial({ color: new THREE.Color(layer.color != undefined ? parseInt(layer.color,16) : 0xffffff) });
+					obj3d = new THREE.Mesh(geom, mat);
+				} else {
+					obj3d.material.color = (layer.color != undefined ? parseInt(layer.color, 16) : 0xffffff);
+				}
+				break;
+			
+			// lookup asset by name
+			default:
+				var asset = assets.cache.get(layer.asset);
+				if(asset){
+					if(!obj3d) obj3d = new THREE.PixelBox(asset);
+				} else {
+					console.log("Deferred loading of "+layer.asset);
+					if(!obj3d) { 
+						// asset will be loaded later
+						// create placeholder
+						obj3d = new THREE.Object3D();
+						obj3d.isPlaceholder = true;
+						var a = new THREE.AxisHelper(1);
+						a.isHelper = true;
+						obj3d.add(a);
+					}
+				}
+				break;	
+			}					
+			
+			// store definition
+			obj3d.def = layer;
+			
+			// set name
+			if(layer.name){
+				obj3d.name = layer.name;
+			}
 			
 			// add as a child
 			if(!obj3d.parent) { 
 				// add to anchor, if specified
-				if(layer.anchor){
+				if(layer.anchor && object.anchors){
 					object.anchors[layer.anchor].add(obj3d);
-					obj3d.anchored = true;
 				// otherwise to object itself
 				} else {
 					object.add(obj3d);
-					obj3d.anchored = false;
 				}				
+				obj3d.anchored = layer.anchor ? layer.anchor : false;
 			} else if(obj3d != this.camera) {
 				//console.log("Object "+obj3d.name+" is already attached to parent");
 			}			
@@ -269,8 +291,17 @@ Scene.prototype = {
 			if(layer.castShadow != undefined) obj3d.castShadow = layer.castShadow;
 			if(layer.receiveShadow != undefined) obj3d.receiveShadow = layer.receiveShadow;
 			
-			if(layer.visible != undefined) obj3d.visible = layer.visible;
-			else obj3d.visible = true;
+			if(helper) { 
+				//obj3d.parent.add(helper);
+				this.scene.add(helper);
+				obj3d.helper = helper;
+				helper.isHelper = true;
+				helper.update();
+			}
+			
+			if(layer.visible != undefined) {
+				obj3d.visible = layer.visible;
+			} else obj3d.visible = true;
 			
 			// PixelBox specific
 			if(obj3d instanceof THREE.PointCloud){
@@ -280,7 +311,6 @@ Scene.prototype = {
 					var maxScale = Math.max(obj3d.scale.x, obj3d.scale.y, obj3d.scale.z);
 					obj3d.pointSize = maxScale + 0.1;
 				}
-
 				if(layer.alpha != undefined) { 
 					obj3d.alpha = layer.alpha;
 				} else {
@@ -321,7 +351,7 @@ Scene.prototype = {
 				if(layer.playAnim != undefined) { 
 					obj3d.playAnim(layer.playAnim);
 				}
-
+				
 				/*if(layer.move){
 					var p = new THREE.Vector3(layer.move[0],layer.move[1],layer.move[2]);
 					p.add(obj3d.position);
@@ -352,13 +382,11 @@ Scene.prototype = {
 				}
 			}
 			
-			obj3d.def = layer;
-
 			objectsCreated.push(obj3d);
 			
 			// recursively process children
 			if(layer.layers){
-				objectsCreated = objectsCreated.concat(this.populateObject(obj3d, layer.layers));
+				objectsCreated = objectsCreated.concat(this.populateObject(obj3d, layer.layers, options));
 			}
 		}
 		
@@ -398,7 +426,7 @@ Scene.prototype = {
 				typeName = 'Object3D';
 			}
 			
-			if(!typeName){
+			if(!typeName || obj3d.isAnchor){
 				//console.log("putObjectToPool: Unknown object type for ", obj3d);
 				continue;
 			}
@@ -479,4 +507,34 @@ Scene.prototype = {
 		/* this.screenPass.onResized();	
 		this.composer.reset(this.fbo);*/
     }
+};
+
+
+THREE.Object3D.prototype.recursiveRemoveChildren = function(omit){
+	var removedChildren = [];
+	for(var i = 0; i < this.children.length; i++){
+		var child = this.children[i];
+		if(omit && omit.indexOf(child) !== -1){
+			continue;
+		}
+		
+		removedChildren = removedChildren.concat(child.recursiveRemoveChildren(omit));
+		if(child.stopTweens) child.stopTweens();
+		if(child.stopAnim) child.stopAnim();
+		child.think = null;
+		if(child['name']){
+			if(child.anchored && this.parent[child.name]) {
+				delete this.parent[child.name];
+			} else if(this[child.name]){
+				delete this[child.name];
+			}
+		}
+		
+		this.remove(child);
+		removedChildren.push(child);
+		
+		i--;
+	}
+	
+	return removedChildren;
 };

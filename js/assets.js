@@ -1,11 +1,16 @@
-/* globals */
+/*
+	
+	TODO -
+	loadAssets({ textures:[], models:[] ... })
+
+*/
 
 var assets = new Assets();
 
 /* init */
 function Assets(){
 	this.cache = new THREE.Cache();
-	this.textures = [
+	/*this.textures = [
 		'textures/transition/transition1.png',
 		'textures/transition/transition2.png'
 	];
@@ -42,7 +47,7 @@ function Assets(){
 		'json/fireplace.b64',
 		'json/instruction.b64',
 		'json/present.b64'
-	];
+	];*/
 	this.totalLoaded = 0;
 	this.totalAssets = 0;
 	this.loadQueue = [];
@@ -56,7 +61,10 @@ function Assets(){
 		setTimeout(assets.loadQueue[assets.loadQueue.length - 1], 10);		
 	};
 	
-	this.loadAssets = function(onDone){
+	this.loadAssets = function(toLoad, onDone){
+		this.textures = toLoad.textures ? toLoad.textures : [];
+		this.scenedata = toLoad.scenes ? toLoad.scenes : [];
+		this.models = toLoad.assets ? toLoad.assets : [];
 		this.onloaded = onDone;
 		
 		this.totalLoaded = 0;
@@ -155,6 +163,20 @@ function Assets(){
 		}
 		
 		this.loadQueue[this.totalAssets - 1]();	
+	};
+	
+	this.unload = function(){
+		console.log("Assets unloaded");
+		for(var key in this.cache.files){
+			var a = this.cache.files[key];
+			// PixelBox
+			if(a.frameData || a.frames){
+				THREE.PixelBox.prototype.dispose(a);
+			} else if(a instanceof THREE.Texture){
+				a.dispose();
+			}
+		}
+		this.cache.clear();
 	};
 }
 

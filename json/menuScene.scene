@@ -6,7 +6,8 @@
 	},
 	
 	"layers": [
-		{	"name": "camera", 
+		{	"name": "camera",
+			"asset": "Camera",
 			"position": [0,50,-50],
 			"lookAt": [0,0,0]
 		},

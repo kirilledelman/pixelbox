@@ -114,7 +114,8 @@ THREE.EditorControls = function ( object, domElement ) {
 	// mouse
 
 	function onMouseDown( event ) {
-
+		if(event.target.nodeName != 'CANVAS' && event.target.className != 'object-label') return;
+		
 		if ( event.button === 0 && scope.rotateEnabled) {
 
 			state = STATE.ROTATE;
@@ -137,13 +138,13 @@ THREE.EditorControls = function ( object, domElement ) {
 
 		domElement.addEventListener( 'mousemove', onMouseMove, false );
 		domElement.addEventListener( 'mouseup', onMouseUp, false );
-		domElement.addEventListener( 'mouseout', onMouseUp, false );
+		// domElement.addEventListener( 'mouseout', onMouseUp, false );
 		domElement.addEventListener( 'dblclick', onMouseUp, false );
 
 	}
 
 	function onMouseMove( event ) {
-
+		
 		// if ( scope.enabled === false ) return;
  
 		event.preventDefault();
@@ -176,10 +177,11 @@ THREE.EditorControls = function ( object, domElement ) {
 	}
 
 	function onMouseUp( event ) {
+		if(event.target.nodeName != 'CANVAS' && event.target.className != 'object-label') return;
 
 		domElement.removeEventListener( 'mousemove', onMouseMove, false );
 		domElement.removeEventListener( 'mouseup', onMouseUp, false );
-		domElement.removeEventListener( 'mouseout', onMouseUp, false );
+		// domElement.removeEventListener( 'mouseout', onMouseUp, false );
 		domElement.removeEventListener( 'dblclick', onMouseUp, false );
 
 		state = STATE.NONE;
@@ -191,7 +193,8 @@ THREE.EditorControls = function ( object, domElement ) {
 	}
 
 	function onMouseWheel( event ) {
-
+		if(event.target.nodeName != 'CANVAS' && event.target.className != 'object-label') return;
+		
 		if ( !scope.zoomEnabled ) return;
 		
 		event.preventDefault();
@@ -212,7 +215,7 @@ THREE.EditorControls = function ( object, domElement ) {
 
 	}
 
-	domElement.addEventListener( 'contextmenu', function ( event ) { event.preventDefault(); }, false );
+	domElement.addEventListener( 'contextmenu', function ( event ) { if(event.target.nodeName != 'CANVAS' && event.target.className != 'object-label') return; event.preventDefault(); }, false );
 	domElement.addEventListener( 'mousedown', onMouseDown, false );
 	domElement.addEventListener( 'mousewheel', onMouseWheel, false );
 	domElement.addEventListener( 'DOMMouseScroll', onMouseWheel, false ); // firefox

@@ -865,6 +865,7 @@ THREE.PixelBox = function(data){
 		for(var aname in data.anchors){
 			var obj3d = new THREE.Object3D();
 			obj3d.isContainer = true;
+			obj3d.isAnchor = true;
 			obj3d.name = aname;
 			obj3d.visible = false;
 			pc.add(obj3d);
@@ -956,8 +957,8 @@ THREE.PixelBox = function(data){
 	pc.dispose = function(){
 		if(this.geometry){
 			if(this.geometry.data){
-				console.log("Disposed of "+this.geometry.data.name);
 				THREE.PixelBox.prototype.dispose(this.geometry.data);
+				console.log("Disposed of "+this.geometry.data.name);
 				delete this.geometry.data;
 			}
 			this.geometry.dispose();
@@ -1041,20 +1042,19 @@ THREE.PixelBox = function(data){
 		get: function(){ return !!material.uniforms.cullBack.value; },
 		set: function(v){ material.uniforms.cullBack.value = v ? 1 : 0; },
 	});
-	pc.cullBack = param('cullBack', true);
-	
+	pc.cullBack = param('cullBack', true);	
 	
 	return pc;
 }
 
 THREE.PixelBox.prototype.material = new THREE.ShaderMaterial( {
-	uniforms:       THREE.UniformsUtils.merge([THREE.UniformsLib['shadowmap'],THREE.UniformsLib['lights'],THREE.PixelBoxShader.uniforms]),
+	uniforms:       THREE.UniformsUtils.merge([THREE.UniformsLib['shadowmap'], THREE.UniformsLib['lights'],THREE.PixelBoxShader.uniforms]),
 	attributes:     THREE.PixelBoxShader.attributes,
 	vertexShader:   THREE.PixelBoxShader.vertexShader,
 	fragmentShader: THREE.PixelBoxShader.fragmentShader,
 	transparent: false,
 	lights: true,
-	fog:true
+	fog: true
 });
 
 THREE.PixelBox.prototype.depthMaterial = new THREE.ShaderMaterial( {
@@ -1066,7 +1066,6 @@ THREE.PixelBox.prototype.depthMaterial._shadowPass = true;
 THREE.PixelBox.prototype.updateViewPortUniform = function(event){ 
 	var fov = (renderer.scene && renderer.scene.camera) ? renderer.scene.camera.fov : 60;
 	THREE.PixelBox.prototype['material'].uniforms.viewPortScale.value = renderer.webgl.domElement.height / (2 * Math.tan(0.5 * fov * Math.PI / 180.0));
-	// THREE.PixelBox.prototype.material.uniforms.viewPortScale.value = renderer.scale * 8.0 * (renderer.webgl.domElement.height / 1024);
 };
 $(window).on('resize.PixelBox', THREE.PixelBox.prototype.updateViewPortUniform);
 
@@ -1074,6 +1073,7 @@ THREE.PixelBox.prototype.dispose = function(data){
 	if(data){
 		var _gl = renderer.webgl.context;
 		for(var f = 0; f < data.frameData.length; f++){
+			if(!data.frameData[f]['p']) continue; // skip empty
 			for ( var key in data.frameData[f] ) {
 				if ( data.frameData[f][key].buffer !== undefined ) {
 					_gl.deleteBuffer(data.frameData[f][key].buffer);
@@ -1471,7 +1471,11 @@ THREE.PixelBox.decodeFrame = function(dataObject, frameIndex){
 	} else {
 		if(isDeltaFormat){
 			frameData = frameData.match(/.{14}/g);
-			prevFrameData = dataObject.frames[frameIndex - 1];
+			var pi = frameIndex - 1;
+			while(!prevFrameData){
+				prevFrameData = dataObject.frames[pi];
+				pi--;
+			}
 		} else {
 			frameData = frameData.match(/.{8}/g);
 		}
@@ -1524,10 +1528,10 @@ THREE.PixelBox.decodeFrame = function(dataObject, frameIndex){
 		}
 		
 		// update dataObject with decoded frame data
-		dataObject.frames[frameIndex] = assembledFrameData;
+		if(!sameAsLast) dataObject.frames[frameIndex] = assembledFrameData;
 		
 		if(sameAsLast){
-			return null;//dataObject.frameData[frameIndex - 1];
+			return null; //dataObject.frameData[frameIndex - 1];
 		}
 	
 		// helper

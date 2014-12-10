@@ -1,4 +1,4 @@
-@import url(http://fonts.googleapis.com/css?family=Coda:400,800);
+/* @import url(http://fonts.googleapis.com/css?family=Coda:400,800); */
 
 /* editor */
 
@@ -65,9 +65,47 @@
 	text-shadow: 0px 1px 3px black;
 }
 
+label.object-label {
+	position: absolute;
+	background-color: rgba(0,0,0,0.6);
+	padding: 5px;
+	font-size: 10px;
+	font-weight: bold;
+	border-right: 5px;
+	text-shadow: 0px 1px 0px black;
+}
+
+#editor-scene {
+	width: 300px;
+	min-width: 300px;
+	overflow: hidden;
+}
+#editor-scene.collapsed { width: 150px; }
+
+#editor-assets {
+	width: 300px;
+	min-width: 300px;
+	overflow: hidden;
+}
+#editor-assets.collapsed { width: 150px; }
+
+#editor-props {
+	width: 350px;
+	min-width: 350px;
+	overflow: hidden;
+}
+#editor-props.collapsed { width: 150px; }
+
 #anim-list,#anchor-list {
 	min-height: 5em;
-	max-height: 10em;
+	max-height: 15em;
+	overflow-y: scroll;
+	overflow-x: hide;
+	background-color: #000;
+	margin: 0.2em;
+}
+
+#scene-list, #asset-list {
 	overflow-y: scroll;
 	overflow-x: hide;
 	background-color: #000;
@@ -86,19 +124,52 @@
 
 .tiny-swatch{
 	display: inline-block;
-	width: 0.6em;
-	height: 0.6em;
+	width: 10px;
+	height: 10px;
 	border: 1px solid black;
-	margin-right: 1em;
+	margin-right: 5px;
+	margin-top: 15px;
 }
 
 .column {
 	float: left;	
 }
 
+#scene-list div.row, #asset-list div.row {
+	padding-left: 25px;
+	min-height: 35px;
+	font-size: 14px;
+	background-color: #000;
+	position: relative;
+	cursor: default;
+	overflow: hidden;
+	clear: both;
+}
+
+#scene-list div.row {
+	white-space: nowrap;
+	overflow-x: hidden;
+}
+
+#scene-list div.row label,
+#asset-list div.row label {
+	padding: 5px 0px;
+}
+
+#asset-list div.row.missing label { color: #d50000; }
+
+#asset-list div.row span.used, #scene-list div.row span.type { 
+	display: block; 
+	float:right; 
+	position: relative; 
+	font-size: 75%; 
+	color: #999999; 
+	top: 10px; right:10px;
+}
+
 .clear { clear: both;}
 
-#anim-list div.anim-row.selected, #anchor-list div.anchor-row.selected {
+#anim-list div.anim-row.selected, #anchor-list div.anchor-row.selected, #scene-list div.row.selected, #asset-list div.row.selected {
 	background-color: #666;
 }
 
@@ -143,6 +214,37 @@
 	color: black;
 }
 
+#editor-load #drop-files {
+	width: 90%;
+	border: 2px solid #666;
+	background-color: #000;
+	padding: 1em;
+	min-height: 40px;
+	max-height: 400px;
+	overflow: hidden;
+	overflow-y: scroll;
+}
+
+#editor-load #drop-files span.file {
+	background-color: #333;
+	padding: 0.5em;
+	font-size: 0.8em;
+	max-width: 130px;
+	height: 1.8em;
+	margin: 0.2em;
+	display: inline-block;
+	white-space: nowrap;
+	float: left;
+	
+	/*word-wrap: break-word;*/
+	text-align: right;
+	overflow: hidden;
+}
+
+#editor-load #drop-files span.file.scene {
+	background-color: #692626;
+}
+
 a.toggleCollapse {
 	position: absolute;
 	left: 5px; top:5px;
@@ -164,9 +266,10 @@ a.toggleCollapse {
 .floating-panel {
 	position:absolute;
 	padding:5px;
+	z-index: 100;
 }
 
-#editor-anims {	width: 290px; }
+#editor-anims {	width: 320px; }
 #editor-anims.collapsed { width: 170px; }
 
 
@@ -295,7 +398,7 @@ span#thumb-options {
 
 .floating-panel.collapsed{
 	height: 26px; overflow: hidden; 
-	width: 170px;
+	width: 170px; min-width: 170px;
 }
 
 #editor-toolbar.collapsed { width: 135px; height: 26px; overflow: hidden; }
@@ -435,10 +538,11 @@ input[type=checkbox] {
 body {
 	position: relative;
     overflow:hidden;
+    font-size: 15px;
 }
 
 body *{
-	font-family: Coda, monospace, sans-serif;
+	font-family: Coda, Verdana, monospace, sans-serif;
 }
 
 a,a:visited {

@@ -23,8 +23,45 @@ function documentReady(){
 	$('body').append('<div class="loading"><h2 class="center">Loading</h2><div id="bar"/><span id="percent">0%</span></div>');
 	
 	// load assets
-	console.log("Loading assets");
-	assets.loadAssets(function(done, percent){
+	assets.loadAssets(
+	{ textures:[
+		'textures/transition/transition1.png',
+		'textures/transition/transition2.png'
+	  ],
+	  scenes:[
+		'json/menuScene.scene',
+		'json/gameScene.scene'
+	  ],
+	  assets:[
+		'json/tower1.b64',
+		'json/tower2.b64',
+		'json/windmill.b64',
+		'json/house1.b64',
+		'json/cloud.b64',
+		'json/torch.b64',
+		'json/crow.b64',
+		'json/building.b64',
+		'json/house2.b64',
+		'json/fire.b64',
+		'json/tree.b64',
+		'json/explosion.b64',
+		'json/adboard.b64',
+		'json/spruce.b64',
+		'json/car.b64',
+		'json/train.b64',
+		'json/igloo.b64',
+		'json/road.b64',
+		'json/santa.b64',
+		'json/sled.b64',
+		'json/deer.b64',
+		'json/wolf.b64',
+		'json/snow.b64',
+		'json/milkglass.b64',
+		'json/cookie.b64',
+		'json/fireplace.b64',
+		'json/instruction.b64',
+		'json/present.b64'
+	  ]}, function(done, percent){
 		$('div.loading #bar').css({width: (6 * percent * 0.01)+'em'});
 		
 		if(done){
@@ -45,35 +82,6 @@ function pause(){
 }
 
 /* global helper functions */
-
-THREE.Object3D.prototype.recursiveRemoveChildren = function(omit){
-	var removedChildren = [];
-	for(var i = 0; i < this.children.length; i++){
-		var child = this.children[i];
-		if(omit && omit.indexOf(child) !== -1){
-			continue;
-		}
-		
-		removedChildren = removedChildren.concat(child.recursiveRemoveChildren(omit));
-		if(child.stopTweens) child.stopTweens();
-		if(child.stopAnim) child.stopAnim();
-		child.think = null;
-		if(child['name']){
-			if(child.anchored && this.parent[child.name]) {
-				delete this.parent[child.name];
-			} else if(this[child.name]){
-				delete this[child.name];
-			}
-		}
-		
-		this.remove(child);
-		removedChildren.push(child);
-		
-		i--;
-	}
-	
-	return removedChildren;
-};
 
 /* pseudo - random */
 Math.seededRandom = function(seed) {

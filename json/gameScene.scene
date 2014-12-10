@@ -6,7 +6,8 @@
 	},
 	
 	"layers": [
-		{	"name": "camera", 
+		{	"name": "camera",
+			"asset": "Camera",
 			"position": [0,35,-18],
 			"lookAt": [0,0,0]
 		},
@@ -39,7 +40,7 @@
 			"castShadow": true,
 			"gotoAndStop":"full",
 			"receiveShadow": true,
-			"position": [0,2,-16],
+			"position": [0,10,-16],
 			"rotation": [0,0,0],
 			"pointSize": 0.3,
 			"scale": 0.25,

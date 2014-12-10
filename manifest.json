@@ -1,0 +1,16 @@
+{
+  "manifest_version": 2,
+  "name": "PixelBox Editor",
+  "version": "1.0",
+  "minimum_chrome_version": "39",
+  "permissions":[
+  	"http://localhost/",
+  	"storage", "unlimitedStorage"
+  ],
+  "icons": { "16": "images/icon-16.png", "128": "images/icon-128.png" },
+  "app": {
+    "background": {
+      "scripts": ["editor/js/chromeApp.js"]
+    }
+  }
+}
