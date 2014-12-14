@@ -24568,7 +24568,7 @@ THREE.WebGLProgram = ( function () {
 			].join( '\n' );
 
 		}
-
+		//console.log({vertex:prefix_vertex + vertexShader, fragment:prefix_fragment + fragmentShader});
 		var glVertexShader = new THREE.WebGLShader( _gl, _gl.VERTEX_SHADER, prefix_vertex + vertexShader );
 		var glFragmentShader = new THREE.WebGLShader( _gl, _gl.FRAGMENT_SHADER, prefix_fragment + fragmentShader );
 
@@ -25373,7 +25373,7 @@ THREE.ShadowMapPlugin = function ( _renderer, _lights, _webglObjects, _webglObje
 
 				var pars = { minFilter: shadowFilter, magFilter: shadowFilter, format: THREE.RGBAFormat };
 
-				light.shadowMap = new THREE.WebGLRenderTarget( light.shadowMapWidth, light.shadowMapHeight, pars );
+				light.shadowMap = new THREE.WebGLRenderTarget( light.shadowMapWidth, light.shadowMapHeight, pars );light.shadowMap.generateMipmaps = false;
 				light.shadowMapSize = new THREE.Vector2( light.shadowMapWidth, light.shadowMapHeight );
 
 				light.shadowMatrix = new THREE.Matrix4();

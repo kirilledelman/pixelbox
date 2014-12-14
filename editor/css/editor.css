@@ -10,6 +10,8 @@
 
 .ui-menu .ui-menu-item em { position: absolute; right: 0.5em; top: 0.2em; }
 
+#undo-buttons, #menu-bar { z-index: 100; }
+
 #editor-toolbar {
 	position: absolute;
 	text-align: right;
@@ -71,30 +73,85 @@ label.object-label {
 	padding: 5px;
 	font-size: 10px;
 	font-weight: bold;
-	border-right: 5px;
+	border-radius: 5px;
+	border: 2px solid transparent;
 	text-shadow: 0px 1px 0px black;
+	z-index: 1;
+}
+
+label.object-label.selected {
+	border: 2px solid white;
 }
 
 #editor-scene {
-	width: 300px;
-	min-width: 300px;
+	width: 380px;
+	min-width: 380px;
 	overflow: hidden;
 }
-#editor-scene.collapsed { width: 150px; }
+#editor-scene.collapsed { width: 150px; min-width: 150px; }
 
 #editor-assets {
 	width: 300px;
 	min-width: 300px;
 	overflow: hidden;
 }
-#editor-assets.collapsed { width: 150px; }
+#editor-assets.collapsed { width: 150px; min-width: 150px;}
 
 #editor-props {
-	width: 350px;
-	min-width: 350px;
+	width: 380px;
+	min-width: 380px;
 	overflow: hidden;
 }
-#editor-props.collapsed { width: 150px; }
+#editor-props.collapsed { width: 190px; min-width: 190px; }
+
+#editor-props .panels {
+	overflow-y: auto;
+	background-color: rgba(0,0,0,0.25);
+}
+
+#editor-props .panel {
+	padding: 15px 10px;
+	border-bottom: 1px dotted #666;
+	position: relative;
+	overflow: visible;
+}
+
+#editor-props .panel .sub {
+	margin: 5px 0 0 0;
+	padding:5px;
+	font-size: 12px;
+}
+
+#editor-props .panel .sub a {
+	font-size: 12px;
+	margin: 0;
+	padding: 5px 5px;
+	border-radius: 5px;
+}
+
+#editor-props .panel .sub a.active {
+	background-color: #fff;
+	color:#000;
+}
+
+#editor-props .panel h4 {
+	position: absolute;
+	font-size: 10px;
+	margin:0;
+	color: #666;
+	right:2px;
+	top:2px;
+	cursor: default;
+}
+
+#prop-object-type {
+	color: #999;
+	font-size: 12px;
+}
+
+#panel-common {
+	height:35px;
+}
 
 #anim-list,#anchor-list {
 	min-height: 5em;
@@ -127,8 +184,9 @@ label.object-label {
 	width: 10px;
 	height: 10px;
 	border: 1px solid black;
-	margin-right: 5px;
-	margin-top: 15px;
+	margin-right: 10px;
+	margin-top: 10px;
+	position: relative;
 }
 
 .column {
@@ -136,32 +194,128 @@ label.object-label {
 }
 
 #scene-list div.row, #asset-list div.row {
-	padding-left: 25px;
 	min-height: 35px;
 	font-size: 14px;
 	background-color: #000;
 	position: relative;
-	cursor: default;
 	overflow: hidden;
 	clear: both;
+	padding-left: 10px;
+	white-space: nowrap;	
+}
+
+#scene-list div.row > div.row {
+	margin-left: 5px;
+}
+
+#scene-list div.row a.toggle {
+	margin-right: 5px;
+	display: inline-block;
+	width: 16px; height:16px;
+	position: relative;
+}
+
+#scene-list div.row.collapsed > div.row {
+	display:none;
+}
+
+#scene-list div.row.hidden {
+	opacity: 0.7;
+}
+#scene-list div.row.hidden > label {
+	text-decoration: line-through;
+}
+
+#scene-list div.row.template {
+	background-color: #32507a;
 }
 
 #scene-list div.row {
 	white-space: nowrap;
 	overflow-x: hidden;
+	border:1px solid transparent;
 }
+
+#scene-list div.row > div.selection {
+	display: none;
+	background-color: #666;
+	height: 36px;
+	width: 100%;
+	position: absolute;
+	left:0; top: 0;
+}
+
+#scene-list div.row.helper {
+	max-width: 200px;
+	border: 1px solid black;
+	opacity: 0.7;
+	font-size: 15px;
+}
+
+#scene-list div.row.helper li {
+	list-style: none;
+	list-style-type: none;
+	padding: 2px; margin-right: 5px;
+	display: inline-block;
+	float: left;
+}
+#scene-list div.row.helper li label {
+	font-size: 12px;
+}
+
+#scene-list div.row.Anchor > label{
+	color:#999;
+	font-style: italic;
+	font-weight: normal;
+}
+
+#scene-list div.row > div.droptarget {
+	display: none;
+	background-color: rgba(255,255,255,0.15);
+	height: 36px;
+	width: 100%;
+	position: absolute;
+	left:0; top: 0;
+}
+#scene-list div.row > div.droptarget.droppable {
+	display:block;
+}
+#scene-list div.row > div.droptarget.droppable.active {
+	background-color: rgba(255,255,255,0.5);
+	border: 1px solid white;
+}
+
+#scene-list div.row.selected > div.selection {
+	display: block;
+}
+
+#scene-list div.row.template {
+	color: #999;
+}
+
+#scene-list div.row.droptarget {
+	border:1px solid #fff;
+}
+
+#scene-list div.row.template .tiny-swatch {
+	border: 1px dotted #999;
+}
+
 
 #scene-list div.row label,
 #asset-list div.row label {
-	padding: 5px 0px;
+	padding: 10px 0px;
+	display: inline-block;
+	position: relative;
+	width: 100%;
 }
 
-#asset-list div.row.missing label { color: #d50000; }
+#asset-list div.row.missing > label,
+#scene-list div.row.missing > label  { color: #d50000; }
 
 #asset-list div.row span.used, #scene-list div.row span.type { 
 	display: block; 
-	float:right; 
-	position: relative; 
+	position: absolute; 
 	font-size: 75%; 
 	color: #999999; 
 	top: 10px; right:10px;
@@ -169,7 +323,7 @@ label.object-label {
 
 .clear { clear: both;}
 
-#anim-list div.anim-row.selected, #anchor-list div.anchor-row.selected, #scene-list div.row.selected, #asset-list div.row.selected {
+#anim-list div.anim-row.selected, #anchor-list div.anchor-row.selected, #asset-list div.row.selected {
 	background-color: #666;
 }
 
@@ -253,7 +407,7 @@ a.toggleCollapse {
 }
 
 #editor-paste {
-	width: 370px;
+	width: 390px;
 }
 
 #editor-lights label {
@@ -492,6 +646,7 @@ h2 { font-weight: normal; color: rgb(57,172,222); letter-spacing: 1;}
 .w2 { width: 60px; display:inline-block; }
 .w3 { width: 70px; display:inline-block; }
 .w31 { width: 80px; display:inline-block; }
+.w32 { width: 100px; display:inline-block; }
 .w4 { width: 150px; display:inline-block; }
 .w5 { width: 195px; display:inline-block; }
 .pad5 { padding: 5px; }
@@ -513,6 +668,10 @@ input.error {
 input:active, input:hover, input:focus {
 	background-color: rgba(255,255,255,0.4);
 	outline: 0;
+}
+
+input[type=text][disabled]{
+	color:#AAA;
 }
 
 input[type=checkbox] {

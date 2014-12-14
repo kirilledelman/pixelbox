@@ -4471,7 +4471,7 @@ EditScene.prototype = {
 				$(dom).css({zIndex: 1000})
 				var src = $(this);
 				var clr = new THREE.Color(src.css('background-color'));
-				src.colpickSetColor(clr.getHexString(), true); 				
+				src.colpickSetColor(clr.getHexString(), true);		
 			},
 			onChange:this.lightColorChanged
 		});

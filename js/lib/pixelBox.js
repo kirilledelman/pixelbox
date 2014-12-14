@@ -519,8 +519,7 @@ THREE.PixelBoxMeshShader = {
 	"uniform float fogFar;",
 
 	"#ifdef USE_SHADOWMAP",
-	"	uniform mat4 shadowMatrix[ MAX_SHADOWS ];",
-	
+	"	uniform mat4 shadowMatrix[ MAX_SHADOWS ];",	
 	"	uniform sampler2D shadowMap[ MAX_SHADOWS ];",
 	"	uniform vec2 shadowMapSize[ MAX_SHADOWS ];",
 	"	uniform float shadowBias[ MAX_SHADOWS ];",
@@ -816,6 +815,19 @@ THREE.MeshPixelBoxMaterial = function(params){
 	uniforms.directionalLightShadowMap = THREE.PixelBox.prototype.material.uniforms.directionalLightShadowMap;
 	uniforms.spotLightShadowMap = THREE.PixelBox.prototype.material.uniforms.spotLightShadowMap;
 	
+	Object.defineProperty(material, 'color', {
+		get: function(){ return this.uniforms.tintColor.value; },
+		set: function(v){ this.uniforms.tintColor.value.copy(v); },
+	});
+	Object.defineProperty(material, 'alpha', {
+		get: function(){ return this.uniforms.tintAlpha.value; },
+		set: function(v){ this.uniforms.tintAlpha.value = v; },
+	});
+	Object.defineProperty(material, 'brightness', {
+		get: function(){ return this.uniforms.brightness.value; },
+		set: function(v){ this.uniforms.brightness.value = v; },
+	});
+	
 	return material;	
 };
 
@@ -932,12 +944,11 @@ THREE.PixelBox = function(data){
 		for(var aname in this.anchors){
 			var anchor = this.anchors[aname];
 			var adata = data.anchors[aname][f];
-			if((anchor.visible = !!adata.on)){
-				anchor.position.set(adata.x - data.width * 0.5, adata.y - data.height * 0.5, adata.z - data.depth * 0.5);
-				anchor.rotation.set(adata.rx, adata.ry, adata.rz);
-				anchor.scale.set(adata.sx || 0.00001, adata.sy || 0.00001, adata.sz || 0.00001);
-				anchor.updateMatrixWorld(true);
-			}
+			anchor.visible = !!adata.on;
+			anchor.position.set(adata.x - data.width * 0.5, adata.y - data.height * 0.5, adata.z - data.depth * 0.5);
+			anchor.rotation.set(adata.rx, adata.ry, adata.rz);
+			anchor.scale.set(adata.sx || 0.00001, adata.sy || 0.00001, adata.sz || 0.00001);
+			anchor.updateMatrixWorld(true);
 			if(adata.meta.length) { 
 				var ev = {type:'anchor-meta', frame:f, anchor: anchor, meta:adata.meta };
 				this.dispatchEvent(ev); ev = null;
@@ -1042,8 +1053,11 @@ THREE.PixelBox = function(data){
 		get: function(){ return !!material.uniforms.cullBack.value; },
 		set: function(v){ material.uniforms.cullBack.value = v ? 1 : 0; },
 	});
+	
 	pc.cullBack = param('cullBack', true);	
 	
+	pc.raycast = THREE.PointCloud.prototype.pixelBoxRaycast;
+	pc.fasterRaycast = true; // raycast just tests for an intersection (returns first match)
 	return pc;
 }
 
@@ -1128,7 +1142,8 @@ THREE.PixelBox.prototype.processPixelBoxFrames = function(data){
 	to generate better shadows
 */
 
-THREE.PixelBox.updateLights = function(scene, updateAllMaterials){
+THREE.PixelBox.updateLights = function(scene, updateAllMaterials){	
+	
 	var uniforms = THREE.PixelBox.prototype.material.uniforms;
 	uniforms.actualHemiLights.value = 0;
 	uniforms.actualDirLights.value = 0;
@@ -1137,29 +1152,28 @@ THREE.PixelBox.updateLights = function(scene, updateAllMaterials){
 	uniforms.directionalLightShadowMap.value.length = 0;
 	uniforms.spotLightShadowMap.value.length = 0;
 
-	if(updateAllMaterials){
-		for(var i = 0; i < scene.children.length; i++){
-			if(scene.children[i].material) scene.children[i].material.needsUpdate = true;
-		}		
-	}
-
 	var shadowMapIndex = 0;
-	scene.traverseVisible(function(light){
-		if (light instanceof THREE.SpotLight){
-			uniforms.actualSpotLights.value++;
-			if(light.castShadow && renderer.webgl.shadowMapEnabled) { 
-				uniforms.spotLightShadowMap.value.push(++shadowMapIndex);
-			} else uniforms.spotLightShadowMap.value.push(0);
-		} else if(light instanceof THREE.DirectionalLight){
-			uniforms.actualDirLights.value++;
-			if(light.castShadow && renderer.webgl.shadowMapEnabled) { 
-				uniforms.directionalLightShadowMap.value.push(++shadowMapIndex);
-			} else uniforms.directionalLightShadowMap.value.push(0);
-		} else if(light instanceof THREE.HemisphereLight){
-			uniforms.actualHemiLights.value++;
-		} else if(light instanceof THREE.PointLight){
-			uniforms.actualPointLights.value++;
+	
+	scene.traverse(function(obj){
+		if(obj.visible){
+			if (obj instanceof THREE.SpotLight){
+				uniforms.actualSpotLights.value++;
+				if(obj.castShadow && renderer.webgl.shadowMapEnabled) { 
+					uniforms.spotLightShadowMap.value.push(++shadowMapIndex);
+				} else uniforms.spotLightShadowMap.value.push(0);
+			} else if(obj instanceof THREE.DirectionalLight){
+				uniforms.actualDirLights.value++;
+				if(obj.castShadow && renderer.webgl.shadowMapEnabled) { 
+					uniforms.directionalLightShadowMap.value.push(++shadowMapIndex);
+				} else uniforms.directionalLightShadowMap.value.push(0);
+			} else if(obj instanceof THREE.HemisphereLight){
+				uniforms.actualHemiLights.value++;
+			} else if(obj instanceof THREE.PointLight){
+				uniforms.actualPointLights.value++;
+			}
 		}
+		
+		if(updateAllMaterials && obj.material) obj.material.needsUpdate = true;
 	});
 };
 
@@ -1840,6 +1854,84 @@ THREE.PixelBox.encodeFrame = function(frameData, dataObject){
 	The functions below are used by the PixelBox editor
 	
 */
+
+THREE.PointCloud.prototype.pixelBoxRaycast = ( function () {
+
+	var inverseMatrix = new THREE.Matrix4();
+	var ray = new THREE.Ray();
+	var temp = new THREE.Vector3(), temp2 = new THREE.Vector3();
+
+	return function ( raycaster, intersects ) {
+
+		var object = this;
+		var geometry = object.geometry;
+		var threshold = raycaster.params.PointCloud.threshold;
+
+		inverseMatrix.getInverse( this.matrixWorld );
+		ray.copy( raycaster.ray ).applyMatrix4( inverseMatrix );
+
+		if(!geometry.boundingBox) {
+			geometry.boundingBox = new THREE.Box3(new THREE.Vector3(-geometry.data.width * 0.5, -geometry.data.height * 0.5, -geometry.data.depth * 0.5),
+												new THREE.Vector3(geometry.data.width * 0.5, geometry.data.height * 0.5, geometry.data.depth * 0.5));
+		}
+		if(ray.isIntersectionBox( geometry.boundingBox ) === false ) {
+			return;
+		}
+
+		var localThreshold = this.pointSize; // threshold / ( ( this.scale.x + this.scale.y + this.scale.z ) / 3 );
+		var position = new THREE.Vector3();
+		var pass = 0;
+		var testPoint = function ( point, index ) {
+
+			var rayPointDistance = ray.distanceToPoint( point );
+
+			if ( rayPointDistance < localThreshold ) {
+
+				var intersectPoint = ray.closestPointToPoint( point );
+				intersectPoint.applyMatrix4( object.matrixWorld );
+
+				var distance = raycaster.ray.origin.distanceTo( intersectPoint );
+				pass++;
+				
+				intersects.push( {
+
+					distance: distance,
+					distanceToRay: rayPointDistance,
+					point: intersectPoint.clone(),
+					index: index,
+					face: null,
+					object: object
+
+				} );
+
+			}
+
+		};
+
+		var attributes = geometry.attributes;
+		var positions = attributes.position.array;
+
+		var start = this.vertexBufferStart;
+		var len = start + this.vertexBufferLength;
+		
+		for ( var i = start; i < len; i ++ ) {
+
+			position.set(
+				positions[ 3 * i ],
+				positions[ 3 * i + 1 ],
+				positions[ 3 * i + 2 ]
+			);
+
+			testPoint( position, i );
+			
+			// first one is sufficient
+			if(this.fasterRaycast && pass > 0) { 
+				break;
+			}
+		}
+	};
+
+}() );
 
 THREE.PointCloud.prototype.encodeRawFrame = function(dataObject, frameNumber){
 	var obj = {p:new Array(), n:new Array(), c:new Array(), o:new Array()};

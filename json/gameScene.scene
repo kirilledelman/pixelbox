@@ -1,9 +1,13 @@
 {
 	"name": "gameScene",
 	
-	"config":{
-		"clearColor": "003777"
-	},
+	"clearColor": "003777",
+	"maxShadows":2,
+	"ambient":"000000",	
+	"fogColor":"003399",
+	"fogNear":1000,
+	"fogFar":10000,
+	
 	
 	"layers": [
 		{	"name": "camera",

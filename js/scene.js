@@ -1,3 +1,18 @@
+/*
+
+Notes
+
+add "transplant" method
+var position = new THREE.Vector3();
+var quaternion = new THREE.Quaternion();
+var scale = new THREE.Vector3();
+mesh.updateMatrixWorld( true );
+mesh.matrixWorld.decompose( position, quaternion, scale );
+
+
+
+*/
+
 /* scene definition */
 function Scene(){
 	// think func
@@ -63,7 +78,7 @@ Scene.prototype = {
 		function value(obj, name, defaultVal){ if(!obj || obj[name] === undefined) return defaultVal; return obj[name]; }
 	
 		// config
-		this.clearColor = parseInt(value(sceneDef.config, 'clearColor', '0'), 16);
+		this.clearColor = parseInt(value(sceneDef, 'clearColor', '0'), 16);
 		
 		// add assets to cache if needed
 		for(var i in sceneDef.assets){
@@ -107,7 +122,7 @@ Scene.prototype = {
 			var helper = null;
 			
 			// check if already added
-			if(layer.name){
+			if(layer.name && !options.noNameReferences){
 				if(object[layer.name]){
 					obj3d = object[layer.name];
 				}
@@ -147,15 +162,20 @@ Scene.prototype = {
 				if(layer.color != undefined) obj3d.color.set(parseInt(layer.color, 16));
 				if(layer.intensity != undefined) obj3d.intensity = layer.intensity;
 				if(layer.shadowMapWidth != undefined) obj3d.shadowMapWidth = obj3d.shadowMapHeight = layer.shadowMapWidth;
-			    if(options.helpers) { 
+				if(layer.target != undefined){
+					if(typeof(layer.target) == 'string' && object.anchors && object.anchors[layer.target]) obj3d.target = object.anchors[layer.target];
+					else if(layer.target.length == 3){// array of world pos
+						obj3d.target.position.set(layer.target[0],layer.target[1],layer.target[2]);
+					}
+				}
+				if(options.helpers) { 
 			    	helper = new THREE.DirectionalLightHelper(obj3d, 5);
-			    	obj3d.shadowCameraVisible = true;
+			    	//obj3d.shadowCameraVisible = true;
 			    }
 				break;						
 			case 'SpotLight':
 				if(!obj3d) obj3d = new THREE.SpotLight(0xffffff, 1.0, 100, Math.PI / 3, 70);
 			    obj3d.shadowMapWidth = obj3d.shadowMapHeight = 1024;
-			    if(options.helpers) obj3d.shadowCameraVisible = true;
 			    obj3d.shadowCameraNear = 5;
 				obj3d.shadowCameraFar = obj3d.distance;
 				obj3d.shadowCameraRight = (layer.shadowVolumeWidth != undefined ? layer.shadowVolumeWidth : 256) * 0.5;
@@ -173,10 +193,15 @@ Scene.prototype = {
 					obj3d.shadowCameraFov = layer.angle;
 				}
 				if(layer.shadowMapWidth != undefined) obj3d.shadowMapWidth = obj3d.shadowMapHeight = layer.shadowMapWidth;
-				if(layer.target != undefined && object.anchors && object.anchors[layer.target]) obj3d.target = object.anchors[layer.target];
+				if(layer.target != undefined){
+					if(typeof(layer.target) == 'string' && object.anchors && object.anchors[layer.target]) obj3d.target = object.anchors[layer.target];
+					else if(layer.target.length == 3){// array of world pos
+						obj3d.target.position.set(layer.target[0],layer.target[1],layer.target[2]);
+					}
+				} 
 				if(options.helpers) { 
 			    	helper = new THREE.SpotLightHelper(obj3d, 5);
-			    	obj3d.shadowCameraVisible = true;
+			    	//obj3d.shadowCameraVisible = true;
 			    }
 				
 				break;								
@@ -287,7 +312,9 @@ Scene.prototype = {
 				if(layer.jostle.y) obj3d.position.y += (Math.random() * 2 - 1.0) * layer.jostle.y;
 				if(layer.jostle.z) obj3d.position.z += (Math.random() * 2 - 1.0) * layer.jostle.z;
 			}
-			if(layer.lookAt) obj3d.lookAt(new THREE.Vector3(layer.lookAt[0],layer.lookAt[1],layer.lookAt[2]));
+			if(layer.lookAt) {
+				obj3d.lookAt(new THREE.Vector3(layer.lookAt[0],layer.lookAt[1],layer.lookAt[2]));
+			}
 			if(layer.castShadow != undefined) obj3d.castShadow = layer.castShadow;
 			if(layer.receiveShadow != undefined) obj3d.receiveShadow = layer.receiveShadow;
 			
@@ -509,6 +536,11 @@ Scene.prototype = {
     }
 };
 
+THREE.Object3D.prototype.isDescendentOf = function(another){
+	if(!this.parent) return false;
+	if(this.parent == another) return true;
+	return this.parent.isDescendentOf(another);
+}
 
 THREE.Object3D.prototype.recursiveRemoveChildren = function(omit){
 	var removedChildren = [];
@@ -537,4 +569,17 @@ THREE.Object3D.prototype.recursiveRemoveChildren = function(omit){
 	}
 	
 	return removedChildren;
+};
+
+THREE.Object3D.prototype.getObjectByUUID = function ( uuid, recursive ) {
+	if ( this.uuid === uuid ) return this;
+
+	for ( var i = 0, l = this.children.length; i < l; i ++ ) {
+		var child = this.children[ i ];
+		var object = child.getObjectByUUID( uuid, recursive );
+		if ( object !== undefined ) {
+			return object;
+		}
+	}
+	return undefined;
 };
