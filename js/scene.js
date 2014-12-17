@@ -167,6 +167,7 @@ Scene.prototype = {
 				if(layer.color != undefined) obj3d.color.set(parseInt(layer.color, 16));
 				if(layer.intensity != undefined) obj3d.intensity = layer.intensity;
 				if(layer.shadowMapWidth != undefined) obj3d.shadowMapWidth = obj3d.shadowMapHeight = layer.shadowMapWidth;
+				if(layer.shadowMapHeight != undefined) obj3d.shadowMapHeight = layer.shadowMapHeight;
 				if(layer.target != undefined){
 					if(typeof(layer.target) == 'string' && object.anchors && object.anchors[layer.target]) obj3d.target = object.anchors[layer.target];
 					else if(layer.target.length == 3){// array of world pos
@@ -183,10 +184,10 @@ Scene.prototype = {
 			    obj3d.shadowMapWidth = obj3d.shadowMapHeight = 1024;
 			    obj3d.shadowCameraNear = 5;
 				obj3d.shadowCameraFar = obj3d.distance;
-				obj3d.shadowCameraRight = (layer.shadowVolumeWidth != undefined ? layer.shadowVolumeWidth : 256) * 0.5;
+				/*obj3d.shadowCameraRight = (layer.shadowVolumeWidth != undefined ? layer.shadowVolumeWidth : 256) * 0.5;
 			    obj3d.shadowCameraLeft = -obj3d.shadowCameraRight;
 				obj3d.shadowCameraTop = (layer.shadowVolumeHeight != undefined ? layer.shadowVolumeHeight : (obj3d.shadowCameraRight * 2)) * 0.5;
-				obj3d.shadowCameraBottom = -obj3d.shadowCameraTop;
+				obj3d.shadowCameraBottom = -obj3d.shadowCameraTop;*/
 				obj3d.shadowBias = (layer.shadowBias != undefined ? layer.shadowBias : -0.0005);
 										
 				if(layer.color != undefined) obj3d.color.set(parseInt(layer.color, 16));
@@ -198,6 +199,7 @@ Scene.prototype = {
 					obj3d.shadowCameraFov = layer.angle;
 				}
 				if(layer.shadowMapWidth != undefined) obj3d.shadowMapWidth = obj3d.shadowMapHeight = layer.shadowMapWidth;
+				if(layer.shadowMapHeight != undefined) obj3d.shadowMapHeight = layer.shadowMapHeight;
 				if(layer.target != undefined){
 					if(typeof(layer.target) == 'string' && object.anchors && object.anchors[layer.target]) obj3d.target = object.anchors[layer.target];
 					else if(layer.target.length == 3){// array of world pos

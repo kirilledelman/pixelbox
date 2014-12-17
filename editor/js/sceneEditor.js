@@ -556,6 +556,8 @@ EditSceneScene.prototype = {
 		
 		var pasteTarget = this.selectedObjects.length ? this.selectedObjects[0].parent : this.container;
 		
+		this.deselectAll();
+		
 		var addedObjects = this.populateObject(pasteTarget, this.sceneCopyItem, { helpers: true, createCameras:true, noNameReferences:true });
 		THREE.PixelBox.updateLights(this.scene, true);
 		var doAdd = [];
@@ -566,10 +568,12 @@ EditSceneScene.prototype = {
 			if(addedObjects[i] instanceof THREE.Camera && addedObjects[i].isDefault){
 				addedObjects[i].isDefault = false;
 			}
+			this.selectObject(addedObjects[i], true);
 		}
 		this.addUndo({name:"paste", redo:[this.addObjects, doAdd], undo:[this.deleteObjects, undoAdd] });
 		
 		this.refreshScene();
+		this.selectionChanged();
 		this.controls.focus(pasteTarget, true);
 	},
 	
@@ -717,7 +721,6 @@ EditSceneScene.prototype = {
 			form[0].submit();
 		}
 	},
-
 
 /* ------------------- ------------------- ------------------- ------------------- ------------------- Document functions */
 
@@ -2240,6 +2243,10 @@ EditSceneScene.prototype = {
 		for(var i = 0; i < objPosArr.length; i++){
 			var obj = objPosArr[i][0];
 			obj.position.copy(objPosArr[i][1]);
+			if(obj.helper) {
+				obj.updateMatrixWorld(true);
+				obj.helper.update();
+			}
 		}
 	},
 
@@ -2296,6 +2303,10 @@ EditSceneScene.prototype = {
 				}
 			} else {
 				obj.rotation.copy(rot);
+			}
+			if(obj.helper) {
+				obj.updateMatrixWorld(true);
+				obj.helper.update();
 			}
 		}
 	},
@@ -2692,6 +2703,37 @@ EditSceneScene.prototype = {
 		editScene.refreshProps();
 	},
 	
+	castShadowChanged:function(val){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'castShadow';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj[prop]]);
+			if(obj.shadowMap){
+				renderer.webgl.clearTarget(obj.shadowMap);
+			}
+		}
+		editScene.addUndo({name:"castShadow", undo:[editScene.setObjectProperty, undoArr, prop],
+											redo:[editScene.setObjectProperty, doArr, prop]});
+		editScene.setObjectProperty(doArr, prop);	
+	},
+
+	receiveShadowChanged:function(val){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'receiveShadow';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj[prop]]);
+		}
+		editScene.addUndo({name:"receiveShadow", undo:[editScene.setObjectProperty, undoArr, prop],
+											redo:[editScene.setObjectProperty, doArr, prop]});
+		editScene.setObjectProperty(doArr, prop);	
+	},
+	
 	transformObjectToCam:function(e){
 		var objPosArr = [];
 		var objRotArr = [];
@@ -2777,7 +2819,11 @@ EditSceneScene.prototype = {
 		for(var i = 0; i < arr.length; i++){
 			var obj = arr[i][0];
 			var val = arr[i][1];
-			obj[prop] = val;
+			if(obj[prop] instanceof THREE.Color){
+				obj[prop].setHex(val);
+			} else {
+				obj[prop] = val;
+			}
 			if(obj instanceof THREE.PerspectiveCamera){
 				obj.updateProjectionMatrix();				
 			}
@@ -2855,6 +2901,234 @@ EditSceneScene.prototype = {
 		editScene.setCameraDefault(cam, val);
 	},
 
+/* ------------------- ------------------- ------------------- ------------------- ------------------- Light panel */
+
+	lightAngleChanged:function(val){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'angle';
+		val = Math.PI * val / 180;
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj[prop]]);
+			/*if(obj.shadowCamera){
+				if(obj.shadowCamera.parent){
+					obj.shadowCameraFov = val;
+					obj.shadowCamera.parent.remove(obj.shadowCamera);
+				}
+				obj.shadowCamera = null;
+			}*/
+		}
+		editScene.addUndo({name:"lightAngle", mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
+											redo:[editScene.setObjectProperty, doArr, prop]});
+		editScene.setObjectProperty(doArr, prop);
+	},
+
+	lightIntensityChanged:function(val){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'intensity';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj[prop]]);
+		}
+		editScene.addUndo({name:"lightIntensity", mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
+											redo:[editScene.setObjectProperty, doArr, prop]});
+		editScene.setObjectProperty(doArr, prop);
+	},
+	
+	lightDistanceChanged:function(val){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'distance';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj[prop]]);
+		}
+		editScene.addUndo({name:"lightDistance", mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
+											redo:[editScene.setObjectProperty, doArr, prop]});
+		editScene.setObjectProperty(doArr, prop);
+	},
+
+	lightExponentChanged:function(val){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'exponent';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj[prop]]);
+		}
+		editScene.addUndo({name:"lightExponent", mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
+											redo:[editScene.setObjectProperty, doArr, prop]});
+		editScene.setObjectProperty(doArr, prop);
+	},
+	
+	setGroundLightColor:function(val){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'groundColor';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj.storedColor]);
+			obj.storedColor = val;
+		}
+		editScene.addUndo({name:"lightGroundColor", undo:[editScene.setObjectProperty, undoArr, prop],
+											redo:[editScene.setObjectProperty, doArr, prop]});
+		editScene.setObjectProperty(doArr, prop);
+	},
+
+	setLightColor:function(val){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'color';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj.storedColor]);
+			obj.storedColor = val;
+		}
+		editScene.addUndo({name:"lightColor", undo:[editScene.setObjectProperty, undoArr, prop],
+											redo:[editScene.setObjectProperty, doArr, prop]});
+		editScene.setObjectProperty(doArr, prop);
+	},
+	
+	lightShadowBiasChanged:function(val){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'shadowBias';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj.shadowBias]);
+		}
+		editScene.addUndo({name:"shadowBias", mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
+											redo:[editScene.setObjectProperty, doArr, prop]});
+		editScene.setObjectProperty(doArr, prop);
+	},
+
+	lightShadowNearChanged:function(val){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'shadowCameraNear';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj.shadowCameraNear]);
+			if(obj.shadowCamera){
+				if(obj.shadowCamera.parent){
+					obj.shadowCamera.parent.remove(obj.shadowCamera);
+				}
+				obj.shadowCamera = null;
+			}
+		}
+		editScene.addUndo({name:"shadowCameraNear", mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
+											redo:[editScene.setObjectProperty, doArr, prop]});
+		editScene.setObjectProperty(doArr, prop);
+	},
+
+	lightShadowFarChanged:function(val){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'shadowCameraFar';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj.shadowCameraFar]);
+			if(obj.shadowCamera){
+				if(obj.shadowCamera.parent){
+					obj.shadowCamera.parent.remove(obj.shadowCamera);
+				}
+				obj.shadowCamera = null;
+			}
+		}
+		editScene.addUndo({name:"shadowCameraFar", mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
+											redo:[editScene.setObjectProperty, doArr, prop]});
+		editScene.setObjectProperty(doArr, prop);
+	},
+
+	lightShadowVolWidthChanged:function(val){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'shadowCameraRight';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj.shadowCameraRight * 2]);
+			if(obj.shadowCamera){
+				if(obj.shadowCamera.parent){
+					obj.shadowCamera.parent.remove(obj.shadowCamera);
+				}
+				obj.shadowCamera = null;
+				obj.shadowCameraLeft = -val * 0.5;
+			}
+		}
+		editScene.addUndo({name:"shadowCameraRight", mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
+											redo:[editScene.setObjectProperty, doArr, prop]});
+		editScene.setObjectProperty(doArr, prop);
+	},
+
+	lightShadowVolHeightChanged:function(val){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'shadowCameraTop';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj.shadowCameraTop * 2]);
+			if(obj.shadowCamera){
+				if(obj.shadowCamera.parent){
+					obj.shadowCamera.parent.remove(obj.shadowCamera);
+				}
+				obj.shadowCamera = null;
+				obj.shadowCameraBottom = -val * 0.5;
+			}
+		}
+		editScene.addUndo({name:"shadowCameraTop", mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
+											redo:[editScene.setObjectProperty, doArr, prop]});
+		editScene.setObjectProperty(doArr, prop);
+	},
+	
+	lightShadowMapWidthChanged:function(val){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'shadowMapWidth';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj.shadowMapWidth]);
+			if(obj.shadowMap){
+				obj.shadowMap.dispose();
+				obj.shadowMap = null;
+			}
+		}
+		editScene.addUndo({name:"shadowMapWidth", mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
+											redo:[editScene.setObjectProperty, doArr, prop]});
+		editScene.setObjectProperty(doArr, prop);
+	},
+
+	lightShadowMapHeightChanged:function(val){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'shadowMapHeight';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj.shadowMapHeight]);
+			if(obj.shadowMap){
+				obj.shadowMap.dispose();
+				obj.shadowMap = null;
+			}
+		}
+		editScene.addUndo({name:"shadowMapHeight", mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
+											redo:[editScene.setObjectProperty, doArr, prop]});
+		editScene.setObjectProperty(doArr, prop);
+	},
+	
 
 /* ------------------- ------------------- ------------------- ------------------- ------------------- Properties panel */
 
@@ -2900,13 +3174,20 @@ EditSceneScene.prototype = {
 		$('#prop-object-type').text('');
 		$('#panel-move').show();
 		
-		$('#prop-visible,#prop-template').removeClass('multiple');
+		$('#editor-props input[type=checkbox].multiple').removeClass('multiple');
 		
 		var prevObj = null;
 		var mults = {};
 		var containsAnchors = false;
+		var containsContainers = false;
+		var containsPointClouds = false;
+		var containsInstances = false;
+		var containsCameras = false;
+		var containsPlanes = false;
 		var containsSpotLights = false;
 		var containsDirLights = false;
+		var containsHemiLights = false;
+		var containsPointLights = false;
 		var radToDeg = 180 / Math.PI;
 		var commonType = null;
 				
@@ -2922,8 +3203,15 @@ EditSceneScene.prototype = {
 			
 			// excludes
 			containsAnchors = containsAnchors || (!!obj.isAnchor);
+			containsContainers = containsContainers | (obj.isContainer);
+			containsPointClouds = containsPointClouds | (obj instanceof THREE.PointCloud);
+			containsInstances = containsInstances | (obj.isInstance);
+			containsCameras = containsCameras | (obj instanceof THREE.Camera);
+			containsPlanes = containsPlanes | (obj instanceof THREE.Mesh);
 			containsSpotLights = containsSpotLights | (obj instanceof THREE.SpotLight);
 			containsDirLights = containsDirLights | (obj instanceof THREE.DirectionalLight);
+			containsHemiLights = containsHemiLights | (obj instanceof THREE.HemisphereLight);
+			containsPointLights = containsPointLights | (obj instanceof THREE.PointLight);
 			
 			// type
 			var type = (obj.isAnchor ? 'Anchor' : (obj instanceof THREE.PointCloud ? obj.geometry.data.name : obj.def.asset));
@@ -2949,6 +3237,20 @@ EditSceneScene.prototype = {
 				mults['template'] = true;
 			} else if(!mults['template']){
 				$('#prop-template')[0].checked = obj.isTemplate;
+			}
+			// cast
+			if(prevObj && prevObj.castShadow != obj.castShadow){
+				$('#prop-cast-shadow').addClass('multiple')[0].checked = false;
+				mults['cast'] = true;
+			} else if(!mults['cast']){
+				$('#prop-cast-shadow')[0].checked = obj.castShadow;
+			}
+			// receive
+			if(prevObj && prevObj.receiveShadow != obj.receiveShadow){
+				$('#prop-receive-shadow').addClass('multiple')[0].checked = false;
+				mults['receive'] = true;
+			} else if(!mults['receive']){
+				$('#prop-receive-shadow')[0].checked = obj.receiveShadow;
 			}
 			
 			//x
@@ -3037,15 +3339,117 @@ EditSceneScene.prototype = {
 				}
 			}
 			
+			// lights
+			if(obj instanceof THREE.Light){
+				if(prevObj && prevObj.color && prevObj.color.getHex() != obj.color.getHex()){
+					$('#light-color').css({backgroundColor:'transparent'}); mults['light-color'] = true;
+				} else if(!mults['light-color']){
+					$('#light-color').css({backgroundColor:'#'+obj.color.getHexString()});
+				}
+				if(obj instanceof THREE.HemisphereLight){
+					if(prevObj && prevObj.groundColor && prevObj.groundColor.getHex() != obj.groundColor.getHex()){
+						$('#light-ground-color').css({backgroundColor:'transparent'}); mults['light-ground-color'] = true;
+					} else if(!mults['light-ground-color']){
+						$('#light-ground-color').css({backgroundColor:'#'+obj.groundColor.getHexString()});
+					}
+				}
+				if(prevObj && prevObj.intensity != obj.intensity){
+					$('#light-intensity').attr('placeholder','M').val('').data('prevVal',''); mults['light-intensity'] = true;
+				} else if(!mults['light-intensity']){
+					var newVal = notNaN(parseFloat(obj.intensity));
+					$('#light-intensity').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}
+				if(prevObj && prevObj.distance != obj.distance){
+					$('#light-distance').attr('placeholder','M').val('').data('prevVal',''); mults['light-distance'] = true;
+				} else if(!mults['light-distance']){
+					var newVal = notNaN(parseFloat(obj.distance));
+					$('#light-distance').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}
+				if(prevObj && prevObj.exponent != obj.exponent){
+					$('#light-exponent').attr('placeholder','M').val('').data('prevVal',''); mults['light-exponent'] = true;
+				} else if(!mults['light-exponent']){
+					var newVal = notNaN(parseFloat(obj.exponent));
+					$('#light-exponent').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}
+				if(prevObj && prevObj.angle != obj.angle){
+					$('#light-angle').attr('placeholder','M').val('').data('prevVal',''); mults['light-angle'] = true;
+				} else if(!mults['light-angle']){
+					var newVal = notNaN(parseFloat(obj.angle * radToDeg));
+					$('#light-angle').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}
+				
+				if(prevObj && prevObj.shadowBias != obj.shadowBias){
+					$('#light-shadow-bias').attr('placeholder','M').val('').data('prevVal',''); mults['light-shadow-bias'] = true;
+				} else if(!mults['light-shadow-bias']){
+					var newVal = notNaN(parseFloat(obj.shadowBias));
+					$('#light-shadow-bias').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}
+				if(prevObj && prevObj.shadowCameraNear != obj.shadowCameraNear){
+					$('#light-shadow-near').attr('placeholder','M').val('').data('prevVal',''); mults['light-shadow-near'] = true;
+				} else if(!mults['light-shadow-near']){
+					var newVal = notNaN(parseFloat(obj.shadowCameraNear));
+					$('#light-shadow-near').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}
+				if(prevObj && prevObj.shadowCameraFar != obj.shadowCameraFar){
+					$('#light-shadow-far').attr('placeholder','M').val('').data('prevVal',''); mults['light-shadow-far'] = true;
+				} else if(!mults['light-shadow-far']){
+					var newVal = notNaN(parseFloat(obj.shadowCameraFar));
+					$('#light-shadow-far').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}
+				if(prevObj && prevObj.shadowCameraRight != obj.shadowCameraRight){
+					$('#light-shadow-vol-width').attr('placeholder','M').val('').data('prevVal',''); mults['light-shadow-vol-width'] = true;
+				} else if(!mults['light-shadow-vol-width']){
+					var newVal = notNaN(parseFloat(obj.shadowCameraRight)) * 2;
+					$('#light-shadow-vol-width').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}
+				if(prevObj && prevObj.shadowCameraTop != obj.shadowCameraTop){
+					$('#light-shadow-vol-height').attr('placeholder','M').val('').data('prevVal',''); mults['light-shadow-vol-height'] = true;
+				} else if(!mults['light-shadow-vol-height']){
+					var newVal = notNaN(parseFloat(obj.shadowCameraTop)) * 2;
+					$('#light-shadow-vol-height').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}
+				if(prevObj && prevObj.shadowMapWidth != obj.shadowMapWidth){
+					$('#light-shadow-map-width').attr('placeholder','M').val('').data('prevVal',''); mults['light-shadow-map-width'] = true;
+				} else if(!mults['light-shadow-map-width']){
+					var newVal = notNaN(parseFloat(obj.shadowMapWidth));
+					$('#light-shadow-map-width').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}
+				if(prevObj && prevObj.shadowMapHeight != obj.shadowMapHeight){
+					$('#light-shadow-map-height').attr('placeholder','M').val('').data('prevVal',''); mults['light-shadow-map-height'] = true;
+				} else if(!mults['light-shadow-map-height']){
+					var newVal = notNaN(parseFloat(obj.shadowMapHeight));
+					$('#light-shadow-map-height').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}
+
+			}
+			
 			prevObj = obj;
 		}
 		
+		// show camera panel
 		if(commonType == 'Camera'){
 			$('#panel-camera').show();
 			$('#cam-default,#cam-default~label').css({ visibility: (this.selectedObjects.length != 1) ? 'hidden' : 'visible'});
 		}		
 		
-		// disable move
+		if((containsDirLights || containsHemiLights || containsPointLights || containsSpotLights) &&
+			!(containsAnchors || containsCameras || containsContainers || containsInstances || containsPlanes || containsPointClouds)){
+			$('#panel-light').show();
+			
+			$('#light-distance,#light-exponent,#light-angle').spinner('enable');
+			$('#light-shadow-bias,#light-shadow-near,#light-shadow-far,#light-shadow-vol-width,#light-shadow-vol-height,#light-shadow-map-width,#light-shadow-map-height').spinner('enable');
+			
+			if(containsDirLights || containsPointLights || containsHemiLights) $('#light-exponent,#light-angle').spinner('disable');
+			if(containsHemiLights) $('#light-distance').spinner('disable');
+			if(containsHemiLights || containsPointLights){
+				$('#light-shadow-bias,#light-shadow-near,#light-shadow-far,#light-shadow-vol-width,#light-shadow-vol-height,#light-shadow-map-width,#light-shadow-map-height').spinner('disable');
+			}
+			if(containsDirLights) $('#light-distance').spinner('disable');
+			if(containsSpotLights) $('#light-shadow-vol-width,#light-shadow-vol-height').spinner('disable');
+
+		}
+		
+		// disable move if anchors selected
 		if(containsAnchors){
 			$('#panel-move input[type=text]').attr('disabled','disabled').spinner('disable');
 			$('#panel-move input[type=checkbox]').attr('disabled','disabled');
@@ -3056,13 +3460,21 @@ EditSceneScene.prototype = {
 			$('#look-at,#prop-name,#obj-from-cam').removeAttr('disabled');			
 		}
 		
+		// only hemi lights have ground color
+		if(containsHemiLights){
+			$('#light-ground-color').css({visibility: ((containsSpotLights || containsDirLights || containsPointLights) ? 'hidden' : 'visible')});
+		} else {
+			$('#light-ground-color').css({visibility: 'hidden'});
+		}
+		
+		
 		if(this.selectedObjects.length == 1){
 			$('#obj-from-cam').removeAttr('disabled');
 		} else {
 			$('#obj-from-cam').attr('disabled','disabled');
 		}
 		
-		this.updateStoredPosition();
+				this.updateStoredPosition();
 		
 		// if(containsSpotLights || containsDirLights){ $('#look-at').attr('disabled', 'disabled'); }
 	},
@@ -3158,6 +3570,8 @@ EditSceneScene.prototype = {
 			<div id="panel-move" class="panel"><h4>Object3D</h4>\
 			<input tabindex="9" type="checkbox" id="prop-visible"/><label for="prop-visible" class="w3">Visible</label>\
 			<input tabindex="10" type="checkbox" id="prop-template"/><label for="prop-template" class="w32">Template</label>\
+			<hr/><input tabindex="11" type="checkbox" id="prop-cast-shadow"/><label for="prop-cast-shadow" class="w32">Cast Shadow</label>\
+			<input tabindex="12" type="checkbox" id="prop-receive-shadow"/><label for="prop-receive-shadow" class="w32">Receive Shadow</label>\
 			<hr/><label for="prop-x" class="w0 right-align">X</label><input tabindex="0" type="text" class="center position" id="prop-x" size="1"/>\
 			<label for="prop-rx" class="w1 right-align">Rot X</label><input tabindex="3" type="text" class="center rotation" id="prop-rx" size="1"/>\
 			<label for="prop-sx" class="w1 right-align">Scale X</label><input tabindex="6" type="text" class="center scale" id="prop-sx" size="1"/><br/>\
@@ -3179,9 +3593,17 @@ EditSceneScene.prototype = {
 		$('#prop-name').change(this.nameChanged.bind(this));
 		
 // object3d
+		function checkBoxValueChanged(setValueFunc){
+			return function(e){
+				var targ = $(e.target);
+				setValueFunc.call(editScene, e.target.checked);
+			}	
+		};
 		$('#panel-move input.position').spinner({step:1, change:this.positionSpinnerChange, stop:this.positionSpinnerChange });//
 		$('#panel-move input.rotation').spinner({step:5, change:this.rotationSpinnerChange, stop:this.rotationSpinnerChange});//
 		$('#panel-move input.scale').spinner({step:0.25, change:this.scaleSpinnerChange, stop:this.scaleSpinnerChange});//
+		$('#prop-cast-shadow').click(checkBoxValueChanged(this.castShadowChanged));
+		$('#prop-receive-shadow').click(checkBoxValueChanged(this.receiveShadowChanged));
 		$('#prop-visible').click(this.visibleChanged);
 		$('#prop-template').click(this.templateChanged);
 		$('#look-at').click(this.lookAtClicked);
@@ -3211,7 +3633,7 @@ EditSceneScene.prototype = {
 				// check if value actually changed
 				var prevVal = targ.data('prevVal').toString();
 				if(targ.val().toString() === prevVal) return;
-				var newVal = parseInt(targ.spinner('value'));
+				var newVal = parseFloat(targ.spinner('value'));
 				if(isNaN(newVal)) newVal = 0;
 				setValueFunc.call(editScene, newVal);
 				targ.data('prevVal', targ.val());
@@ -3226,11 +3648,13 @@ EditSceneScene.prototype = {
 		function colorPickerOnShow(dom){ 
 			$(dom).css({zIndex: 10000001});
 			var src = $(this);
-			var clr = new THREE.Color(src.css('background-color'));
-			var hex = clr.getHexString();
-			$(src).data('prevVal', hex);
-			src.colpickSetColor(hex, true);
-			
+			var css = src.css('background-color');
+			if(css != 'transparent'){
+				var clr = new THREE.Color(css);
+				var hex = clr.getHexString();
+				$(src).data('prevVal', hex);
+				src.colpickSetColor(hex, true);
+			}
 		};
 		$('#scene-color').colpick({
 			colorScheme:'dark',
@@ -3285,7 +3709,125 @@ EditSceneScene.prototype = {
 		$('#cam-far').spinner({step:10, min:1, change:vc, stop:vc});//
 		$('#cam-default').click(this.cameraDefaultChanged);
 
+// Light panel
+		$('#editor-props .panels').append('<div id="panel-light" class="panel"><h4>Light</h4>\
+			<label class="w3 right-align pad5">Color</label><div id="light-color" class="color-swatch"/>&nbsp;\
+			<div id="light-ground-color" class="color-swatch"/><br/>\
+			<label for="light-intensity" class="w3 pad5 right-align">Intensity</label><input tabindex="0" type="text" class="center" id="light-intensity" size="2"/>\
+			<label for="light-shadow-near" class="w32 pad5 right-align">Shadow Near</label><input tabindex="0" type="text" class="center" id="light-shadow-near" size="2"/>\
+			<br/>\
+			<label for="light-distance" class="w3 pad5 right-align">Distance</label><input tabindex="1" type="text" class="center" id="light-distance" size="2"/>\
+			<label for="light-shadow-far" class="w32 pad5 right-align">Shadow Far</label><input tabindex="0" type="text" class="center" id="light-shadow-far" size="2"/>\
+			<br/>\
+			<label for="light-exponent" class="w3 pad5 right-align">Exponent</label><input tabindex="2" type="text" class="center" id="light-exponent" size="2"/>\
+			<label for="light-shadow-vol-width" class="w32 pad5 right-align">Vol. Width</label><input tabindex="0" type="text" class="center" id="light-shadow-vol-width" size="2"/>\
+			<br/>\
+			<label for="light-angle" class="w3 pad5 right-align">Angle</label><input tabindex="3" type="text" class="center" id="light-angle" size="2"/>\
+			<label for="light-shadow-vol-height" class="w32 pad5 right-align">Vol. Height</label><input tabindex="0" type="text" class="center" id="light-shadow-vol-height" size="2"/>\
+			<br/>\
+			<label for="light-shadow-map-width" class="w3 pad5 right-align">Map Width</label><input tabindex="0" type="text" class="center" id="light-shadow-map-width" size="2"/>\
+			<label for="light-shadow-map-height" class="w32 pad5 right-align">Map Height</label><input tabindex="0" type="text" class="center" id="light-shadow-map-height" size="2"/>\
+			<br/>\
+			<label for="light-shadow-bias" class="w32 pad5 right-align">Shadow Bias</label><input tabindex="0" type="text" class="center" id="light-shadow-bias" size="4"/>\
+			</div>');
+		$('#light-color').colpick({
+			colorScheme:'dark',
+			onShow:function(dom){ 
+				$(dom).css({zIndex: 10000001});
+				var src = $(this);
+				var css = src.css('background-color');
+				if(css != 'transparent'){
+					var clr = new THREE.Color(css);
+					var hex = clr.getHexString();
+					$(src).data('prevVal', hex);
+					src.colpickSetColor(hex, true);
+				}
+				// store preselection color
+				for(var i = 0; i < editScene.selectedObjects.length; i++){
+					var obj = editScene.selectedObjects[i];
+					obj.storedColor = obj.color.getHex();
+				}
+			},
+			onHide:function(){ 
+				for(var i = 0; i < editScene.selectedObjects.length; i++){
+					var obj = editScene.selectedObjects[i];
+					obj.color.setHex(obj.storedColor);
+				}
+			},
+			onSubmit:function(hsb, hex, rgb, el){
+				editScene.setLightColor(parseInt(hex,16));
+				$('#light-color').css({backgroundColor:'#'+hex});
+				$(el).colpickHide();
+			},
+			onChange:function(hsb, hex, rgb, el){
+				var newColor = parseInt(hex,16);
+				for(var i = 0; i < editScene.selectedObjects.length; i++){
+					var obj = editScene.selectedObjects[i];
+					obj.color.setHex(newColor);
+				}
+			}
+		});
+		$('#light-ground-color').colpick({
+			colorScheme:'dark',
+			onShow:function(dom){ 
+				$(dom).css({zIndex: 10000001});
+				var src = $(this);
+				var css = src.css('background-color');
+				if(css != 'transparent'){
+					var clr = new THREE.Color(css);
+					var hex = clr.getHexString();
+					$(src).data('prevVal', hex);
+					src.colpickSetColor(hex, true);
+				}
+				// store preselection color
+				for(var i = 0; i < editScene.selectedObjects.length; i++){
+					var obj = editScene.selectedObjects[i];
+					obj.storedColor = obj.groundColor.getHex();
+				}
+			},
+			onHide:function(){ 
+				for(var i = 0; i < editScene.selectedObjects.length; i++){
+					var obj = editScene.selectedObjects[i];
+					obj.groundColor.setHex(obj.storedColor);
+				}
+			},
+			onSubmit:function(hsb, hex, rgb, el){
+				editScene.setGroundLightColor(parseInt(hex,16));
+				$(el).colpickHide();
+				$('#light-ground-color').css({backgroundColor:'#'+hex});
+			},
+			onChange:function(hsb, hex, rgb, el){
+				var newColor = parseInt(hex,16);
+				for(var i = 0; i < editScene.selectedObjects.length; i++){
+					var obj = editScene.selectedObjects[i];
+					obj.groundColor.setHex(newColor);
+				}
+			}
+		});
+		vc = valueChanged(this.lightIntensityChanged);
+		$('#light-intensity').spinner({step:0.1, min:0, change:vc, stop:vc});
+		vc = valueChanged(this.lightDistanceChanged);
+		$('#light-distance').spinner({step:1, min:0, change:vc, stop:vc});
+		vc = valueChanged(this.lightExponentChanged);
+		$('#light-exponent').spinner({step:1, min:0, change:vc, stop:vc});
+		vc = valueChanged(this.lightAngleChanged);
+		$('#light-angle').spinner({step:5, min:0, max:180, change:vc, stop:vc});
 		
+		vc = valueChanged(this.lightShadowBiasChanged);
+		$('#light-shadow-bias').spinner({step:0.0001, change:vc, stop:vc});
+		vc = valueChanged(this.lightShadowNearChanged);
+		$('#light-shadow-near').spinner({step:1, min:0, change:vc, stop:vc});
+		vc = valueChanged(this.lightShadowFarChanged);
+		$('#light-shadow-far').spinner({step:1, min:1, change:vc, stop:vc});
+		vc = valueChanged(this.lightShadowVolWidthChanged);
+		$('#light-shadow-vol-width').spinner({step:1, min:1, change:vc, stop:vc});
+		vc = valueChanged(this.lightShadowVolHeightChanged);
+		$('#light-shadow-vol-height').spinner({step:1, min:1, change:vc, stop:vc});
+		vc = valueChanged(this.lightShadowMapWidthChanged);
+		$('#light-shadow-map-width').spinner({step:256, min:64, max: 2048, change:vc, stop:vc});
+		vc = valueChanged(this.lightShadowMapHeightChanged);
+		$('#light-shadow-map-height').spinner({step:256, min:64, max: 2048, change:vc, stop:vc});
+
 		var savePosOnDrop = function(e, ui) { localStorage_setItem(ui.helper.context.id + '-x', ui.position.left); localStorage_setItem(ui.helper.context.id + '-y', ui.position.top); };
 		var bringToFront = function(e, ui){ $('body').append(ui.helper.context); }
 		function makeDraggablePanel(id, defX, defY, defH, onResizeHandler){
@@ -3311,6 +3853,7 @@ EditSceneScene.prototype = {
 				panel.css('height', h ? h : defH);
 			}
 			if(onResizeHandler) onResizeHandler();
+			dh = panel.height();
 			var dx = localStorage_getItem(id+'-x');
 			var dy = localStorage_getItem(id+'-y');
 			dx = Math.min((dx === null) ? defX : dx, window.innerWidth - dw);
@@ -3863,8 +4406,8 @@ THREE.Object3D.prototype.serialize = function(templates){
 		}
 	}  else if(this instanceof THREE.SpotLight){
 		def.asset = 'SpotLight';
-		if(this.shadowCameraRight != 128) def.shadowVolumeWidth = this.shadowCameraRight * 2;
-		if(this.shadowCameraTop != 128) def.shadowVolumeHeight = this.shadowCameraTop * 2;
+		//if(this.shadowCameraRight != 128) def.shadowVolumeWidth = this.shadowCameraRight * 2;
+		//if(this.shadowCameraTop != 128) def.shadowVolumeHeight = this.shadowCameraTop * 2;
 		def.shadowBias = this.shadowBias;
 		def.shadowMapWidth = Math.max(this.shadowMapWidth, this.shadowMapHeight);
 		def.color = this.color.getHexString();
