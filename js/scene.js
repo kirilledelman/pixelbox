@@ -141,6 +141,11 @@ Scene.prototype = {
 					if(layer.fov != undefined) obj3d.fov = layer.fov;
 					if(layer.near != undefined) obj3d.near = layer.near;
 					if(layer.far != undefined) obj3d.far = layer.far;
+					if(layer.isDefault && (this instanceof Scene) && !this.camera.def) { 
+						this.camera.parent.remove(this.camera);
+						this.camera = obj3d;
+					}
+					obj3d.isDefault = layer.isDefault ? true : false;
 				} else {
 					obj3d = this.camera; // only one camera - link to scene's camera
 				}
@@ -324,6 +329,7 @@ Scene.prototype = {
 				obj3d.helper = helper;
 				helper.isHelper = true;
 				helper.update();
+				helper.visible = false;
 			}
 			
 			if(layer.visible != undefined) {
@@ -378,19 +384,7 @@ Scene.prototype = {
 				if(layer.playAnim != undefined) { 
 					obj3d.playAnim(layer.playAnim);
 				}
-				
-				/*if(layer.move){
-					var p = new THREE.Vector3(layer.move[0],layer.move[1],layer.move[2]);
-					p.add(obj3d.position);
-					obj3d.tween({target:obj3d.position, to:p, duration: layer.move[3]});
-				}
-				if(layer.rotate){
-					var degToRad = Math.PI / 180.0;
-					var r = new THREE.Euler(layer.rotate[0] * degToRad,layer.rotate[1] * degToRad,layer.rotate[2] * degToRad,'XYZ');
-					r.x += obj3d.rotation.x; r.y += obj3d.rotation.y; r.z += obj3d.rotation.z;
-					obj3d.tween({target:obj3d.rotation, to:r, duration: layer.rotate[3]});
-				}*/
-				
+
 				// re-add anchors if removed
 				for(var a in obj3d.anchors){
 					if(!obj3d.anchors[a].parent){
@@ -411,10 +405,20 @@ Scene.prototype = {
 			
 			objectsCreated.push(obj3d);
 			
+			if(layer.isTemplate) obj3d.isTemplate = layer.isTemplate;
+			
+			// add templates for editor
+			if(layer.containsTemplates && options.templates){
+				for(var ti = 0; ti < layer.containsTemplates.length; ti++){
+					var td = options.templates[layer.containsTemplates[ti]];
+					if(td) objectsCreated = objectsCreated.concat(this.populateObject(obj3d, [ options.templates[layer.containsTemplates[ti]] ], options));
+				}
+			}
 			// recursively process children
 			if(layer.layers){
 				objectsCreated = objectsCreated.concat(this.populateObject(obj3d, layer.layers, options));
 			}
+			
 		}
 		
 		return objectsCreated;
@@ -535,6 +539,35 @@ Scene.prototype = {
 		this.composer.reset(this.fbo);*/
     }
 };
+/*
+//changes the parent but preserves global position + rotation
+THREE.Object3D.prototype.transplant = function ( parent ) {
+  var target = this;
+  
+  // calculate new pos
+  var newPos = new THREE.Vector3()
+  newPos.setFromMatrixPosition( target.matrixWorld )
+  parent.worldToLocal( newPos )
+  target.position = newPos
+
+  // calculate new rot
+  var newRot = new THREE.Quaternion()
+  newRot.setFromRotationMatrix( target.matrixWorld )
+  var parentRot = new THREE.Quaternion()
+  parentRot.setFromRotationMatrix( parent.matrixWorld )
+  newRot.multiply( parentRot.inverse() )
+  target.quaternion.copy( newRot )
+
+  // attach to parent
+  parent.add( target )
+
+}*/
+
+THREE.Object3D.prototype.isVisibleRecursive = function(){
+	if(!this.visible) return false;
+	if(this.parent) return this.parent.isVisibleRecursive();
+	return this.visible;	
+}
 
 THREE.Object3D.prototype.isDescendentOf = function(another){
 	if(!this.parent) return false;

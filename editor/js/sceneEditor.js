@@ -1,21 +1,33 @@
 /*
 
 
-	modify .serialize() so that Dir and Spotlights output .target correctly
-	
-	move populateObject to THREE.Scene
-	
-	screenshot move	
-	
-	
+	screenshot or test scene mode (maybe select camera, Test Scene button in props?)
 
 	Properties:
-		Scene:
-			MaxShadows - reserve shadows
-			Clear color
-			Fog values
-			
+
+		Object3D
+			set to camera | set from camera
+		
+		PixelBox:
+		Animation (dropdown) playAnim, loopAnim, gotoAndStop (Animation list dropdown) (frame spinner)
+		...
+		[Swap Asset]
+		
+		
+	Object type - instance of template	
+		dynamic updates when template is edited
 	
+		
+	TODO:
+	
+	mouse move tool
+	
+	make transform(max scale) affect pointSize
+	
+	? Camera default + template
+			
+	? copy, paste when asset has been deleted
+
 */
 
 function EditSceneScene(){
@@ -32,6 +44,8 @@ function EditSceneScene(){
 		
 	this.canvasInteractionsEnabled = true;
 	this.disableCanvasInteractionsOnRelease = false;
+	
+	this.version = '1.0';
 }
 
 EditSceneScene.prototype = {
@@ -40,6 +54,31 @@ EditSceneScene.prototype = {
 
 	/* undo queue */
 	initUndo:function(){
+		if(this._undo){
+			// clean up / dispose
+			var checkArgs = function(arg){
+				if(typeof(arg)!='object') return;
+				for(var p in arg){
+					var val = arg[p];
+					if(typeof(val)!='object') continue;
+					if(val && val instanceof THREE.Object3D){
+						if(val instanceof THREE.PointCloud) val.dispose();
+						checkArgs(p.children);
+					}
+				}
+			}
+			
+			// process undo and redo
+			for(var i = 0; i < this._undo.length; i++){
+				checkArgs(this._undo[i].undo);	
+				checkArgs(this._undo[i].redo);	
+			}
+			for(var i = 0; i < this._redo.length; i++){
+				checkArgs(this._redo[i].undo);	
+				checkArgs0(this._redo[i].redo);	
+			}
+		}
+		
 		this._undoing = false;
 		this._undo = [];
 		this._redo = [];
@@ -156,9 +195,11 @@ EditSceneScene.prototype = {
 			if(item instanceof Array){
 				for(var i = item.length - 1; i >= 0; i--){
 					var uitem = item[i];
+					if(uitem.name) console.log('<< '+uitem.name);
 					uitem.undo[0].apply(editScene, uitem.undo.slice(1));				
 				}
 			} else {
+				if(item.name) console.log('<< '+item.name);
 				item.undo[0].apply(editScene, item.undo.slice(1));
 			}
 			this._undoing = false;
@@ -174,9 +215,11 @@ EditSceneScene.prototype = {
 			if(item instanceof Array){
 				for(var i = 0; i < item.length; i++){
 					var uitem = item[i];
+					if(uitem.name) console.log('>> '+uitem.name);
 					uitem.redo[0].apply(editScene, uitem.redo.slice(1));				
 				}
 			} else {
+				if(item.name) console.log('>> '+item.name);
 				item.redo[0].apply(editScene, item.redo.slice(1));
 			}
 			this._undoing = false;
@@ -196,7 +239,7 @@ EditSceneScene.prototype = {
 		this.alt = e.altKey;
 		
 		// ignore right button
-		if(e.button === 2 || !this.canvasInteractionsEnabled || $(event.target).hasClass('object-label')) return;
+		if(e.button === 2 || !this.canvasInteractionsEnabled || $(e.target).hasClass('object-label')) return;
 		
 		// blur input boxes
 		if(e.target.nodeName.toLowerCase()=='canvas') editScene.blur();
@@ -401,348 +444,6 @@ EditSceneScene.prototype = {
 	},
 
 
-/* ------------------- ------------------- ------------------- ------------------- ------------------- Name */
-
-	renameObjects:function(objNameArr){
-		for(var i = 0; i < objNameArr.length; i++){
-			var obj = objNameArr[i][0];
-			obj.name = objNameArr[i][1];
-			if(obj.htmlLabel){
-				obj.htmlLabel.text(obj.name);
-			}
-			if(obj.htmlRow){
-				obj.htmlRow.children('label').first().text(obj.name);
-			}
-		}
-	},
-
-	renameScene:function(newName){
-		this.doc.name = newName;
-		$('#scene-list #scene > label').text(newName);
-	},
-
-	nameChanged:function(e){
-		var doArr = [];
-		var undoArr = [];
-		var newName = $('#prop-name').val().replace(/\W+/g,'_'); // replace non-word chars with _
-		if(newName.match(/^\d+/)){ // prepend _ if starts with a digit
-			newName = '_'+newName;
-		}
-		for(var i = 0; i < this.selectedObjects.length; i++){
-			var obj = this.selectedObjects[i];
-			undoArr.push([obj, obj.name ]);
-			doArr.push([obj, newName]);
-		}
-		
-		if(undoArr.length){ 
-			this.addUndo({name:"rename", redo:[this.renameObjects,doArr], undo:[this.renameObjects, undoArr] });
-			this.renameObjects(doArr);
-		} else {
-			this.addUndo({name:"renameScene", redo:[this.renameScene,newName], undo:[this.renameScene, this.doc.name] });
-			this.renameScene(newName);
-		}
-		
-		this.refreshProps();
-	},
-
-/* ------------------- ------------------- ------------------- ------------------- ------------------- Move, scale, rotate */
-
-	
-	moveObjects:function(objPosArr){
-		for(var i = 0; i < objPosArr.length; i++){
-			var obj = objPosArr[i][0];
-			obj.position.copy(objPosArr[i][1]);
-		}
-	},
-
-	moveSelectionTo: function(pos){
-		var objPosArr = [];
-		var undoPosArr = [];
-		for(var i = 0; i < this.selectedObjects.length; i++){
-			var obj = this.selectedObjects[i];
-			if(obj.isAnchor) continue;
-			undoPosArr.push([obj, obj.position.clone() ]);
-			objPosArr.push([obj,
-				new THREE.Vector3(	(pos.x === null ? obj.position.x : pos.x),
-									(pos.y === null ? obj.position.y : pos.y),
-									(pos.z === null ? obj.position.z : pos.z))
-			]);
-		}
-		
-		if(objPosArr.length) this.addUndo({name:"moveTo", mergeable:true, redo:[this.moveObjects, objPosArr], undo:[this.moveObjects, undoPosArr] });
-		
-		this.moveObjects(objPosArr);
-		return objPosArr.length;
-	},
-
-	moveSelectionBy: function(pos){
-		var objPosArr = [];
-		var undoPosArr = [];
-		for(var i = 0; i < this.selectedObjects.length; i++){
-			var obj = this.selectedObjects[i];
-			if(obj.isAnchor) continue;
-			undoPosArr.push([obj, obj.position.clone() ]);
-			objPosArr.push([obj,
-				new THREE.Vector3(	obj.position.x + (pos.x === null ? 0 : pos.x),
-									obj.position.y + (pos.y === null ? 0 : pos.y),
-									obj.position.z + (pos.z === null ? 0 : pos.z))
-			]);
-		}
-		
-		this.moveObjects(objPosArr);		
-		if(objPosArr.length) this.addUndo({name:"moveBy", mergeable:true, redo:[this.moveObjects, objPosArr], undo:[this.moveObjects, undoPosArr] });
-	},
-
-	rotateObjects:function(objRotArr){
-		for(var i = 0; i < objRotArr.length; i++){
-			var obj = objRotArr[i][0];
-			var rot = objRotArr[i][1];
-			if((obj instanceof THREE.DirectionalLight || obj instanceof THREE.SpotLight) && rot instanceof THREE.Object3D){
-				obj.target = rot;
-			} else {
-				obj.rotation.copy(rot);
-			}
-		}
-	},
-
-	rotateSelectionTo: function(rot){
-		var objRotArr = [];
-		var undoRotArr = [];
-		var degToRad = Math.PI / 180;
-		for(var i = 0; i < this.selectedObjects.length; i++){
-			var obj = this.selectedObjects[i];
-			if(obj.isAnchor) continue;
-			undoRotArr.push([obj, obj.rotation.clone() ]);
-			objRotArr.push([obj,
-				new THREE.Euler(	(rot.x === null ? obj.rotation.x : (rot.x * degToRad)),
-									(rot.y === null ? obj.rotation.y : (rot.y * degToRad)),
-									(rot.z === null ? obj.rotation.z : (rot.z * degToRad)))
-			]);
-		}
-		
-		this.rotateObjects(objRotArr);
-		if(objRotArr.length) this.addUndo({name:"rotateTo", mergeable:true, redo:[this.rotateObjects, objRotArr], undo:[this.rotateObjects, undoRotArr] });
-		return objRotArr.length;
-	},
-
-	rotateSelectionBy: function(rot){
-		var objRotArr = [];
-		var undoRotArr = [];
-		var degToRad = Math.PI / 180;
-		for(var i = 0; i < this.selectedObjects.length; i++){
-			var obj = this.selectedObjects[i];
-			if(obj.isAnchor) continue;
-			undoRotArr.push([obj, obj.rotation.clone() ]);
-			objRotArr.push([obj,
-				new THREE.Euler(	obj.rotation.x + (rot.x === null ? 0 : (rot.x * degToRad)),
-									obj.rotation.y + (rot.y === null ? 0 : (rot.y * degToRad)),
-									obj.rotation.z + (rot.z === null ? 0 : (rot.z * degToRad)))
-			]);
-		}
-		
-		if(objRotArr.length) this.addUndo({name:"rotateBy", mergeable:true, redo:[this.rotateObjects, objRotArr], undo:[this.rotateObjects, undoRotArr] });
-		
-		this.rotateObjects(objRotArr);
-		
-	},
-	
-	scaleObjects:function(objScaleArr){
-		for(var i = 0; i < objScaleArr.length; i++){
-			objScaleArr[i][0].scale.copy(objScaleArr[i][1]);
-		}
-	},
-
-	scaleSelectionTo: function(scale){
-		var objScaleArr = [];
-		var undoScaleArr = [];
-		for(var i = 0; i < this.selectedObjects.length; i++){
-			var obj = this.selectedObjects[i];
-			if(obj.isAnchor) continue;
-			undoScaleArr.push([obj, obj.scale.clone() ]);
-			objScaleArr.push([obj,
-				new THREE.Vector3(	(scale.x === null ? obj.scale.x : scale.x),
-									(scale.y === null ? obj.scale.y : scale.y),
-									(scale.z === null ? obj.scale.z : scale.z))
-			]);
-		}
-		
-		this.scaleObjects(objScaleArr);
-		if(objScaleArr.length) this.addUndo({name:"scaleTo", mergeable:true, redo:[this.scaleObjects, objScaleArr], undo:[this.scaleObjects, undoScaleArr] });
-		
-		return objScaleArr.length;
-	},
-
-	scaleSelectionBy: function(scale){
-		var objScaleArr = [];
-		var undoScaleArr = [];
-		for(var i = 0; i < this.selectedObjects.length; i++){
-			var obj = this.selectedObjects[i];
-			if(obj.isAnchor) continue;
-			undoScaleArr.push([obj, obj.scale.clone() ]);
-			objScaleArr.push([obj,
-				new THREE.Vector3(	obj.scale.x + (scale.x === null ? 0 : scale.x),
-									obj.scale.y + (scale.y === null ? 0 : scale.y),
-									obj.scale.z + (scale.z === null ? 0 : scale.z))
-			]);
-		}
-		
-		if(objScaleArr.length) this.addUndo({name:"scaleBy", mergeable:true, redo:[this.scaleObjects, objScaleArr], undo:[this.scaleObjects, undoScaleArr] });
-		
-		this.scaleObjects(objScaleArr);
-		
-	},
-	
-	lookAtSelection: function(targ){
-		if(targ.selected) return;
-		var objRotArr = [];
-		var undoRotArr = [];
-		var degToRad = Math.PI / 180;
-		var wp = new THREE.Vector3();
-		targ.localToWorld(wp);
-		for(var i = 0; i < this.selectedObjects.length; i++){
-			var obj = this.selectedObjects[i];
-			if(obj.isAnchor) continue;
-			if(obj instanceof THREE.DirectionalLight || obj instanceof THREE.SpotLight){
-				// if(targ.isAnchor && (targ.parent == obj.parent || (obj.parent.isAnchor && obj.parent.parent == targ.parent))){
-				undoRotArr.push([obj, obj.target ]);
-				obj.target = targ;
-				objRotArr.push([obj, targ]);
-			} else {
-				undoRotArr.push([obj, obj.rotation.clone() ]);
-				obj.lookAt(wp);
-				objRotArr.push([obj, obj.rotation.clone()]);
-			}
-		}
-		if(!objRotArr.length) return;
-		this.addUndo({name:"lookAt", redo:[this.rotateObjects, objRotArr], undo:[this.rotateObjects, undoRotArr] });
-		this.refreshProps();
-	},
-	
-	lookAtClicked:function(e){
-		if($(e.target).attr('disabled')) return;
-		if(editScene.objectPickMode){
-			editScene.objectPickMode(null);
-			return;
-		}
-		
-		$('#look-at').addClass('active');
-		$('canvas,.object-label,#scene-list div.row:not(.selected),#scene-list div.row:not(.selected) > label').css('cursor','cell');
-		editScene.objectPickMode = function(obj){
-			if(obj){
-				editScene.lookAtSelection(obj);
-			}
-			$('#look-at').removeClass('active');
-			editScene.objectPickMode = null;
-			$('canvas,.object-label,#scene-list div.row:not(.selected),#scene-list div.row:not(.selected) > label').css('cursor','');
-		};
-	},
-	
-	updateStoredPosition:function(){
-		this.storedTransform = this.storedTransform ? this.storedTransform : {pos:null,rot:null,scale:null};
-		if(this.storedTransform.pos){
-			var tt = '{'+(this.storedTransform.pos[0] != '' ? this.storedTransform.pos[0] : '*') + ','
-					+(this.storedTransform.pos[1] != '' ? this.storedTransform.pos[1] : '*') + ','
-					+(this.storedTransform.pos[2] != '' ? this.storedTransform.pos[2] : '*') + '}';
-			$('#store-pos').attr('disabled','disabled').attr('title',tt);
-			$('#clear-pos').removeAttr('disabled').attr('title',tt);
-		} else {
-			$('#store-pos').removeAttr('disabled').removeAttr('title');
-			$('#clear-pos').attr('disabled','disabled').removeAttr('title');
-		}
-		if(this.storedTransform.rot){
-			var tt = '{'+(this.storedTransform.rot[0] != '' ? this.storedTransform.rot[0] : '*') + ','
-					+(this.storedTransform.rot[1] != '' ? this.storedTransform.rot[1] : '*') + ','
-					+(this.storedTransform.rot[2] != '' ? this.storedTransform.rot[2] : '*') + '}';
-			$('#store-rot').attr('disabled','disabled').attr('title',tt);
-			$('#clear-rot').removeAttr('disabled').attr('title',tt);
-		} else {
-			$('#store-rot').removeAttr('disabled').removeAttr('title');
-			$('#clear-rot').attr('disabled','disabled').removeAttr('title');	
-		}
-		if(this.storedTransform.scale){
-			var tt = '{'+(this.storedTransform.scale[0] != '' ? this.storedTransform.scale[0] : '*') + ','
-					+(this.storedTransform.scale[1] != '' ? this.storedTransform.scale[1] : '*') + ','
-					+(this.storedTransform.scale[2] != '' ? this.storedTransform.scale[2] : '*') + '}';
-			$('#store-scale').attr('disabled','disabled').attr('title',tt);
-			$('#clear-scale').removeAttr('disabled').attr('title',tt);
-		} else {
-			$('#store-scale').removeAttr('disabled').removeAttr('title');
-			$('#clear-scale').attr('disabled','disabled').removeAttr('title');
-		}
-		
-		if((this.storedTransform.pos || this.storedTransform.rot || this.storedTransform.scale) && !($('#prop-x').attr('disabled'))){
-			$('#restore-pos').removeAttr('disabled');
-		} else {
-			$('#restore-pos').attr('disabled','disabled');	
-		}
-
-	},
-	
-	restorePosition:function(){
-		var v = new THREE.Vector3();
-		var numAffected = 0;
-		if(this.storedTransform.pos){
-			v.x = this.storedTransform.pos[0] === '' ? null : parseFloat(this.storedTransform.pos[0]);
-			v.y = this.storedTransform.pos[1] === '' ? null : parseFloat(this.storedTransform.pos[1]);
-			v.z = this.storedTransform.pos[2] === '' ? null : parseFloat(this.storedTransform.pos[2]);
-			if(this.moveSelectionTo(v)) numAffected++;
-		}
-		if(this.storedTransform.rot){
-			v.x = this.storedTransform.rot[0] === '' ? null : parseFloat(this.storedTransform.rot[0]);
-			v.y = this.storedTransform.rot[1] === '' ? null : parseFloat(this.storedTransform.rot[1]);
-			v.z = this.storedTransform.rot[2] === '' ? null : parseFloat(this.storedTransform.rot[2]);
-			if(this.rotateSelectionTo(v)) numAffected++;
-		}
-		if(this.storedTransform.scale){
-			v.x = this.storedTransform.scale[0] === '' ? null : parseFloat(this.storedTransform.scale[0]);
-			v.y = this.storedTransform.scale[1] === '' ? null : parseFloat(this.storedTransform.scale[1]);
-			v.z = this.storedTransform.scale[2] === '' ? null : parseFloat(this.storedTransform.scale[2]);
-			if(this.scaleSelectionTo(v)) numAffected++;
-		}
-		
-		if(numAffected > 1){
-			this.joinUndoActions(numAffected);
-		}
-		this.undoChanged();
-		this.refreshProps();
-	},
-	
-	storePosition:function(e){
-		if($(e.target).attr('disabled')) return;
-		editScene.storedTransform.pos = [$('#prop-x').val(), $('#prop-y').val(), $('#prop-z').val()];
-		editScene.updateStoredPosition();
-	},
-
-	storeRotation:function(e){
-		if($(e.target).attr('disabled')) return;
-		editScene.storedTransform.rot = [$('#prop-rx').val(), $('#prop-ry').val(), $('#prop-rz').val()];
-		editScene.updateStoredPosition();
-	},
-
-	storeScale:function(e){
-		if($(e.target).attr('disabled')) return;
-		editScene.storedTransform.scale = [$('#prop-sx').val(), $('#prop-sy').val(), $('#prop-sz').val()];
-		editScene.updateStoredPosition();
-	},
-
-	clearStorePosition:function(e){
-		if($(e.target).attr('disabled')) return;
-		editScene.storedTransform.pos = null;
-		editScene.updateStoredPosition();
-	},
-
-	clearStoreRotation:function(e){
-		if($(e.target).attr('disabled')) return;
-		editScene.storedTransform.rot = null;
-		editScene.updateStoredPosition();
-	},
-
-	clearStoreScale:function(){
-		if($(e.target).attr('disabled')) return;
-		editScene.storedTransform.scale = null;
-		editScene.updateStoredPosition();
-	},
-
 /* ------------------- ------------------- ------------------- ------------------- ------------------- Add, copy, paste, delete */
 
 	objectAddedRecusive:function(obj){
@@ -774,6 +475,7 @@ EditSceneScene.prototype = {
 	deleteObjects:function(objs){
 		for(var i = 0; i < objs.length; i++){
 			var obj = objs[i];
+			obj.selected = false;
 			this.objectDeletedRecusive(obj);
 			obj.parent.remove(objs[i]);
 		}
@@ -790,6 +492,7 @@ EditSceneScene.prototype = {
 			this.objectAddedRecusive(obj);
 		}
 		THREE.PixelBox.updateLights(this.scene, true);
+		this.updateTextLabels(this.container, 0);
 		this.refreshScene();
 		this.refreshAssets();
 	},
@@ -856,10 +559,15 @@ EditSceneScene.prototype = {
 		var addedObjects = this.populateObject(pasteTarget, this.sceneCopyItem, { helpers: true, createCameras:true, noNameReferences:true });
 		THREE.PixelBox.updateLights(this.scene, true);
 		var doAdd = [];
+		var undoAdd = [];
 		for(var i = 0; i < addedObjects.length; i++){
 			doAdd.push([addedObjects[i], pasteTarget]);
+			undoAdd.push(addedObjects[i]);
+			if(addedObjects[i] instanceof THREE.Camera && addedObjects[i].isDefault){
+				addedObjects[i].isDefault = false;
+			}
 		}
-		this.addUndo({name:"paste", redo:[this.addObjects, addedObjects], undo:[this.deleteObjects, addedObjects] });
+		this.addUndo({name:"paste", redo:[this.addObjects, doAdd], undo:[this.deleteObjects, undoAdd] });
 		
 		this.refreshScene();
 		this.controls.focus(pasteTarget, true);
@@ -904,12 +612,13 @@ EditSceneScene.prototype = {
 		}
 		
 		this.container = new THREE.Object3D();
+		this.container.visibleRecursive = true;
 		this.scene.add(this.container);
 	},
 	
 	resetZoom:function(){
 		this.camera.position.set(512, 512, 512);
-		this.camera.lookAt(0,0,0);
+		this.camera.lookAt(new THREE.Vector3(0,0,0));
 		this.controls.focus(this.container, true);
 	},
 	
@@ -928,6 +637,10 @@ EditSceneScene.prototype = {
 			if(!obj.htmlLabel){
 				obj.htmlLabel = $('<label id="'+obj.uuid+'" class="object-label" style="color:'+this.automaticColorForIndex(obj.id, 1, false)+'"/>').text(obj.name);
 				if(obj.isAnchor) obj.htmlLabel.css({'background-color':'transparent', 'font-size':'8px','font-weight':'normal'});
+				var type = (obj instanceof THREE.PointCloud) ? 'PixelBox' : (obj.def ? obj.def.asset : 0);
+				if(type) obj.htmlLabel.addClass(type);
+				if(obj.isTemplate) obj.htmlLabel.addClass('template');
+				if(!obj.visible) obj.htmlLabel.css({visibility: 'hidden'});
 				obj.htmlLabel.click(this.objectLabelClicked);
 				$(document.body).append(obj.htmlLabel);
 			}
@@ -935,13 +648,25 @@ EditSceneScene.prototype = {
 			obj.localToWorld(p);
 			p.project(this.camera);
 			var offs = depth * (obj.isAnchor ? -5 : 8);
-			var lw = obj.htmlLabel.width();
-			var lh = obj.htmlLabel.height();
+			var lw, lh;
+			if(obj.htmlLabel.labelWidth){
+				lw = obj.htmlLabel.labelWidth;
+				lh = obj.htmlLabel.labelHeight;
+			} else {
+				obj.htmlLabel.labelWidth = lw = obj.htmlLabel.width();
+				obj.htmlLabel.labelHeight = lh = obj.htmlLabel.height();
+			}
 			var x = Math.max(0, Math.min(windowInnerWidth - lw - 20, 
 								Math.floor(windowInnerWidth * 0.5 * p.x + windowInnerWidth * 0.5 - lw * 0.5)));
 			var y = Math.max(0, Math.min(windowInnerHeight - lh - 10, 
 					Math.floor(windowInnerHeight * 0.5 - windowInnerHeight * 0.5 * p.y - lh * 0.5) + offs));
-			obj.htmlLabel.offset({top:y, left:x});
+			if(p.z < 0 || p.z > 1.0) {
+				y = 0;
+			}
+			if(obj.htmlLabel.labelX != x || obj.htmlLabel.labelY != y){
+				obj.htmlLabel.offset({top:(obj.htmlLabel.labelY = y), left:(obj.htmlLabel.labelX = x)});
+				obj.htmlLabel.css({zIndex: parseInt(1 + (1 - p.z) * 10000)});
+			}
 			this.updateTextLabels(obj, depth + 1);
 		}
 	},
@@ -971,13 +696,26 @@ EditSceneScene.prototype = {
 		return 'rgba('+Math.floor(color.r * 255.0)+','+Math.floor(color.g * 255.0)+','+Math.floor(color.b * 255.0)+','+alpha+')';
 	},
 	
-	makeDownloadLink:function(filename, contents) {
-	  var pom = document.createElement('a');
-	  pom.setAttribute('href', 'data:application/json;charset=utf-8,' + encodeURIComponent(contents));
-	  pom.setAttribute('download', filename);
-	  pom.setAttribute('target', '_blank');
-	  // pom.click();
-	  return pom;
+	download:function(filename, contents) {
+		if(typeof(contents) == 'object') contents = JSON.stringify(contents);
+		if(chrome && chrome.storage){
+			chrome.fileSystem.chooseEntry({type: 'saveFile', suggestedName: filename}, function(writableFileEntry) {
+			    writableFileEntry.createWriter(function(writer) {
+			      writer.onwriteend = function(e) {
+			      	this.onwriteend = null;
+			      	this.truncate(this.position);
+			        console.log('write complete');
+			      };
+			      writer.write(new Blob([[contents]], {type: 'application/json'}));
+			    });
+			});
+		} else {
+			// bounce the file off of server
+			var form = $('<form action="downloadFile.php" method="post" target="_blank"><input type="hidden" name="filename"/><input type="hidden" name="data"/></div>');
+			$('input[name=filename]', form).val(filename);
+			$('input[name=data]', form).val(contents);
+			form[0].submit();
+		}
 	},
 
 
@@ -1010,14 +748,14 @@ EditSceneScene.prototype = {
 	/* store localStore */
 	holdDoc:function(){	
 		function doHold(){
-			var data = editScene.createDataObject(editScene.doc);
-			data = JSON.stringify(data);
+			var data = editScene.exportScene(true, false);
 			localStorage_setItem('holdScene', data);
 		}
 		
 		if(localStorage_getItem('holdScene')){
 			$('<div id="editor-hold" class="editor">\
-			<div class="center">This will replace current "Hold" object.</div>\
+			<div class="center">This will replace current "Hold" scene.</div>\
+			<span class="info">Hold scene is auto-loaded on editor start.</span>\
 			</div>').dialog({
 		      resizable: false, width: 400, height:220, modal: true, dialogClass:'no-close', title:"Replace Hold?",
 		      buttons: { 
@@ -1041,7 +779,7 @@ EditSceneScene.prototype = {
 		if(!data) return;
 		
 		$('<div id="editor-reset" class="editor">\
-		<div class="center">Ths will replace current object with the ones stored in "Hold".</div>\
+		<div class="center">Ths will replace current scene with the one stored in "Hold".</div>\
 		</div>').dialog({
 	      resizable: false, width: 400, height:220, modal: true, dialogClass:'no-close', title:"Restore from Hold?",
 	      buttons: { 
@@ -1059,42 +797,51 @@ EditSceneScene.prototype = {
 
 	/* export doc */
 	saveDoc:function(){
-		if(editScene.playing) editScene.stop();
-		
-		function refresh(e){
-			//localStorage_setItem('save-compress', $('#save-compress').get(0).checked);
-			//localStorage_setItem('save-raw', $('#save-raw').get(0).checked);
+		function refresh(){
+			var single = $('#editor-save #export-single')[0].checked;
+			var compress = $('#editor-save #export-smaller')[0].checked;
+			$('#drop-files').empty();
 			
-			var data = editScene.createDataObject(editScene.doc);
+			var file = $('<span class="file scene handcursor"/>').text(editScene.doc.name+'.scene');
+			file.click(function(){ editScene.download(editScene.doc.name+'.scene', editScene.exportScene(single, compress)); });
+			$('#drop-files').append(file);
 			
-			data = JSON.stringify(data);
-			//data = LZString.compressToBase64(data);
-			
-			$('#save-size').text(data.length + ' chars');
-			$('#editor-save textarea').text(data);
-		};
-
-		
+			if(!single){
+				for(var assetName in assets.cache.files){
+					var assetFileName = assetName+'.b64';
+					var asset = assets.cache.files[assetName];
+					file = $('<span class="file handcursor"/>').text(assetFileName);
+					file.click((function(assetFileName,asset,compress){
+						return function(){ editScene.download(assetFileName, editScene.exportAsset(asset, !compress, compress)); };})(assetFileName,asset,compress));
+					$('#drop-files').append(file);
+				}
+			}			
+		}
+	
 		var dlg = $('<div id="editor-save" class="editor">\
-		<label for="save-name" class="pad5 w2">Name&nbsp;&nbsp;</label><input type="text" class="w4" id="save-name"/>\
-		&nbsp;&nbsp;&nbsp;<button id="save-select">Select All</button>\
-		<hr/>\
-		<textarea readonly="readonly"></textarea>\
-		<hr/>\
-		<label for="save-compress" class="pad5">LZString - compress&nbsp;&nbsp;</label><input type="checkbox" id="save-compress"/>-->\
-		<span id="save-size" class="flush-right">chars</span><br/>\
-		<label for="save-raw" class="pad5">Raw (faster loading, bigger file)&nbsp;&nbsp;</label><input type="checkbox" id="save-raw"/>\
-		<span class="info">Copy and paste above into a file</span>\
+		<div class="center">\
+		<input type="radio" id="export-faster" name="export-compress" value="false"/><label for="export-faster">Faster load / bigger file</label>\
+		<span class="separator-left"/>\
+		<input type="radio" id="export-smaller" name="export-compress" value="true"/><label for="export-smaller">LZString - compressed</label><hr/>\
+		<input type="radio" id="export-single" name="export-single" value="true"/><label for="export-single">Single file</label>\
+		<span class="separator-left"/>\
+		<input type="radio" id="export-multiple" name="export-single" value="false"/><label for="export-multiple">Separate assets</label><hr/>\
+		<span class="info">Left-click to save files</span>\
+		<div id="drop-files"/>\
+		</div>\
 		</div>');
 		
-		$('#save-name', dlg).val(editScene.doc.name).change(refresh);
-		$('#save-compress', dlg).change(refresh).get(0).checked = (localStorage_getItem('save-compress') == 'true');
-		$('#save-raw', dlg).change(refresh).get(0).checked = (localStorage_getItem('save-raw') == 'true');
-		$('#save-select', dlg).button().click(function(){ $('#editor-save textarea').get(0).select();});
+		var opt = localStorage_getItem('export-compress');
+		$('#export-'+(opt === 'true' ? 'smaller' : 'faster'), dlg)[0].checked = true;
+		opt = localStorage_getItem('export-single');
+		$('#export-'+(opt === 'false' ? 'multiple' : 'single'), dlg)[0].checked = true;
+		$('#export-faster,#export-smaller', dlg).change(function(e){ localStorage_setItem('export-compress', $(this).val().toString()); refresh(); });
+		$('#export-single,#export-multiple', dlg).change(function(e){ localStorage_setItem('export-single', $(this).val().toString()); refresh(); });
+		
 		editScene.disableCanvasInteractions(true);
 		
 		dlg.dialog({
-	      resizable: false, width: 400, height:470, modal: true, dialogClass:'no-close', title:"Export Data",
+	      resizable: false, width: 550, height:400, modal: true, dialogClass:'no-close', title:"Export",
 	      buttons: { OK: function() { $(this).dialog("close"); } },
 	      open: refresh,
 	      close: function(){ $(this).remove(); editScene.enableCanvasInteractions(true); }
@@ -1104,6 +851,8 @@ EditSceneScene.prototype = {
 
 	/* export doc */
 	loadDoc:function(){
+		$('.ui-dialog .editor').dialog("close");
+
 		$('<div id="editor-load" class="editor">\
 		<span class="info">Drag &amp; drop files below.</span>\
 		<span class="info">Accepting .scene file to load scene, and .b64 files to load or replace PixelBox assets.</span>\
@@ -1142,11 +891,9 @@ EditSceneScene.prototype = {
 	/* new document */
 	newDoc:function(e, createDefaults){
 		if(e === true){
-			var bgColor = localStorage_getItem('editor-scene-bg-color');
-			if(!bgColor) bgColor = '000000';
 			this.doc = {
 				name: "newScene",
-				clearColor: new THREE.Color(parseInt(bgColor, 16)),
+				clearColor: new THREE.Color(0x333333),
 				ambient: new THREE.Color(0),
 				fogColor: new THREE.Color(0),
 				fogNear: 1000,
@@ -1230,13 +977,21 @@ EditSceneScene.prototype = {
 			}
 			// add asset to cache if needed
 			if(!assets.cache.get(asset.name)){
+				asset.importedAsset = _.deepClone(asset, 100);
 				assets.cache.add(asset.name, asset);
-				sceneDef.assets[i] = asset;
+				THREE.PixelBox.prototype.processPixelBoxFrames(asset);
 			}
 		}
 		
 		// populate
-		this.populateObject(this.container, dataObject.layers, { helpers: true, createCameras:true, noNameReferences: true });
+		var opts = { helpers: true, createCameras:true, noNameReferences: true, templates: dataObject.templates };
+		this.populateObject(this.container, dataObject.layers, opts);
+		if(dataObject.containsTemplates){
+			for(var ti = 0; ti < dataObject.containsTemplates.length; ti++){
+				var td = dataObject.templates[dataObject.containsTemplates[ti]];
+				if(td) this.populateObject(this.container, [ dataObject.templates[dataObject.containsTemplates[ti]] ], opts);
+			}
+		}
 		THREE.PixelBox.updateLights(this.scene, true);
 		
 		// clear undo queue
@@ -1244,9 +999,11 @@ EditSceneScene.prototype = {
 		this.resetZoom();
 		
 		// refresh
-		editScene.refreshAssets();
-		editScene.refreshScene();
-		editScene.refreshProps();
+		this.refreshScene();
+		this.refreshAssets();
+		this.refreshProps();
+		
+		this.showMessage(this.doc.name);
 	},
 	
 	createDataObject:function(options){
@@ -1363,10 +1120,23 @@ EditSceneScene.prototype = {
 	
 /* ------------------- ------------------- ------------------- ------------------- ------------------- Scene & asset functions */
 
+	assetUpdated:function(newAsset){
+		this.showMessage('<em>'+newAsset.name+'</em> updated');
+
+		var prevAsset = assets.cache.files[newAsset.name];
+		if(prevAsset){
+			this.addUndo({name:"updateAsset",undo:[this.importSceneAsset, prevAsset],redo:[this.importSceneAsset, newAsset]});
+		}
+		this.importSceneAsset(newAsset);
+	},
+
 	/* called to update placeholders, or to replace existing assets */
 	importSceneAsset: function(newAsset){
-		newAsset.importedAsset = _.deepClone(newAsset, 100);
-     	THREE.PixelBox.prototype.processPixelBoxFrames(newAsset);
+		if(!newAsset.importedAsset){
+			// just imported
+			newAsset.importedAsset = _.deepClone(newAsset, 100);
+			THREE.PixelBox.prototype.processPixelBoxFrames(newAsset);
+     	}
 	
 		var replaced = [];
 		var replaceUndoObjects = { };
@@ -1389,7 +1159,7 @@ EditSceneScene.prototype = {
 							newObj.add(child);
 							child.anchored = false;
 						}
-						if(child.def && child.def.target && newObj.anchors[child.def.target]){
+						if(child.def && child.def.target && typeof(child.def.target) == 'string' && newObj.anchors[child.def.target]){
 							replaceUndoObjects[child.def.target.uuid] = newObj.anchors[child.def.target];
 							child.target = newObj.anchors[child.def.target];
 						}
@@ -1410,13 +1180,13 @@ EditSceneScene.prototype = {
 								// anchored subchild is added to new obj's anchor of same name
 								if(newObj.anchors[child.name]){
 									newObj.anchors[child.name].add(subchild);
-								// no mathing anchor in new object, add as child
+								// no mathing anchor in new object, add as child, keep anchor def
 								} else {
 									newObj.add(subchild);
-									subchild.anchored = false;
+									subchild.anchored = subchild.def.anchor = child.name;
 								}
 								// subchild had named target (anchor name)
-								if(subchild.def.target && newObj.anchors[subchild.def.target]){
+								if(subchild.def.target && typeof(subchild.def.target) == 'string' && newObj.anchors[subchild.def.target]){
 									replaceUndoObjects[subchild.target.uuid] = newObj.anchors[subchild.def.target];
 									subchild.target = newObj.anchors[subchild.def.target];
 								}
@@ -1448,6 +1218,8 @@ EditSceneScene.prototype = {
 				// populate new object
 				if(newObj){
 					newObj.anchored = obj3d.anchored;
+					newObj.isTemplate = obj3d.isTemplate;
+					newObj.visible = obj3d.visible;
 					
 					// update name
 					if(obj3d.name){
@@ -1536,15 +1308,14 @@ EditSceneScene.prototype = {
 		} while(replaced.length);
 		
 		// dispose of old asset
-		var oldAsset = assets.cache.get(newAsset.name);
-		if(oldAsset){
-			THREE.PixelBox.prototype.dispose(oldAsset);
-		}
+		/* var oldAsset = assets.cache.get(newAsset.name);
+		if(oldAsset){ THREE.PixelBox.prototype.dispose(oldAsset); } */
+		
 		// add new asset to cache
 		assets.cache.add(newAsset.name, newAsset);
 		
 		// update undo references
-		editScene.replaceReferencesInUndo(replaceUndoObjects);
+		/* editScene.replaceReferencesInUndo(replaceUndoObjects); */
 		
 		// refresh
 		editScene.refreshAssets();
@@ -1600,6 +1371,143 @@ EditSceneScene.prototype = {
 		this.doc.maxShadows = maxShadows;
 	},
 		
+	exportScene:function(single, compress){
+		var obj = {
+			name: this.doc.name,
+			clearColor: this.doc.clearColor.getHexString(),
+			ambient: this.doc.ambient.getHexString(),
+			fogColor: this.doc.fogColor.getHexString(),
+			fogNear: this.doc.fogNear,
+			fogFar: this.doc.fogFar,
+			layers:[],
+			templates:{}
+		}
+		
+		// validate scene names
+		var doArr = [];
+		var undoArr = [];
+		var usedTemplateNames = {};
+		this.container.traverse(function(obj3d){
+			var usedNames = {};
+			for(var i = 0; i < obj3d.children.length; i++){
+				var child = obj3d.children[i];
+				if(child.isTemplate){
+					var childName = child.name;
+					if(!childName.length){
+						doArr.push([child, '_']);
+						undoArr.push([child, '']);
+						childName = '_';
+					}
+					if(usedTemplateNames[childName]){
+						doArr.push([child, childName + (usedTemplateNames[childName]++).toString()]);
+						undoArr.push([child, childName]);
+					} else {
+						usedTemplateNames[childName] = 1;
+					}
+				} else if(child.name.length){
+					if(usedNames[child.name]){
+						doArr.push([child, child.name + (usedNames[child.name]++).toString()]);
+						undoArr.push([child, child.name]);
+					} else {
+						usedNames[child.name] = 1;	
+					}
+				}
+			}
+		});
+		if(doArr.length){
+			this.addUndo({name:"rename", redo:[this.renameObjects, doArr], undo:[this.renameObjects, undoArr] });
+			this.renameObjects(doArr);
+		}
+				
+		var cont = this.container.serialize(obj.templates);
+		obj.layers = cont.layers;
+		if(cont.containsTemplates) obj.containsTemplates = cont.containsTemplates;
+		
+		if(single){
+			obj.assets = {};
+			for(var assetName in assets.cache.files){
+				var asset = assets.cache.files[assetName];
+				obj.assets[assetName] = editScene.exportAsset(asset, !compress, false);
+			}
+		}
+		
+		var ss = JSON.stringify(obj, null, (compress ? undefined : '\t'));
+		if(compress){
+			ss = LZString.compressToBase64(ss);
+		}
+		
+		return ss;
+	},
+	
+	exportAsset:function(asset, raw, compress){
+		var processedAsset = asset;
+		asset = asset.importedAsset;
+		
+		var obj = {
+			name:asset.name,
+			width:asset.width, height:asset.height, depth:asset.depth,
+			floor: asset.floor,
+			optimize: asset.optimize,
+			smoothNormals: asset.smoothNormals,
+			occlusion: asset.occlusion,
+			pointSize: asset.pointSize,
+			frames:[],
+			anchors:asset.anchors,
+			anims: asset.anims,
+			meta: asset.meta
+		};
+		
+		if(raw){
+			if(typeof(asset.frames[0]) == 'string'){
+				// frames need to be converted to raw
+				var model = new THREE.PixelBox(processedAsset);
+				
+				// process frames
+				for(var f = 0; f < asset.frames.length; f++){
+					model.frame = f;
+					model.encodeRawFrame(obj, f);
+				}				
+			// already raw		
+			} else {
+				obj.frames = asset.frames;
+			}
+		} else {
+			// process frames
+			var hw = asset.width * 0.5, hh = asset.height * 0.5, hd = asset.depth * 0.5;
+			var c = new THREE.Color();
+			for(var f = 0; f < asset.frames.length; f++){
+				// convert frame
+				var convertedFrame = new Array(asset.width * asset.height * asset.depth);
+				var currFrame = asset.frames[f];
+				// already converted
+				if(typeof(currFrame) == 'string') continue;
+				for(var i = 0; i < currFrame.o.length; i++){
+					var x = Math.floor(currFrame.p[i * 3] + hw);
+					var y = Math.floor(currFrame.p[i * 3 + 1] + hh);
+					var z = Math.floor(currFrame.p[i * 3 + 2] + hd);
+					var n = new THREE.Vector3(currFrame.n[i * 3], currFrame.n[i * 3 + 1], currFrame.n[i * 3 + 2]);
+					c.setRGB(currFrame.c[i * 4],currFrame.c[i * 4 + 1], currFrame.c[i * 4 + 2]);
+					var a = currFrame.c[i * 4 + 3];
+					var addr = x * asset.height * asset.depth + y * asset.depth + z;
+					convertedFrame[addr] = { x:x, y:y, z:z, c:c.getHex(), a:a, b: Math.max(0, n.length() - 1.0) };
+				}
+				
+				// encode
+				THREE.PixelBox.encodeFrame(convertedFrame, obj);
+			}
+			delete obj.assembledFrames;
+		}		
+		
+		if(compress){
+			var ss = JSON.stringify(obj);
+			if(compress){
+				ss = LZString.compressToBase64(ss);
+			}
+			return ss;	
+		}		
+		
+		return obj;
+	},
 
 /* ------------------- ------------------- ------------------- ------------------- ------------------- Scene panel & object picking */
 
@@ -1624,64 +1532,114 @@ EditSceneScene.prototype = {
 	
 	refreshScene:function(){
 		var list = $('#scene-list');
-		var sceneRow = $('<div class="row" id="scene"><div class="selection"/><div class="droptarget"/><a class="toggle">-</a><label/></div>');
-		sceneRow.find('label:first').text(this.doc.name);
-		var prevChildren = list.children();
-		prevChildren = prevChildren.remove().find('div.row.collapsed');
-		list.append(sceneRow);
+		
+		var sceneRow = $('#scene', list);
+		if(!sceneRow.length){
+		 	sceneRow = $('<div class="row" id="scene"><div class="selection"/><div class="droptarget"/><a class="toggle">-</a><label/></div>');
+		 	list.append(sceneRow);
+ 			sceneRow.click(editScene.objectRowClicked);
+ 			list.disableSelection();
+		} else {
+			sceneRow.children('div.row').detach();
+		}
+		sceneRow.children('label:first').text(this.doc.name);
 		
 		// traverse
+		editScene.container.children.sort(editScene.sceneSortFunc);
 		editScene.container.traverse(function(obj3d){
-			obj3d.children.sort(editScene.sceneSortFunc);
-		
+			// don't show helpers
 			if(obj3d.isHelper || obj3d == editScene.container || obj3d.parent.isHelper) return;
 			
-			if(obj3d.htmlRow) obj3d.htmlRow.remove();
-			var color = editScene.automaticColorForIndex(obj3d.id, 1.0);
-			var type = obj3d.isAnchor ? 'Anchor' : (obj3d.def ? obj3d.def.asset : '?');
-			obj3d.htmlRow = $('<div class="row" id="row-'+obj3d.uuid+'"><div class="selection"/><div class="droptarget"/>\
-				<a class="toggle">-</a><div class="tiny-swatch" style="background-color:'+color+'"/><label/>\
-				<span class="type">'+type+'</span></div>');
-			if(obj3d.isPlaceholder) obj3d.htmlRow.addClass('missing');
-			var name = obj3d.name ? (obj3d.name.length ? obj3d.name : '(Object)') : '(Object)';
-			obj3d.htmlRow.find('label').text(name).attr('alt',obj3d.uuid);
-			obj3d.htmlRow.click(editScene.objectRowClicked);
-			obj3d.htmlRow.addClass(type);
-			if(!obj3d.visible) obj3d.htmlRow.addClass('hidden');
-			if(obj3d.isTemplate) obj3d.htmlRow.addClass('template');
-			if(!obj3d.children.length) obj3d.htmlRow.children('a.toggle').css({visibility:'hidden'});
-			if(obj3d.selected) obj3d.htmlRow.addClass('selected');
-			if(obj3d.isTemplate) obj3d.htmlRow.addClass('template');
+			// sort children
+			obj3d.children.sort(editScene.sceneSortFunc);
 			
-			if(!obj3d.isAnchor) { 
-				var h = $('<div class="row helper" alt="'+obj3d.uuid+'"></div>');
-				obj3d.htmlRow.children('label:first').addClass('draggable').draggable({
-					//axis:'y',
-					appendTo:list,
-					containment:list,
-					scroll:false,
-					delay:300,
-					cursorAt: { left: 5, top: 5 },
-					revert:'invalid',
-					helper:function(){ return h[0]; },
-					start:editScene.dragRowStarted,
-					stop:editScene.dragRowStopped
-				});
+			// create a new row			
+			var type = (obj3d.isAnchor ? 'Anchor' : (obj3d instanceof THREE.PointCloud ? obj3d.geometry.data.name : obj3d.def.asset));
+			if(!obj3d.htmlRow) {
+				var color = editScene.automaticColorForIndex(obj3d.id, 1.0);
+				obj3d.htmlRow = $('<div class="row" id="row-'+obj3d.uuid+'">\<div class="selection"/><div class="droptarget"/>\
+				<a class="toggle">-</a><div class="tiny-swatch" style="background-color:'+color+'"/><label alt="'+obj3d.uuid+'"/>\
+				<span class="type"/></div>');
+				
+				// type
+				obj3d.htmlRow.addClass(obj3d instanceof THREE.PointCloud ? 'PixelBox' : type);
+				
+				// placeholder
+				if(obj3d.isPlaceholder) obj3d.htmlRow.addClass('missing');
+				
+				// click
+				obj3d.htmlRow.click(editScene.objectRowClicked);
+				
+				// draggable
+				if(!obj3d.isAnchor) { 
+					var h = $('<div class="row helper" alt="'+obj3d.uuid+'"></div>');
+					obj3d.htmlRow.children('label:first').addClass('draggable').draggable({
+						//axis:'y',
+						appendTo:list,
+						containment:list,
+						scroll:false,
+						delay:300,
+						cursorAt: { left: 5, top: 5 },
+						revert:'invalid',
+						helper:function(){ return h[0]; },
+						start:editScene.dragRowStarted,
+						stop:editScene.dragRowStopped
+					});
+				}
+
+			} else {
+				obj3d.htmlRow.children('div.row').detach();
 			}
 			
+			// update row
+			var name = obj3d.name;
+			obj3d.htmlRow.children('label:first').text(name);
+			obj3d.htmlRow.children('span.type:first').text(type);
+			
+			if(obj3d.visible){
+				obj3d.htmlRow.removeClass('hidden');
+			} else { 
+				obj3d.htmlRow.addClass('hidden');
+			}
+			if(obj3d.isTemplate) { 
+				obj3d.htmlRow.addClass('template');
+			} else {
+				obj3d.htmlRow.removeClass('template');
+			}			
+			if(obj3d.children.length){
+				obj3d.htmlRow.children('a.toggle').css({visibility:'visible'});
+			} else {
+				obj3d.htmlRow.children('a.toggle').css({visibility:'hidden'});
+			}
+			if(obj3d.selected) { 
+				obj3d.htmlRow.addClass('selected');
+			} else {
+				obj3d.htmlRow.removeClass('selected');
+			}
+			if(obj3d.isDefault) { 
+				obj3d.htmlRow.addClass('default');
+			} else {
+				obj3d.htmlRow.removeClass('default');
+			}
+			
+			// update object helper and label visibility
+			obj3d.visibleRecursive = obj3d.visible && obj3d.parent.visibleRecursive;
+			if(obj3d.helper) obj3d.helper.visible = obj3d.visibleRecursive && obj3d.selected;
+			if(obj3d.htmlLabel){
+				if(obj3d.visibleRecursive){
+					obj3d.htmlLabel.css({visibility:'visible'});
+				} else {
+					obj3d.htmlLabel.css({visibility:'hidden'});
+				}
+			}
+			
+			// add to parent row
 			var prow = sceneRow;
 			if(obj3d.parent != editScene.container){
 				prow = $('#row-'+obj3d.parent.uuid, list);
 			}
 			prow.append(obj3d.htmlRow);
 		});
-		
-		sceneRow.click(editScene.objectRowClicked);
-		prevChildren.each(function(i,el){
-			list.find('#'+el.id).addClass('collapsed').children('a.toggle:first').text('+');
-		});
-		
-		list.disableSelection();
 	},
 
 	dragRowStarted:function(event, ui){
@@ -1858,6 +1816,7 @@ EditSceneScene.prototype = {
 		this.selectedObjects.length = 0;
 		this.container.traverse(function(obj){ 
 			obj.selected = false;
+			if(obj.helper) obj.helper.visible = false;
 			if(obj.htmlLabel) obj.htmlLabel.removeClass('selected');
 			if(obj.htmlRow) obj.htmlRow.removeClass('selected');
 		});
@@ -1871,6 +1830,7 @@ EditSceneScene.prototype = {
 		}
 		
 		obj.selected = select;
+		if(obj.helper) obj.helper.visible = select && obj.visibleRecursive;
 		var sp = this.selectedObjects.indexOf(obj);
 		
 		if(select && sp === -1) this.selectedObjects.push(obj);
@@ -1888,6 +1848,18 @@ EditSceneScene.prototype = {
 			else 
 				obj.htmlRow.removeClass('selected');
 		}
+	},
+	
+	selectObjectsByAsset:function(e){
+		var assetName = $(e.target).attr('name');
+		if(!(editScene.shift || editScene.alt)) editScene.deselectAll();
+		editScene.container.traverse(function(obj){
+			if(obj instanceof THREE.PointCloud && obj.geometry.data.name == assetName){
+				editScene.selectObject(obj, !editScene.alt);
+			}
+		});
+		
+		editScene.selectionChanged();
 	},
 	
 	selectionChanged:function(){
@@ -1976,9 +1948,10 @@ EditSceneScene.prototype = {
 			var id = asset.name.replace(/\W|\s+/g,'-');
 			var color = this.automaticColorForIndex(rows.length, 1.0);
 			if(asset.missing) color = '#333';
-			var newRow = $('<div class="row" id="asset-row-'+id+'"><div class="tiny-swatch" style="background-color:'+color+'"/><label/><span class="used">used '+asset.used+'</span></div>');
+			var newRow = $('<div class="row" id="asset-row-'+id+'"><div class="tiny-swatch" style="background-color:'+color+'"/><label/><span class="used"><a>used '+asset.used+'</a></span></div>');
 			newRow.find('label').text(asset.name);
 			newRow.prop('asset', asset.name);
+			newRow.find('a').attr('name', asset.name).click(editScene.selectObjectsByAsset);
 			if(asset.missing) newRow.addClass('missing');
 			if(newRow.attr('id') == prevSelected) newRow.addClass('selected');
 			newRow.click(this.assetSelect.bind(this));
@@ -2008,134 +1981,568 @@ EditSceneScene.prototype = {
 			$(row).addClass('selected');
 		}
 	},
-
-/* ------------------- ------------------- ------------------- ------------------- ------------------- Properties panel */
-
-	refreshProps:function(){
-		$('#editor-props > h1').text('Properties' + (this.selectedObjects.length ? (' ('+this.selectedObjects.length+')') : ''));
-		$('#editor-props .panels > .panel').hide();
-		if(!this.selectedObjects.length){
-			$('#prop-name').attr('placeholder','Scene name').val(this.doc.name);
-			$('#prop-object-type').text('Scene');
-			$('#panel-scene').show();
-			// scene panel
-			$('#scene-color').css({backgroundColor: this.doc.clearColor.getHexString()});
-			$('#scene-fog-color').css({backgroundColor: this.doc.fogColor.getHexString()});
-			$('#scene-ambient-color').css({backgroundColor: this.doc.ambient.getHexString()});
-			$('#scene-max-shadows').val(this.doc.maxShadows != undefined ? this.doc.maxShadows : 0).data('prevVal', $('#scene-max-shadows').val().toString());
-			$('#scene-fog-near').val(this.doc.fogNear != undefined ? this.doc.fogNear : this.scene.fog.near).data('prevVal', $('#scene-fog-near').val().toString());
-			$('#scene-fog-far').val(this.doc.fogFar != undefined ? this.doc.fogFar : this.scene.fog.far).data('prevVal', $('#scene-fog-far').val().toString());
-			return;
-		}
-		$('#prop-name').attr('placeholder','Object name');
-		$('#prop-object-type').text('');
-		$('#panel-move').show();
+	
+	renameAsset:function(oldName, newName){
+		assets.cache.files[newName] = assets.cache.files[oldName];
+		assets.cache.files[newName].name = newName;
+		assets.cache.files[newName].importedAsset.name = newName;
+		delete assets.cache.files[oldName];
 		
-		var prevObj = null;
-		var mults = {};
-		var containsAnchors = false;
-		var containsSpotLights = false;
-		var containsDirLights = false;
-		var radToDeg = 180 / Math.PI;
+		this.refreshAssets();
+		this.refreshScene();
+		this.refreshProps();
+	},
+	
+	assetRename:function(e){
+		var selectedAsset = $('#asset-list .row.selected');
+		if(!selectedAsset.length) return;
+
+		var dlg = $('<div id="editor-rename" class="editor">\
+		<span class="info">Enter new name for <em/>.</span>\
+		<div class="center pad5"><input type="text" id="asset-name" size="20"/></div>\
+		</div>');
+		
+		var oldName = $('label:first', selectedAsset).text();
+		$('span.info:first em', dlg).text(oldName);		
+		//
+		var dlgDef = {
+	      resizable: false, width: 330, height:270, modal: true, dialogClass:'no-close', title:"Rename Asset",
+	      buttons: { 
+	      	"Rename": function() {
+	      		var newName = $('#asset-name').val().trim();
+	      		newName = newName.substr(0,1).toLowerCase()+newName.substr(1); //lowercase first
+	      		var err = null;
+	      		if(oldName != newName){
+		      		if(!newName.length) err = "Asset name can't be empty";
+		      		if(assets.cache.files[newName] != undefined) err = "Asset with this name already exists";
+		      		if(err){
+		      			$('#editor-rename #asset-name').val(newName).focus().select();
+			      		$('#editor-rename > span').last().removeClass('info').addClass('error center').text(err);
+			      		return;
+		      		} else {
+		      			selectedAsset.prop('asset', newName);
+		      			editScene.addUndo({name:"renameAsset",undo:[editScene.renameAsset, newName, oldName],redo:[editScene.renameAsset, oldName, newName]});
+		      			editScene.renameAsset(oldName, newName);
+		      		}
+	      		}		      	
+		      	$('#editor-rename').dialog("close"); 
+	      	},
+	      	"Cancel": function() { 
+	      		$(this).dialog("close"); 
+	      	},
+	      },	      
+	      close: function(){ $(this).remove(); editScene.enableCanvasInteractions(true); }
+		};
+		dlg.dialog(dlgDef);
+		
+		editScene.disableCanvasInteractions(true);
+		$('#asset-name', dlg).val(oldName).focus().select().keypress(function(e){ if(e.which == 13) dlgDef.buttons.Rename(); });
+
+	},
+	
+	assetNew:function(e){
+		var dlg = $('<div id="editor-new-asset" class="editor">\
+		<span class="info">Enter new asset name.</span>\
+		<span class="info">This operation is not undo-able.</span>\
+		<div class="center pad5"><input type="text" id="asset-name" size="20" tabindex="0"/>\
+		<br/><br/>\
+		<label for="asset-x" class="right-align w2">Width</label><input class="center" type="text" size="1" tabindex="1" id="asset-x" value="8"/>\
+		<label for="asset-y" class="right-align w2">Height</label><input class="center" type="text" size="1" tabindex="2" id="asset-y" value="8"/>\
+		<label for="asset-z" class="right-align w2">Depth</label><input class="center" type="text" size="1" tabindex="3" id="asset-z" value="8"/></div>\
+		</div>');
+		
+		var dlgDef = {
+	      resizable: false, width: 440, height:320, modal: true, dialogClass:'no-close', title:"New Asset",
+	      buttons: { 
+	      	"Create": function() {
+		      	var newName = $('#asset-name').val().trim();
+	      		newName = newName.substr(0,1).toLowerCase()+newName.substr(1); //lowercase first
+	      		var err = null;
+	      		if(!newName.length) err = "Asset name can't be empty";
+	      		if(assets.cache.files[newName] != undefined) err = "Asset with this name already exists";
+	      		var xx = parseInt($('#asset-x').val());
+	      		var yy = parseInt($('#asset-y').val());
+	      		var zz = parseInt($('#asset-z').val());
+	      		if(isNaN(xx) || xx <= 0 || xx > 256 || isNaN(yy) || yy <= 0 || yy > 256 || isNaN(zz) || zz <= 0 || zz > 256){
+		      		err = "Asset dimensions must be between 1 and 256";
+	      		} 
+	      		if(err){
+	      			$('#editor-new-asset #asset-name').val(newName).focus().select();
+		      		$('#editor-new-asset > span').last().removeClass('info').addClass('error center').text(err);
+		      		return;
+	      		} else {
+	      			var asset = {"name":newName,
+					"width":xx,
+					"height":yy,
+					"depth":zz,
+					"floor":false,
+					"optimize":true,
+					"smoothNormals":0.5,
+					"occlusion":0.75,
+					"pointSize":1,
+					"frames":[{"p":[],"n":[],"c":[],"o":[]}]
+					};
+					editScene.addUndo({name:"addAsset",undo:[editScene.deleteAsset, asset],redo:[editScene.importSceneAsset, asset]});
+	      			editScene.importSceneAsset(asset);
+	      		}
+	      				      	
+		      	$('#editor-new-asset').dialog("close"); 
+	      	},
+	      	"Cancel": function() { 
+	      		$(this).dialog("close"); 
+	      	},
+	      },	      
+	      close: function(){ $(this).remove(); editScene.enableCanvasInteractions(true); }
+		};
+		dlg.dialog(dlgDef);
+		
+		editScene.disableCanvasInteractions(true);
+		$('#asset-x,#asset-y,#asset-z').spinner({min:1,max:256,step:1});
+		$('input', dlg).keypress(function(e){ if(e.which == 13) dlgDef.buttons.Create(); });
+		$('#asset-name', dlg).focus();
+	},
+
+	deleteAsset:function(asset){
+		delete assets.cache.files[asset.name];
+		editScene.refreshAssets();
+	},
+	deleteAssetWithName:function(assetName){
+		// gather affected objects
+		var objsAdd = [];
+		var objs = [];
+		function trav(obj){
+			if(obj instanceof THREE.PointCloud && obj.geometry.data.name == assetName){
+				objsAdd.push([obj, obj.parent]);
+				objs.push(obj);
+			} else {
+				for(var i = 0; i < obj.children.length; i++){
+					trav(obj.children[i]);
+				}
+			}
+		};
+		trav(this.container);
+		var asset = assets.cache.get(assetName);
+		if(objs.length){
+		    this.addUndo([
+		    	{name:"deleteObjects", undo:[this.addObjects, objsAdd], redo:[this.deleteObjects, objs]},
+		    	{name:"deleteAsset",undo:[this.importSceneAsset, asset],redo:[this.deleteAsset, asset]}
+		    ]);
+		    this.deleteObjects(objs);
+		    this.deleteAsset(asset);
+		} else {
+		    this.addUndo({name:"deleteAsset",undo:[this.importSceneAsset, asset],redo:[this.deleteAsset, asset]});
+		    this.deleteAsset(asset);
+		}
+	},
+	assetDelete:function(e){
+		var selectedAsset = $('#asset-list .row.selected');
+		if(!selectedAsset.length) return;
+
+		var dlg = $('<div id="editor-delete-asset" class="editor">\
+		<p class="center">Delete <em/>?</p>\
+		<span class="info">This will also delete all scene objects of the same type.</span>\
+		</div>');
+		
+		var assetName = $('label:first', selectedAsset).text();
+		$('p:first em', dlg).text(assetName);		
+		//
+		var dlgDef = {
+	      resizable: false, width: 280, height:270, modal: true, dialogClass:'no-close', title:"Delete Asset",
+	      buttons: { 
+	      	"Delete": function() {
+	      		editScene.deleteAssetWithName(assetName);
+		      	$(this).dialog("close"); 
+	      	},
+	      	"Cancel": function() { 
+	      		$(this).dialog("close"); 
+	      	},
+	      },	      
+	      close: function(){ $(this).remove(); editScene.enableCanvasInteractions(true); }
+		};
+		dlg.dialog(dlgDef);
+		
+		editScene.disableCanvasInteractions(true);
+	},
+
+/* ------------------- ------------------- ------------------- ------------------- ------------------- Name */
+
+	renameObjects:function(objNameArr){
+		for(var i = 0; i < objNameArr.length; i++){
+			var obj = objNameArr[i][0];
+			obj.name = objNameArr[i][1];
+			if(obj.htmlLabel){
+				obj.htmlLabel.text(obj.name);
+				obj.htmlLabel.labelWidth = obj.htmlLabel.labelWidth = 0;
+			}
+			if(obj.htmlRow){
+				obj.htmlRow.children('label').first().text(obj.name);
+			}
+		}
+		this.refreshScene();
+	},
+
+	renameScene:function(newName){
+		this.doc.name = newName;
+		$('#scene-list #scene > label').text(newName);
+	},
+
+	nameChanged:function(e){
+		var doArr = [];
+		var undoArr = [];
+		var newName = $('#prop-name').val().replace(/\W+/g,'_'); // replace non-word chars with _
+		if(newName.match(/^\d+/)){ // prepend _ if starts with a digit
+			newName = '_'+newName;
+		}
+		for(var i = 0; i < this.selectedObjects.length; i++){
+			var obj = this.selectedObjects[i];
+			undoArr.push([obj, obj.name ]);
+			doArr.push([obj, newName]);
+		}
+		
+		if(undoArr.length){ 
+			this.addUndo({name:"rename", redo:[this.renameObjects,doArr], undo:[this.renameObjects, undoArr] });
+			this.renameObjects(doArr);
+		} else {
+			this.addUndo({name:"renameScene", redo:[this.renameScene,newName], undo:[this.renameScene, this.doc.name] });
+			this.renameScene(newName);
+		}
+		
+		this.refreshProps();
+	},
+
+/* ------------------- ------------------- ------------------- ------------------- ------------------- Move, scale, rotate, visible, template */
+
+	setObjectsVisible:function(objArr){
+		for(var i = 0; i < objArr.length; i++){
+			var obj = objArr[i][0];
+			var val = objArr[i][1];
+			obj.visible = val;
+		}
+		this.refreshScene(); // refreshes labels visibility
+	},
+
+	setObjectsTemplate:function(objArr){
+		for(var i = 0; i < objArr.length; i++){
+			var obj = objArr[i][0];
+			var val = objArr[i][1];
+			obj.isTemplate = val;
+			if(val){
+				obj.htmlLabel.addClass('template');
+				obj.htmlRow.addClass('template');
+			} else {
+				obj.htmlLabel.removeClass('template');
+				obj.htmlRow.removeClass('template');
+			}
+		}
+	},
+
+	moveObjects:function(objPosArr){
+		for(var i = 0; i < objPosArr.length; i++){
+			var obj = objPosArr[i][0];
+			obj.position.copy(objPosArr[i][1]);
+		}
+	},
+
+	moveSelectionTo: function(pos){
+		var objPosArr = [];
+		var undoPosArr = [];
+		for(var i = 0; i < this.selectedObjects.length; i++){
+			var obj = this.selectedObjects[i];
+			if(obj.isAnchor) continue;
+			undoPosArr.push([obj, obj.position.clone() ]);
+			objPosArr.push([obj,
+				new THREE.Vector3(	(pos.x === null ? obj.position.x : pos.x),
+									(pos.y === null ? obj.position.y : pos.y),
+									(pos.z === null ? obj.position.z : pos.z))
+			]);
+		}
+		
+		if(objPosArr.length) this.addUndo({name:"moveTo", mergeable:true, redo:[this.moveObjects, objPosArr], undo:[this.moveObjects, undoPosArr] });
+		
+		this.moveObjects(objPosArr);
+		return objPosArr.length;
+	},
+
+	moveSelectionBy: function(pos){
+		var objPosArr = [];
+		var undoPosArr = [];
+		for(var i = 0; i < this.selectedObjects.length; i++){
+			var obj = this.selectedObjects[i];
+			if(obj.isAnchor) continue;
+			undoPosArr.push([obj, obj.position.clone() ]);
+			objPosArr.push([obj,
+				new THREE.Vector3(	obj.position.x + (pos.x === null ? 0 : pos.x),
+									obj.position.y + (pos.y === null ? 0 : pos.y),
+									obj.position.z + (pos.z === null ? 0 : pos.z))
+			]);
+		}
+		
+		this.moveObjects(objPosArr);		
+		if(objPosArr.length) this.addUndo({name:"moveBy", mergeable:true, redo:[this.moveObjects, objPosArr], undo:[this.moveObjects, undoPosArr] });
+	},
+
+	rotateObjects:function(objRotArr){
+		for(var i = 0; i < objRotArr.length; i++){
+			var obj = objRotArr[i][0];
+			var rot = objRotArr[i][1];
+			if((obj instanceof THREE.DirectionalLight || obj instanceof THREE.SpotLight)){
+				if(rot instanceof THREE.Object3D){
+					obj.target = rot;
+				} else if(rot instanceof THREE.Vector3){
+					if(obj.target.parent){
+						obj.target = new THREE.Object3D();	
+					}
+					obj.target.position.copy(rot);
+				}
+			} else {
+				obj.rotation.copy(rot);
+			}
+		}
+	},
+
+	rotateSelectionTo: function(rot){
+		var objRotArr = [];
+		var undoRotArr = [];
+		var degToRad = Math.PI / 180;
+		for(var i = 0; i < this.selectedObjects.length; i++){
+			var obj = this.selectedObjects[i];
+			if(obj.isAnchor) continue;
+			undoRotArr.push([obj, obj.rotation.clone() ]);
+			objRotArr.push([obj,
+				new THREE.Euler(	(rot.x === null ? obj.rotation.x : (rot.x * degToRad)),
+									(rot.y === null ? obj.rotation.y : (rot.y * degToRad)),
+									(rot.z === null ? obj.rotation.z : (rot.z * degToRad)))
+			]);
+		}
+		
+		this.rotateObjects(objRotArr);
+		if(objRotArr.length) this.addUndo({name:"rotateTo", mergeable:true, redo:[this.rotateObjects, objRotArr], undo:[this.rotateObjects, undoRotArr] });
+		return objRotArr.length;
+	},
+
+	rotateSelectionBy: function(rot){
+		var objRotArr = [];
+		var undoRotArr = [];
+		var degToRad = Math.PI / 180;
+		for(var i = 0; i < this.selectedObjects.length; i++){
+			var obj = this.selectedObjects[i];
+			if(obj.isAnchor) continue;
+			undoRotArr.push([obj, obj.rotation.clone() ]);
+			objRotArr.push([obj,
+				new THREE.Euler(	obj.rotation.x + (rot.x === null ? 0 : (rot.x * degToRad)),
+									obj.rotation.y + (rot.y === null ? 0 : (rot.y * degToRad)),
+									obj.rotation.z + (rot.z === null ? 0 : (rot.z * degToRad)))
+			]);
+		}
+		
+		if(objRotArr.length) this.addUndo({name:"rotateBy", mergeable:true, redo:[this.rotateObjects, objRotArr], undo:[this.rotateObjects, undoRotArr] });
+		
+		this.rotateObjects(objRotArr);
+		
+	},
+	
+	scaleObjects:function(objScaleArr){
+		for(var i = 0; i < objScaleArr.length; i++){
+			objScaleArr[i][0].scale.copy(objScaleArr[i][1]);
+		}
+	},
+
+	scaleSelectionTo: function(scale){
+		var objScaleArr = [];
+		var undoScaleArr = [];
+		for(var i = 0; i < this.selectedObjects.length; i++){
+			var obj = this.selectedObjects[i];
+			if(obj.isAnchor) continue;
+			undoScaleArr.push([obj, obj.scale.clone() ]);
+			objScaleArr.push([obj,
+				new THREE.Vector3(	(scale.x === null ? obj.scale.x : scale.x),
+									(scale.y === null ? obj.scale.y : scale.y),
+									(scale.z === null ? obj.scale.z : scale.z))
+			]);
+		}
+		
+		this.scaleObjects(objScaleArr);
+		if(objScaleArr.length) this.addUndo({name:"scaleTo", mergeable:true, redo:[this.scaleObjects, objScaleArr], undo:[this.scaleObjects, undoScaleArr] });
+		
+		return objScaleArr.length;
+	},
+
+	scaleSelectionBy: function(scale){
+		var objScaleArr = [];
+		var undoScaleArr = [];
+		for(var i = 0; i < this.selectedObjects.length; i++){
+			var obj = this.selectedObjects[i];
+			if(obj.isAnchor) continue;
+			undoScaleArr.push([obj, obj.scale.clone() ]);
+			objScaleArr.push([obj,
+				new THREE.Vector3(	obj.scale.x + (scale.x === null ? 0 : scale.x),
+									obj.scale.y + (scale.y === null ? 0 : scale.y),
+									obj.scale.z + (scale.z === null ? 0 : scale.z))
+			]);
+		}
+		
+		if(objScaleArr.length) this.addUndo({name:"scaleBy", mergeable:true, redo:[this.scaleObjects, objScaleArr], undo:[this.scaleObjects, undoScaleArr] });
+		
+		this.scaleObjects(objScaleArr);
+		
+	},
+	
+	lookAtSelection: function(targ){
+		if(targ.selected) return;
+		targ.updateMatrixWorld(true);
+		
+		var objRotArr = [];
+		var undoRotArr = [];
+		var degToRad = Math.PI / 180;
+		var wp = new THREE.Vector3();
+		var lp = new THREE.Vector3();
+		wp.setFromMatrixPosition(targ.matrixWorld);
 		
 		for(var i = 0; i < this.selectedObjects.length; i++){
 			var obj = this.selectedObjects[i];
-			// name
-			if(prevObj && prevObj.name != obj.name){
-				$('#prop-name').attr('placeholder','Multiple').val('');
-				mults['name'] = true;
-			} else if(!mults['name']){
-				$('#prop-name').attr('placeholder','Object name').val(obj.name);
+			if(obj.isAnchor) continue;
+			if(obj instanceof THREE.DirectionalLight || obj instanceof THREE.SpotLight){
+				// if(targ.isAnchor && (targ.parent == obj.parent || (obj.parent.isAnchor && obj.parent.parent == targ.parent))){
+				undoRotArr.push([obj, obj.target ]);
+				obj.target = targ;
+				objRotArr.push([obj, targ]);
+			} else {
+				undoRotArr.push([obj, obj.rotation.clone() ]);
+				obj.updateMatrixWorld(true);
+				lp.copy(wp); 
+				obj.parent.worldToLocal(lp);
+				obj.lookAt(lp);
+				objRotArr.push([obj, obj.rotation.clone()]);
 			}
-			
-			// excludes
-			containsAnchors = containsAnchors || (!!obj.isAnchor);
-			containsSpotLights = containsSpotLights | (obj instanceof THREE.SpotLight);
-			containsDirLights = containsDirLights | (obj instanceof THREE.DirectionalLight);
-			
-			// type
-			var type = (obj.isAnchor ? 'Anchor' : obj.def.asset);
-			if(prevObj && (prevObj.isAnchor ? 'Anchor' : prevObj.def.asset) != type){
-				$('#prop-object-type').text('Multiple types');
-				mults['type'] = true;
-			} else if(!mults['type']){
-				$('#prop-object-type').text(type);
-			}
-			//x
-			if(prevObj && prevObj.position.x != obj.position.x){
-				$('#prop-x').attr('placeholder','M').val('').data('prevVal',''); mults['x'] = true;
-			} else if(!mults['x']){
-				$('#prop-x').attr('placeholder','').val(obj.position.x).data('prevVal', obj.position.x.toString());
-			}
-			//y
-			if(prevObj && prevObj.position.y != obj.position.y){
-				$('#prop-y').attr('placeholder','M').val('').data('prevVal',''); mults['y'] = true;
-			} else if(!mults['x']){
-				$('#prop-y').attr('placeholder','').val(obj.position.y).data('prevVal', obj.position.y.toString());
-			}
-			//z
-			if(prevObj && prevObj.position.z != obj.position.z){
-				$('#prop-z').attr('placeholder','M').val('').data('prevVal',''); mults['z'] = true;
-			} else if(!mults['z']){
-				$('#prop-z').attr('placeholder','').val(obj.position.z).data('prevVal', obj.position.z.toString());
-			}
-			//rx
-			if(prevObj && prevObj.rotation.x != obj.rotation.x){
-				$('#prop-rx').attr('placeholder','M').val('').data('prevVal',''); mults['rx'] = true;
-			} else if(!mults['rx']){
-				var newVal = Math.round(radToDeg * obj.rotation.x);
-				$('#prop-rx').attr('placeholder','').val(newVal).data('prevVal', newVal);
-			}
-			//ry
-			if(prevObj && prevObj.rotation.y != obj.rotation.y){
-				$('#prop-ry').attr('placeholder','M').val('').data('prevVal',''); mults['ry'] = true;
-			} else if(!mults['ry']){
-				var newVal = Math.round(radToDeg * obj.rotation.y);
-				$('#prop-ry').attr('placeholder','').val(newVal).data('prevVal', newVal);
-			}
-			//rz
-			if(prevObj && prevObj.rotation.z != obj.rotation.z){
-				$('#prop-rz').attr('placeholder','M').val('').data('prevVal',''); mults['rz'] = true;
-			} else if(!mults['rz']){
-				var newVal = Math.round(radToDeg * obj.rotation.z);
-				$('#prop-rz').attr('placeholder','').val(newVal).data('prevVal', newVal);
-			}
-			//sx
-			if(prevObj && prevObj.scale.x != obj.scale.x){
-				$('#prop-sx').attr('placeholder','M').val('').data('prevVal',''); mults['sx'] = true;
-			} else if(!mults['sx']){
-				var newVal = fake0(obj.scale.x);
-				$('#prop-sx').attr('placeholder','').val(newVal).data('prevVal', newVal);
-			}
-			//ry
-			if(prevObj && prevObj.scale.y != obj.scale.y){
-				$('#prop-sy').attr('placeholder','M').val('').data('prevVal',''); mults['sy'] = true;
-			} else if(!mults['sy']){
-				var newVal = fake0(obj.scale.y);
-				$('#prop-sy').attr('placeholder','').val(newVal).data('prevVal', newVal);
-			}
-			//rz
-			if(prevObj && prevObj.scale.z != obj.scale.z){
-				$('#prop-sz').attr('placeholder','M').val('').data('prevVal',''); mults['sz'] = true;
-			} else if(!mults['sz']){
-				var newVal = fake0(obj.scale.z);
-				$('#prop-sz').attr('placeholder','').val(newVal).data('prevVal', newVal);
-			}
-			
-			prevObj = obj;
+		}
+		if(!objRotArr.length) return;
+		this.addUndo({name:"lookAt", redo:[this.rotateObjects, objRotArr], undo:[this.rotateObjects, undoRotArr] });
+		this.refreshProps();
+	},
+	
+	lookAtClicked:function(e){
+		if($(e.target).attr('disabled')) return;
+		if(editScene.objectPickMode){
+			editScene.objectPickMode(null);
+			return;
 		}
 		
-		// disable move
-		if(containsAnchors){
-			$('#panel-move input').attr('disabled','disabled').spinner('disable');
-			$('#look-at,#prop-name').attr('disabled','disabled');
+		$('#look-at').addClass('active');
+		$('canvas,.object-label,#scene-list div.row:not(.selected),#scene-list div.row:not(.selected) > label').css('cursor','cell');
+		editScene.objectPickMode = function(obj){
+			if(obj){
+				editScene.lookAtSelection(obj);
+			}
+			$('#look-at').removeClass('active');
+			editScene.objectPickMode = null;
+			$('canvas,.object-label,#scene-list div.row:not(.selected),#scene-list div.row:not(.selected) > label').css('cursor','');
+		};
+	},
+	
+	updateStoredPosition:function(){
+		this.storedTransform = this.storedTransform ? this.storedTransform : {pos:null,rot:null,scale:null};
+		if(this.storedTransform.pos){
+			var tt = '{'+(this.storedTransform.pos[0] != '' ? this.storedTransform.pos[0] : '*') + ','
+					+(this.storedTransform.pos[1] != '' ? this.storedTransform.pos[1] : '*') + ','
+					+(this.storedTransform.pos[2] != '' ? this.storedTransform.pos[2] : '*') + '}';
+			$('#store-pos').attr('disabled','disabled').attr('title',tt);
+			$('#clear-pos').removeAttr('disabled').attr('title',tt);
 		} else {
-			$('#panel-move input').removeAttr('disabled').spinner('enable');
-			$('#look-at,#prop-name').removeAttr('disabled');
+			$('#store-pos').removeAttr('disabled').removeAttr('title');
+			$('#clear-pos').attr('disabled','disabled').removeAttr('title');
 		}
-		this.updateStoredPosition();
+		if(this.storedTransform.rot){
+			var tt = '{'+(this.storedTransform.rot[0] != '' ? this.storedTransform.rot[0] : '*') + ','
+					+(this.storedTransform.rot[1] != '' ? this.storedTransform.rot[1] : '*') + ','
+					+(this.storedTransform.rot[2] != '' ? this.storedTransform.rot[2] : '*') + '}';
+			$('#store-rot').attr('disabled','disabled').attr('title',tt);
+			$('#clear-rot').removeAttr('disabled').attr('title',tt);
+		} else {
+			$('#store-rot').removeAttr('disabled').removeAttr('title');
+			$('#clear-rot').attr('disabled','disabled').removeAttr('title');	
+		}
+		if(this.storedTransform.scale){
+			var tt = '{'+(this.storedTransform.scale[0] != '' ? this.storedTransform.scale[0] : '*') + ','
+					+(this.storedTransform.scale[1] != '' ? this.storedTransform.scale[1] : '*') + ','
+					+(this.storedTransform.scale[2] != '' ? this.storedTransform.scale[2] : '*') + '}';
+			$('#store-scale').attr('disabled','disabled').attr('title',tt);
+			$('#clear-scale').removeAttr('disabled').attr('title',tt);
+		} else {
+			$('#store-scale').removeAttr('disabled').removeAttr('title');
+			$('#clear-scale').attr('disabled','disabled').removeAttr('title');
+		}
 		
-		// if(containsSpotLights || containsDirLights){ $('#look-at').attr('disabled', 'disabled'); }
+		if((this.storedTransform.pos || this.storedTransform.rot || this.storedTransform.scale) && !($('#prop-x').attr('disabled'))){
+			$('#restore-pos').removeAttr('disabled');
+		} else {
+			$('#restore-pos').attr('disabled','disabled');	
+		}
+
+	},
+	
+	restorePosition:function(){
+		var v = new THREE.Vector3();
+		var numAffected = 0;
+		if(this.storedTransform.pos){
+			v.x = this.storedTransform.pos[0] === '' ? null : parseFloat(this.storedTransform.pos[0]);
+			v.y = this.storedTransform.pos[1] === '' ? null : parseFloat(this.storedTransform.pos[1]);
+			v.z = this.storedTransform.pos[2] === '' ? null : parseFloat(this.storedTransform.pos[2]);
+			if(this.moveSelectionTo(v)) numAffected++;
+		}
+		if(this.storedTransform.rot){
+			v.x = this.storedTransform.rot[0] === '' ? null : parseFloat(this.storedTransform.rot[0]);
+			v.y = this.storedTransform.rot[1] === '' ? null : parseFloat(this.storedTransform.rot[1]);
+			v.z = this.storedTransform.rot[2] === '' ? null : parseFloat(this.storedTransform.rot[2]);
+			if(this.rotateSelectionTo(v)) numAffected++;
+		}
+		if(this.storedTransform.scale){
+			v.x = this.storedTransform.scale[0] === '' ? null : parseFloat(this.storedTransform.scale[0]);
+			v.y = this.storedTransform.scale[1] === '' ? null : parseFloat(this.storedTransform.scale[1]);
+			v.z = this.storedTransform.scale[2] === '' ? null : parseFloat(this.storedTransform.scale[2]);
+			if(this.scaleSelectionTo(v)) numAffected++;
+		}
+		
+		if(numAffected > 1){
+			this.joinUndoActions(numAffected);
+		}
+		this.undoChanged();
+		this.refreshProps();
+	},
+	
+	storePosition:function(e){
+		if($(e.target).attr('disabled')) return;
+		editScene.storedTransform.pos = [$('#prop-x').val(), $('#prop-y').val(), $('#prop-z').val()];
+		editScene.updateStoredPosition();
+	},
+
+	storeRotation:function(e){
+		if($(e.target).attr('disabled')) return;
+		editScene.storedTransform.rot = [$('#prop-rx').val(), $('#prop-ry').val(), $('#prop-rz').val()];
+		editScene.updateStoredPosition();
+	},
+
+	storeScale:function(e){
+		if($(e.target).attr('disabled')) return;
+		editScene.storedTransform.scale = [$('#prop-sx').val(), $('#prop-sy').val(), $('#prop-sz').val()];
+		editScene.updateStoredPosition();
+	},
+
+	clearStorePosition:function(e){
+		if($(e.target).attr('disabled')) return;
+		editScene.storedTransform.pos = null;
+		editScene.updateStoredPosition();
+	},
+
+	clearStoreRotation:function(e){
+		if($(e.target).attr('disabled')) return;
+		editScene.storedTransform.rot = null;
+		editScene.updateStoredPosition();
+	},
+
+	clearStoreScale:function(e){
+		if($(e.target).attr('disabled')) return;
+		editScene.storedTransform.scale = null;
+		editScene.updateStoredPosition();
 	},
 	
 	positionSpinnerChange:function(e){
@@ -2249,11 +2656,422 @@ EditSceneScene.prototype = {
 		targ.data('prevVal', targ.val());
 	},
 
+	visibleChanged:function(e){
+		var doArr = [];
+		var undoArr = [];
+		var newVal = $('#prop-visible')[0].checked;
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			if(obj.isAnchor) continue;
+			doArr.push([obj, newVal]);
+			undoArr.push([obj, obj.visible]);
+		}
+		
+		if(!doArr.length) return;
+		
+		editScene.setObjectsVisible(doArr);
+		editScene.addUndo({name:'setVisible',undo:[editScene.setObjectsVisible, undoArr], redo:[editScene.setObjectsVisible, doArr]} );
+		editScene.refreshProps();
+	},
+
+	templateChanged:function(e){
+		var doArr = [];
+		var undoArr = [];
+		var newVal = $('#prop-template')[0].checked;
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			if(obj.isAnchor) continue;
+			doArr.push([obj, newVal]);
+			undoArr.push([obj, obj.visible]);
+		}
+		
+		if(!doArr.length) return;
+		
+		editScene.setObjectsTemplate(doArr);
+		editScene.addUndo({name:'setTemplate',undo:[editScene.setObjectsTemplate, undoArr], redo:[editScene.setObjectsTemplate, doArr]} );
+		editScene.refreshProps();
+	},
+	
+	transformObjectToCam:function(e){
+		var objPosArr = [];
+		var objRotArr = [];
+		var undoPosArr = [];
+		var undoRotArr = [];
+		var pos = this.camera.position;
+		var rot = this.camera.rotation;
+		for(var i = 0; i < this.selectedObjects.length; i++){
+			var obj = this.selectedObjects[i];
+			if(obj.isAnchor) continue;
+			undoPosArr.push([obj, obj.position.clone() ]);
+			objPosArr.push([obj, obj.parent.worldToLocal(pos.clone()) ]);
+			if(obj instanceof THREE.DirectionalLight || obj instanceof THREE.SpotLight){
+				var newTarg = new THREE.Object3D();
+				newTarg.position.copy(pos);
+				newTarg.rotation.copy(rot);
+				newTarg.translateZ(-100);
+				undoRotArr.push([obj, obj.target ]);
+				objRotArr.push([obj, newTarg ]);
+			} else {
+				var parentRot = new THREE.Quaternion();
+				obj.parent.updateMatrixWorld(true);
+				parentRot.setFromRotationMatrix(obj.parent.matrixWorld);
+				var newRot = new THREE.Quaternion();
+				newRot.setFromRotationMatrix(this.camera.matrixWorld);
+				newRot.multiply(parentRot.inverse());
+				var r = new THREE.Euler();
+				r.setFromQuaternion(newRot);
+				if(e.altKey){
+					if(e.shiftKey) r.y += Math.PI * 0.5;
+					else r.y -= Math.PI * 0.5;
+				} else {
+					if(e.shiftKey) r.y += Math.PI;
+				}
+				
+				undoRotArr.push([obj, obj.rotation.clone() ]);
+				objRotArr.push([obj, r]);
+				
+				obj.rotation.copy(r);
+			}
+			this.refreshProps();
+		}
+		
+		this.addUndo([
+			{name:"moveTo", mergeable:true, redo:[this.moveObjects, objPosArr], undo:[this.moveObjects, undoPosArr]},
+			{name:"rotateTo", mergeable:true, redo:[this.rotateObjects, objRotArr], undo:[this.rotateObjects, undoRotArr] }			
+		]);
+		
+		this.moveObjects(objPosArr);
+		this.rotateObjects(objRotArr);
+	},
+	
+	transformCamToObject:function(e){
+		var obj = this.selectedObjects[0];
+		var wp = new THREE.Vector3();
+		if(obj instanceof THREE.DirectionalLight || obj instanceof THREE.SpotLight){
+			this.camera.position.copy(obj.position);
+			obj.parent.localToWorld(this.camera.position);
+			this.camera.updateMatrixWorld( true );
+			obj.target.updateMatrixWorld(true);
+			wp.setFromMatrixPosition(obj.target.matrixWorld);
+			this.controls.center.copy(wp);
+			this.camera.lookAt(wp);
+		} else {
+			obj.updateMatrixWorld( true );
+			this.camera.position.setFromMatrixPosition(obj.matrixWorld);
+			if(e.altKey){
+				wp.set(e.shiftKey ? 100 : -100,0,0);
+			} else {
+				wp.set(0,0, e.shiftKey ? 100 : -100);
+			}
+			obj.localToWorld(wp);
+			this.camera.lookAt(wp);
+			this.controls.center.copy(wp);
+		}
+	},
+
+	
+/* ------------------- ------------------- ------------------- ------------------- ------------------- Camera panel */
+
+	
+	setObjectProperty:function(arr, prop){
+		for(var i = 0; i < arr.length; i++){
+			var obj = arr[i][0];
+			var val = arr[i][1];
+			obj[prop] = val;
+			if(obj instanceof THREE.PerspectiveCamera){
+				obj.updateProjectionMatrix();				
+			}
+			if(obj.helper) obj.helper.update();
+		}
+	},
+	cameraFovChanged:function(val){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'fov';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj[prop]]);
+		}
+		editScene.addUndo({name:"cameraFOV", mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
+											redo:[editScene.setObjectProperty, doArr, prop]});
+		editScene.setObjectProperty(doArr, prop);
+	},
+
+	cameraNearChanged:function(val){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'near';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj[prop]]);
+		}
+		editScene.addUndo({name:"cameraNear", mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
+											redo:[editScene.setObjectProperty, doArr, prop]});
+		editScene.setObjectProperty(doArr, prop);
+	},
+
+	cameraFarChanged:function(val){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'far';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj[prop]]);
+		}
+		editScene.addUndo({name:"cameraFar", mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
+											redo:[editScene.setObjectProperty, doArr, prop]});
+		editScene.setObjectProperty(doArr, prop);
+		
+	},
+
+	setCameraDefault:function(cam, val){
+		this.container.traverse(function(obj){
+			if(obj instanceof THREE.Camera){
+				if(obj == cam){
+					obj.isDefault = val;
+				} else if(val){
+					obj.isDefault = false;
+				}
+			}
+		});
+		editScene.doc.defaultCamera = val ? cam : null;
+		editScene.refreshScene();
+	},
+	cameraDefaultChanged:function(val){
+		if(editScene.selectedObjects.length != 1) return;
+		var cam = editScene.selectedObjects[0];
+		if(editScene.doc.defaultCamera && editScene.doc.defaultCamera != cam){
+			editScene.addUndo([
+				{name:"cameraDefault",undo:[editScene.setCameraDefault, editScene.doc.defaultCamera, true], redo:[editScene.setCameraDefault, editScene.doc.defaultCamera, false]},
+				{name:"cameraDefault",undo:[editScene.setCameraDefault, cam, !!cam.isDefault], redo:[editScene.setCameraDefault, cam, val]}]);
+			
+		} else {
+			editScene.addUndo({name:"cameraDefault",undo:[editScene.setCameraDefault, cam, !!cam.isDefault],
+													redo:[editScene.setCameraDefault, cam, val]});
+		}
+		editScene.setCameraDefault(cam, val);
+	},
+
+
+/* ------------------- ------------------- ------------------- ------------------- ------------------- Properties panel */
+
+	previewScene:function(camera){
+		if(chrome && chrome.storage){
+			chrome.app.window.create('editor/preview.html', { 
+				outerBounds: {
+			      width: Math.max(800, window.outerWidth),
+			      height: Math.max(600, window.outerHeight)
+			    }
+			 }, function(win){
+		 		win.contentWindow.loadScene = editScene.exportScene(true, false);
+		 		win.contentWindow.startCamera = camera.name;
+		 		win.contentWindow.sceneEditor = editScene;
+			 	win.focus();
+			});
+		} else {
+			var win = window.open('preview.html', '_blank');
+	 		win.loadScene = editScene.exportScene(true, false);
+	 		win.startCamera = camera.name;
+	 		win.sceneEditor = editScene;
+		 	win.focus();
+		}
+	},
+
+	refreshProps:function(){
+		$('#editor-props > h1').text('Properties' + (this.selectedObjects.length ? (' ('+this.selectedObjects.length+')') : ''));
+		$('#editor-props .panels > .panel').hide();
+		if(!this.selectedObjects.length){
+			$('#prop-name').attr('placeholder','Scene name').val(this.doc.name);
+			$('#prop-object-type').text('Scene');
+			$('#panel-scene').show();
+			// scene panel
+			$('#scene-color').css({backgroundColor: this.doc.clearColor.getHexString()});
+			$('#scene-fog-color').css({backgroundColor: this.doc.fogColor.getHexString()});
+			$('#scene-ambient-color').css({backgroundColor: this.doc.ambient.getHexString()});
+			$('#scene-max-shadows').val(this.doc.maxShadows != undefined ? this.doc.maxShadows : 0).data('prevVal', $('#scene-max-shadows').val().toString());
+			$('#scene-fog-near').val(this.doc.fogNear != undefined ? this.doc.fogNear : this.scene.fog.near).data('prevVal', $('#scene-fog-near').val().toString());
+			$('#scene-fog-far').val(this.doc.fogFar != undefined ? this.doc.fogFar : this.scene.fog.far).data('prevVal', $('#scene-fog-far').val().toString());
+			return;
+		}
+		$('#prop-name').attr('placeholder','Object name');
+		$('#prop-object-type').text('');
+		$('#panel-move').show();
+		
+		$('#prop-visible,#prop-template').removeClass('multiple');
+		
+		var prevObj = null;
+		var mults = {};
+		var containsAnchors = false;
+		var containsSpotLights = false;
+		var containsDirLights = false;
+		var radToDeg = 180 / Math.PI;
+		var commonType = null;
+				
+		for(var i = 0; i < this.selectedObjects.length; i++){
+			var obj = this.selectedObjects[i];
+			// name
+			if(prevObj && prevObj.name != obj.name){
+				$('#prop-name').attr('placeholder','Multiple').val('');
+				mults['name'] = true;
+			} else if(!mults['name']){
+				$('#prop-name').attr('placeholder','Object name').val(obj.name);
+			}
+			
+			// excludes
+			containsAnchors = containsAnchors || (!!obj.isAnchor);
+			containsSpotLights = containsSpotLights | (obj instanceof THREE.SpotLight);
+			containsDirLights = containsDirLights | (obj instanceof THREE.DirectionalLight);
+			
+			// type
+			var type = (obj.isAnchor ? 'Anchor' : (obj instanceof THREE.PointCloud ? obj.geometry.data.name : obj.def.asset));
+			if(prevObj && (prevObj.isAnchor ? 'Anchor' : prevObj.def.asset) != type){
+				$('#prop-object-type').text('Multiple types');
+				mults['type'] = true;
+				commonType = null;
+			} else if(!mults['type']){
+				$('#prop-object-type').text(type);
+				commonType = type;
+			}
+			
+			// visible
+			if(prevObj && prevObj.visible != obj.visible){
+				$('#prop-visible').addClass('multiple')[0].checked = false;
+				mults['visible'] = true;
+			} else if(!mults['visible']){
+				$('#prop-visible')[0].checked = obj.visible;
+			}
+			// template
+			if(prevObj && prevObj.isTemplate != obj.isTemplate){
+				$('#prop-template').addClass('multiple')[0].checked = false;
+				mults['template'] = true;
+			} else if(!mults['template']){
+				$('#prop-template')[0].checked = obj.isTemplate;
+			}
+			
+			//x
+			if(prevObj && prevObj.position.x != obj.position.x){
+				$('#prop-x').attr('placeholder','M').val('').data('prevVal',''); mults['x'] = true;
+			} else if(!mults['x']){
+				$('#prop-x').attr('placeholder','').val(obj.position.x).data('prevVal', obj.position.x.toString());
+			}
+			//y
+			if(prevObj && prevObj.position.y != obj.position.y){
+				$('#prop-y').attr('placeholder','M').val('').data('prevVal',''); mults['y'] = true;
+			} else if(!mults['x']){
+				$('#prop-y').attr('placeholder','').val(obj.position.y).data('prevVal', obj.position.y.toString());
+			}
+			//z
+			if(prevObj && prevObj.position.z != obj.position.z){
+				$('#prop-z').attr('placeholder','M').val('').data('prevVal',''); mults['z'] = true;
+			} else if(!mults['z']){
+				$('#prop-z').attr('placeholder','').val(obj.position.z).data('prevVal', obj.position.z.toString());
+			}
+			//rx
+			if(prevObj && prevObj.rotation.x != obj.rotation.x){
+				$('#prop-rx').attr('placeholder','M').val('').data('prevVal',''); mults['rx'] = true;
+			} else if(!mults['rx']){
+				var newVal = Math.round(radToDeg * obj.rotation.x);
+				$('#prop-rx').attr('placeholder','').val(newVal).data('prevVal', newVal);
+			}
+			//ry
+			if(prevObj && prevObj.rotation.y != obj.rotation.y){
+				$('#prop-ry').attr('placeholder','M').val('').data('prevVal',''); mults['ry'] = true;
+			} else if(!mults['ry']){
+				var newVal = Math.round(radToDeg * obj.rotation.y);
+				$('#prop-ry').attr('placeholder','').val(newVal).data('prevVal', newVal);
+			}
+			//rz
+			if(prevObj && prevObj.rotation.z != obj.rotation.z){
+				$('#prop-rz').attr('placeholder','M').val('').data('prevVal',''); mults['rz'] = true;
+			} else if(!mults['rz']){
+				var newVal = Math.round(radToDeg * obj.rotation.z);
+				$('#prop-rz').attr('placeholder','').val(newVal).data('prevVal', newVal);
+			}
+			//sx
+			if(prevObj && prevObj.scale.x != obj.scale.x){
+				$('#prop-sx').attr('placeholder','M').val('').data('prevVal',''); mults['sx'] = true;
+			} else if(!mults['sx']){
+				var newVal = fake0(obj.scale.x);
+				$('#prop-sx').attr('placeholder','').val(newVal).data('prevVal', newVal);
+			}
+			//ry
+			if(prevObj && prevObj.scale.y != obj.scale.y){
+				$('#prop-sy').attr('placeholder','M').val('').data('prevVal',''); mults['sy'] = true;
+			} else if(!mults['sy']){
+				var newVal = fake0(obj.scale.y);
+				$('#prop-sy').attr('placeholder','').val(newVal).data('prevVal', newVal);
+			}
+			//rz
+			if(prevObj && prevObj.scale.z != obj.scale.z){
+				$('#prop-sz').attr('placeholder','M').val('').data('prevVal',''); mults['sz'] = true;
+			} else if(!mults['sz']){
+				var newVal = fake0(obj.scale.z);
+				$('#prop-sz').attr('placeholder','').val(newVal).data('prevVal', newVal);
+			}
+			
+			// camera
+			if(commonType == 'Camera'){
+				if(prevObj && prevObj.fov != obj.fov){
+					$('#cam-fov').attr('placeholder','M').val('').data('prevVal',''); mults['cam-fov'] = true;
+				} else if(!mults['cam-fov']){
+					var newVal = obj.fov;
+					$('#cam-fov').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}
+				if(prevObj && prevObj.near != obj.near){
+					$('#cam-near').attr('placeholder','M').val('').data('prevVal',''); mults['cam-near'] = true;
+				} else if(!mults['cam-near']){
+					var newVal = obj.near;
+					$('#cam-near').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}
+				if(prevObj && prevObj.far != obj.far){
+					$('#cam-far').attr('placeholder','M').val('').data('prevVal',''); mults['cam-far'] = true;
+				} else if(!mults['cam-far']){
+					var newVal = obj.far;
+					$('#cam-far').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}
+				if(this.selectedObjects.length == 1){
+					$('#cam-default')[0].checked = !!obj.isDefault;
+				}
+			}
+			
+			prevObj = obj;
+		}
+		
+		if(commonType == 'Camera'){
+			$('#panel-camera').show();
+			$('#cam-default,#cam-default~label').css({ visibility: (this.selectedObjects.length != 1) ? 'hidden' : 'visible'});
+		}		
+		
+		// disable move
+		if(containsAnchors){
+			$('#panel-move input[type=text]').attr('disabled','disabled').spinner('disable');
+			$('#panel-move input[type=checkbox]').attr('disabled','disabled');
+			$('#look-at,#prop-name,#obj-from-cam').attr('disabled','disabled');
+		} else {
+			$('#panel-move input[type=text]').removeAttr('disabled').spinner('enable');
+			$('#panel-move input[type=checkbox]').removeAttr('disabled');
+			$('#look-at,#prop-name,#obj-from-cam').removeAttr('disabled');			
+		}
+		
+		if(this.selectedObjects.length == 1){
+			$('#obj-from-cam').removeAttr('disabled');
+		} else {
+			$('#obj-from-cam').attr('disabled','disabled');
+		}
+		
+		this.updateStoredPosition();
+		
+		// if(containsSpotLights || containsDirLights){ $('#look-at').attr('disabled', 'disabled'); }
+	},
+	
 /* ------------------- ------------------- ------------------- ------------------- ------------------- UI functions */
 
 	/* create main editor UI*/
 	addUI:function(){
-		// menu bar
+// menu bar
 		$('body').append(
 		'<div id="menu-bar" class="absolute-pos upper-left editor">\
 		<ul class="horizontal"><li>\
@@ -2285,7 +3103,7 @@ EditSceneScene.prototype = {
 			<button id="undo">Undo</button>\
 		</div>');
 		
-	// file menu
+// file menu
 		$('#file').click(function(){
 			$('.submenu').hide();
 			var pos = $(this).offset();
@@ -2300,7 +3118,7 @@ EditSceneScene.prototype = {
 		$('#file-fetch').click(editScene.fetchDoc);
 		$('#file-submenu').menu().hide();
 
-	// edit menu
+// edit menu
 		$('#edit').click(function(){
 			$('.submenu').hide();
 			var pos = $(this).offset();
@@ -2313,7 +3131,7 @@ EditSceneScene.prototype = {
 		$('#edit-cut').click(editScene.cutSelection.bind(editScene));
 		$('#edit-paste').click(editScene.pasteSelection.bind(editScene));
 		
-		// view menu
+// view menu
 		$('#view').click(function(){
 			$('.submenu').hide();
 			var pos = $(this).offset();
@@ -2323,11 +3141,11 @@ EditSceneScene.prototype = {
 		$('#reset-zoom').click(editScene.resetZoom.bind(editScene));
 		$('#view-submenu').menu().hide();
 		
-	// help menu
+// help menu
 		$('#help').click(editScene.showHelp);
 	
 	
-	// properties
+// properties
 	$('body').append(
 		'<div id="editor-props" class="ui-widget-header ui-corner-all editor floating-panel">\
 		<h1>Properties</h1>\
@@ -2338,7 +3156,9 @@ EditSceneScene.prototype = {
 		</div>\
 		<div class="panels">\
 			<div id="panel-move" class="panel"><h4>Object3D</h4>\
-			<label for="prop-x" class="w0 right-align">X</label><input tabindex="0" type="text" class="center position" id="prop-x" size="1"/>\
+			<input tabindex="9" type="checkbox" id="prop-visible"/><label for="prop-visible" class="w3">Visible</label>\
+			<input tabindex="10" type="checkbox" id="prop-template"/><label for="prop-template" class="w32">Template</label>\
+			<hr/><label for="prop-x" class="w0 right-align">X</label><input tabindex="0" type="text" class="center position" id="prop-x" size="1"/>\
 			<label for="prop-rx" class="w1 right-align">Rot X</label><input tabindex="3" type="text" class="center rotation" id="prop-rx" size="1"/>\
 			<label for="prop-sx" class="w1 right-align">Scale X</label><input tabindex="6" type="text" class="center scale" id="prop-sx" size="1"/><br/>\
 			<label for="prop-y" class="w0 right-align">Y</label><input tabindex="1" type="text" class="center position" id="prop-y" size="1"/>\
@@ -2347,20 +3167,23 @@ EditSceneScene.prototype = {
 			<label for="prop-z" class="w0 right-align">Z</label><input tabindex="2" type="text" class="center position" id="prop-z" size="1"/>\
 			<label for="prop-rz" class="w1 right-align">Rot Z</label><input tabindex="5" type="text" class="center rotation" id="prop-rz" size="1"/>\
 			<label for="prop-sz" class="w1 right-align">Scale Z</label><input tabindex="8" type="text" class="center scale" id="prop-sz" size="1"/><br/>\
-			<div class="sub">Store <a id="store-pos">position</a> <a id="store-rot">rotation</a> <a id="store-scale">scale</a><span class="separator-left"/><a id="restore-pos" disabled="disabled">restore</a>\
+			<hr/><div class="sub">Store <a id="store-pos">position</a> <a id="store-rot">rotation</a> <a id="store-scale">scale</a><span class="separator-left"/><a id="restore-pos" disabled="disabled">restore</a>\
 			<span class="separator-left"/><a id="look-at">look at</a></div>\
-			<div class="sub">Clear <a id="clear-pos">position</a> <a id="clear-rot">rotation</a> <a id="clear-scale">scale</a></div>\
+			<div class="sub">Clear <a id="clear-pos">position</a> <a id="clear-rot">rotation</a> <a id="clear-scale">scale</a>\
+			<span class="separator-left"/><a id="obj-from-cam">from cam</a><span class="separator-left"/><a id="obj-to-cam">to cam</a></div>\
 			</div>\
 		</div>\
 		</div>');
 		
-		// common
+// common
 		$('#prop-name').change(this.nameChanged.bind(this));
 		
-		// object3d
+// object3d
 		$('#panel-move input.position').spinner({step:1, change:this.positionSpinnerChange, stop:this.positionSpinnerChange });//
 		$('#panel-move input.rotation').spinner({step:5, change:this.rotationSpinnerChange, stop:this.rotationSpinnerChange});//
 		$('#panel-move input.scale').spinner({step:0.25, change:this.scaleSpinnerChange, stop:this.scaleSpinnerChange});//
+		$('#prop-visible').click(this.visibleChanged);
+		$('#prop-template').click(this.templateChanged);
 		$('#look-at').click(this.lookAtClicked);
 		$('#store-pos').click(this.storePosition);
 		$('#store-rot').click(this.storeRotation);
@@ -2369,8 +3192,10 @@ EditSceneScene.prototype = {
 		$('#clear-rot').click(this.clearStoreRotation);
 		$('#clear-scale').click(this.clearStoreScale);
 		$('#restore-pos').click(this.restorePosition.bind(this));
+		$('#obj-from-cam').click(this.transformObjectToCam.bind(this));
+		$('#obj-to-cam').click(this.transformCamToObject.bind(this));
 		
-		// scene panel
+// scene panel
 		$('#editor-props .panels').append('<div id="panel-scene" class="panel"><h4>Scene</h4>\
 			<label for="scene-max-shadows" class="w32 pad5 right-align">Max shadows</label><input tabindex="3" type="text" class="center" id="scene-max-shadows" size="1"/><br/>\
 			<label class="w32 right-align pad5">Clear color</label><div id="scene-color" class="color-swatch"/><br/>\
@@ -2393,13 +3218,13 @@ EditSceneScene.prototype = {
 			}	
 		};
 		var vc = valueChanged(this.setSceneMaxShadows);
-		$('#scene-max-shadows').spinner({step:1, change:vc, stop:vc});
+		$('#scene-max-shadows').spinner({step:1, min:1, max:8, change:vc, stop:vc});
 		vc = valueChanged(this.setSceneFogNear);
-		$('#scene-fog-near').spinner({step:10, change:vc, stop:vc});//
+		$('#scene-fog-near').spinner({step:10, min:0, change:vc, stop:vc});//
 		vc = valueChanged(this.setSceneFogFar);
-		$('#scene-fog-far').spinner({step:10, change:vc, stop:vc});//
+		$('#scene-fog-far').spinner({step:10, min:0, change:vc, stop:vc});//
 		function colorPickerOnShow(dom){ 
-			$(dom).css({zIndex: 1000});
+			$(dom).css({zIndex: 10000001});
 			var src = $(this);
 			var clr = new THREE.Color(src.css('background-color'));
 			var hex = clr.getHexString();
@@ -2443,10 +3268,27 @@ EditSceneScene.prototype = {
 				editScene.scene.fog.color.setHex(parseInt(hex,16));
 			}
 		});
+
+// camera panel
+		$('#editor-props .panels').append('<div id="panel-camera" class="panel"><h4>Camera</h4>\
+			<input tabindex="3" type="checkbox" id="cam-default"/><label for="cam-default" class="w3">Default camera</label>\
+			<hr/>\
+			<label for="cam-fov" class="w1 pad5 right-align">FOV</label><input tabindex="0" type="text" class="center" id="cam-fov" size="1"/><br/>\
+			<label for="cam-near" class="w1 pad5 right-align">Near</label><input tabindex="1" type="text" class="center" id="cam-near" size="2"/>\
+			<label for="cam-far" class="w1 pad5 right-align"> Far</label><input tabindex="2" type="text" class="center" id="cam-far" size="2"/><br/>\
+			</div>');
+		var vc = valueChanged(this.cameraFovChanged);
+		$('#cam-fov').spinner({step:5, min:1, max:180, change:vc, stop:vc});
+		vc = valueChanged(this.cameraNearChanged);
+		$('#cam-near').spinner({step:10, min:0, change:vc, stop:vc});//
+		vc = valueChanged(this.cameraFarChanged);
+		$('#cam-far').spinner({step:10, min:1, change:vc, stop:vc});//
+		$('#cam-default').click(this.cameraDefaultChanged);
+
 		
 		var savePosOnDrop = function(e, ui) { localStorage_setItem(ui.helper.context.id + '-x', ui.position.left); localStorage_setItem(ui.helper.context.id + '-y', ui.position.top); };
 		var bringToFront = function(e, ui){ $('body').append(ui.helper.context); }
-		function makeDraggablePanel(id, defX, defY, onResizeHandler){
+		function makeDraggablePanel(id, defX, defY, defH, onResizeHandler){
 			var panel = $('#'+id);
 			var dw = panel.width();
 			var dh = panel.height();
@@ -2466,7 +3308,7 @@ EditSceneScene.prototype = {
 				panel.addClass('collapsed').resizable('disable');
 			} else {
 				var h = parseInt(localStorage_getItem(id+'-height'));
-				panel.css('height', h ? h : (window.innerHeight * 0.25));
+				panel.css('height', h ? h : defH);
 			}
 			if(onResizeHandler) onResizeHandler();
 			var dx = localStorage_getItem(id+'-x');
@@ -2474,10 +3316,10 @@ EditSceneScene.prototype = {
 			dx = Math.min((dx === null) ? defX : dx, window.innerWidth - dw);
 			dy = Math.min((dy === null) ? defY : dy, window.innerHeight - dh);
 			panel.offset({left:dx, top: dy}).draggable({ snap: ".editor", containment: "body", cancel: '.ui-widget,input,a,button,#scene-list', start: bringToFront, stop: savePosOnDrop });
-			panel.mousedown(function(){ $('.floating-panel').css({zIndex:100}); $(this).css({zIndex:101}); $('.submenu').hide();});
+			panel.mousedown(function(){ $('.floating-panel').css({zIndex:1000000}); $(this).css({zIndex:1000001}); $('.submenu').hide();});
 		}
 		
-	// scene
+// scene graph window
 		$('body').append(
 		'<div id="editor-scene" class="ui-widget-header ui-corner-all editor floating-panel">\
 		<h1>Scene</h1>\
@@ -2505,7 +3347,7 @@ EditSceneScene.prototype = {
 	    $('#scene-dupe').button();
 	    $('#scene-delete').button().click(this.deleteSelection.bind(this));
 
-	// assets
+// assets
 		$('body').append(
 		'<div id="editor-assets" class="ui-widget-header ui-corner-all editor floating-panel">\
 		<h1>Assets</h1>\
@@ -2515,38 +3357,38 @@ EditSceneScene.prototype = {
 		<hr/>\
 		<div id="asset-list"></div>\
 		<hr/>\
-		<button id="asset-replace">Replace</button><span class="separator-left"/><button id="asset-delete">Delete</button>\
+		<button id="asset-delete">Delete</button>\
 		</div>');
-		$('#asset-new').button();
-	    //$('#asset-rename').button().click(this.assetRename.bind(this));
-	    //$('#asset-delete').button().click(this.assetDelete.bind(this));
+		$('#asset-new').button().click(this.assetNew.bind(this));
+		$('#asset-rename').button().click(this.assetRename.bind(this));
+	    $('#asset-delete').button().click(this.assetDelete.bind(this));
 	    
-	    makeDraggablePanel('editor-scene', 20, window.innerHeight * 0.25, function(){
+	    makeDraggablePanel('editor-scene', 0, 40, window.innerHeight * 0.5 - 60, function(){
 	    	var h = $('#editor-scene').height();
 	    	$('#scene-list').css('height', h - 140);
 	    });
-   		makeDraggablePanel('editor-props', window.innerWidth - $('#editor-props').width() - 20, window.innerHeight * 0.25, function(){
+   		makeDraggablePanel('editor-props', 0, window.innerHeight * 0.5, window.innerHeight * 0.5 - 20, function(){
 	    	var h = $('#editor-props').height();
 	    	$('#editor-props .panels').height(h - 100);
 	    });
-	    makeDraggablePanel('editor-assets', window.innerWidth - $('#editor-assets').width() - 20, $('#editor-props').offset().top + $('#editor-props').height() + 20, function(){
+	    makeDraggablePanel('editor-assets', window.innerWidth - $('#editor-assets').width() - 20, window.innerHeight * 0.7, window.innerHeight * 0.3 - 20, function(){
     		var h = $('#editor-assets').height();
     		$('#asset-list').css('height', h - 140);
 	    });
 
-	// replace shortcut text
+// replace shortcut text
 		$('.editor .ctrl').append(navigator.appVersion.indexOf("Mac")!=-1 ? '&#8984; ':'Ctrl + ');//⌘
 	
-	// undo/redo
+// undo/redo
 		$('#undo').button().click(this.performUndo.bind(this));
 		$('#redo').button().click(this.performRedo.bind(this));
 		
-	// protect canvas when over UI
+// protect canvas when over UI
 		$('.editor').hover(editScene.disableCanvasInteractions.bind(editScene),
 							editScene.enableCanvasInteractions.bind(editScene));
 		$("div").disableSelection();
 		
-	// add collapse buttons
+// add collapse buttons
 		$('#editor-props,#editor-scene,#editor-assets').prepend('<a class="toggleCollapse">[-]</a>');
 		$('.editor a.toggleCollapse').each(function(i, el){
 			el = $(el);
@@ -2573,7 +3415,7 @@ EditSceneScene.prototype = {
 			parent.resizable('option','resize')();
 		});
 		
-	// focus/blur
+// focus/blur
 		$('input').on('focus',function(e){editScene.focusedTextField = e.target; editScene.disableKeyboardShortcuts();})
 				  .on('blur',function(e){editScene.focusedTextField = null; editScene.enableKeyboardShortcuts();})
 				  .on('keyup',function(e){ if(e.which == 13) e.target.blur(); });
@@ -2813,6 +3655,18 @@ EditSceneScene.prototype = {
 			break;
 		}
 	},
+	
+	showMessage:function(html){
+		var msg = $('div.bigMessage');
+		msg.each(function(i, el){
+			var offs = $(el).offset();
+			$(el).offset({top:offs.top + 100, left: offs.left });
+		});
+		msg = $('<div class="bigMessage"/>').html(html);
+		$('body').append(msg);
+		msg.offset({top: 60, left: Math.floor(0.5 * (window.innerWidth - msg.width())) });
+		setTimeout(function(){ msg.fadeOut(function(){ msg.remove(); }); }, 2000);
+	},
 
 /* ------------------- ------------------- ------------------- ------------------- ------------------- Framework */
 
@@ -2833,7 +3687,7 @@ EditSceneScene.prototype = {
 		// camera
 		this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 2000000 );
 		this.camera.position.set(512, 512, 512);
-		this.camera.lookAt(0,0,0);
+		this.camera.lookAt(new THREE.Vector3(0,0,0));
 		this.scene.add(this.camera);
 		this.controls = new THREE.EditorControls(this.camera, document.body);//renderer.webgl.domElement);
 	    this.controls.panEnabled = this.controls.rotateEnabled = this.controls.zoomEnabled = true;
@@ -2863,7 +3717,8 @@ EditSceneScene.prototype = {
 			{	"name": "camera",
 				"asset": "Camera",
 				"position": [0,50,100],
-				"lookAt": [0,0,0]
+				"lookAt": [0,0,0],
+				"isDefault": true
 			},
 			{	"name": "sun",
 				"asset": "DirectionalLight",
@@ -2902,11 +3757,11 @@ EditSceneScene.prototype = {
 		editScene.enableCanvasInteractions(true);
 		
 		document.addEventListener("contextmenu", function(e) {
-			if(editScene.ctrl || e.ctrlKey){
+			if(editScene.ctrl || e.ctrlKey || $(e.target).hasClass('object-label')){
 				e.preventDefault();
 				//editScene.mouseDown(e);
 				//e.stopPropagation();
-				$(e.target).trigger('click');
+				if(!$(e.target).hasClass('object-label')) $(e.target).trigger('click');
 			}
 			return false;
 		}, false);
@@ -2956,7 +3811,7 @@ EditSceneScene.prototype = {
     },
 };
 
-var editScene = new EditSceneScene();
+editScene = new EditSceneScene();
 
 
 /* scene serializing */
@@ -2968,10 +3823,10 @@ THREE.Object3D.prototype.serialize = function(templates){
 	// common props
 	var radToDeg = 180 / Math.PI;
 	if(this.position.x || this.position.y || this.position.z) def.position = [this.position.x, this.position.y, this.position.z];
-	if(this.rotation.x || this.rotation.y || this.rotation.z) def.rotation = [this.rotation.x * radToDeg, this.position.y * radToDeg, this.position.z * radToDeg];
+	if(this.rotation.x || this.rotation.y || this.rotation.z) def.rotation = [this.rotation.x * radToDeg, this.rotation.y * radToDeg, this.rotation.z * radToDeg];
 	if(this.scale.x != 1.0 || this.scale.y != 1.0 || this.scale.z != 1.0) {
 		if(this.scale.x != this.scale.y || this.scale.y != this.scale.z || this.scale.y != this.scale.x){
-			def.scale = [this.position.x, this.position.y, this.position.z];
+			def.scale = [this.scale.x, this.scale.y, this.scale.z];
 		} else {
 			def.scale = this.scale.x;
 		}
@@ -2980,6 +3835,7 @@ THREE.Object3D.prototype.serialize = function(templates){
 	if(this.receiveShadow !== undefined) def.receiveShadow = this.receiveShadow;
 	if(!this.visible) def.visible = false;
 	if(this.children.length) def.layers = [];
+	if(this.isTemplate) def.isTemplate = true;
 	
 	// types
 	if(this instanceof THREE.Camera){
@@ -2987,6 +3843,7 @@ THREE.Object3D.prototype.serialize = function(templates){
 		def.fov = this.fov;
 		def.near = this.near;
 		def.far = this.far;
+		def.isDefault = !!this.isDefault;
 	} else if(this instanceof THREE.DirectionalLight){
 		def.asset = 'DirectionalLight';
 		if(this.shadowCameraRight != 128) def.shadowVolumeWidth = this.shadowCameraRight * 2;
@@ -2995,6 +3852,15 @@ THREE.Object3D.prototype.serialize = function(templates){
 		def.color = this.color.getHexString();
 		def.intensity = this.intensity;
 		def.shadowMapWidth = Math.max(this.shadowMapWidth, this.shadowMapHeight);
+		// target is under the same parent/anchor
+		if(this.target.isAnchor && (this.parent == this.target.parent || (this.parent.isAnchor && this.target.parent == this.parent.parent))){
+			def.target = this.target.name;
+		} else if(this.target){
+			this.target.updateMatrixWorld(true);
+			var p = new THREE.Vector3();
+			this.target.localToWorld(p);
+			def.target = [p.x,p.y,p.z];
+		}
 	}  else if(this instanceof THREE.SpotLight){
 		def.asset = 'SpotLight';
 		if(this.shadowCameraRight != 128) def.shadowVolumeWidth = this.shadowCameraRight * 2;
@@ -3006,10 +3872,14 @@ THREE.Object3D.prototype.serialize = function(templates){
 		def.distance = this.distance;
 		def.exponent = this.exponent;
 		def.angle = this.angle * radToDeg;
-		if(this.target.isAnchor){
+		// target is under the same parent/anchor
+		if(this.target.isAnchor && (this.parent == this.target.parent || (this.parent.isAnchor && this.target.parent == this.parent.parent))){
 			def.target = this.target.name;
 		} else {
-			def.target = [this.target.position.x,this.target.position.y,this.target.position.z];
+			this.target.updateMatrixWorld(true);
+			var p = new THREE.Vector3();
+			this.target.localToWorld(p);
+			def.target = [p.x,p.y,p.z];
 		}
 	} else if(this instanceof THREE.PointLight){
 		def.asset = 'PointLight';
@@ -3050,10 +3920,13 @@ THREE.Object3D.prototype.serialize = function(templates){
 				var child = this.children[i];
 				if(child.anchored) {
 					var cdef = child.serialize(templates);
-					if(child.isTemplate) {
-						// TODO - TEMPLATES
+					cdef.anchor = child.anchored;
+					if(child.isTemplate && templates) {
+						//delete cdef.name;
+						templates[child.name] = cdef;
+						if(!def.containsTemplates){ def.containsTemplates = [ child.name ]; }
+						else def.containsTemplates.push(child.name);
 					} else {
-						cdef.anchor = child.anchored;
 						def.layers.push(cdef);
 					}
 				}
@@ -3076,10 +3949,13 @@ THREE.Object3D.prototype.serialize = function(templates){
 					var child = anchor.children[i];
 					child.anchored = aname;
 					var cdef = child.serialize(templates);
-					if(child.isTemplate) {
-						// TODO - TEMPLATES
+					cdef.anchor = aname;
+					if(child.isTemplate && templates) {
+						//delete cdef.name;
+						templates[child.name] = cdef;
+						if(!def.containsTemplates){ def.containsTemplates = [ child.name ]; }
+						else def.containsTemplates.push(child.name);
 					} else {
-						cdef.anchor = aname;
 						def.layers.push(cdef);
 					}				
 				}
@@ -3091,7 +3967,7 @@ THREE.Object3D.prototype.serialize = function(templates){
 		if(this.def.playAnim != undefined) def.playAnim = this.def.playAnim;
 		
 	} else {
-		console.log("Serializing an unknown type", this);
+		//console.log("Serializing an unknown type", this);
 		def.asset = 'Object3D';
 	}
 	
@@ -3100,10 +3976,14 @@ THREE.Object3D.prototype.serialize = function(templates){
 		// skip anchors
 		var child = this.children[i];
 		if(child.isAnchor || child.anchored) continue;
-		if(child.isTemplate) {
-			// TODO - TEMPLATES
+		var cdef = child.serialize(templates);
+		if(child.isTemplate && templates) {
+			// delete cdef.name;
+			templates[child.name] = cdef;
+			if(!def.containsTemplates){ def.containsTemplates = [ child.name ]; }
+			else def.containsTemplates.push(child.name);
 		} else {
-			def.layers.push(child.serialize(templates));
+			def.layers.push(cdef);
 		}
 	}
 	

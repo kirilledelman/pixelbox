@@ -1,9 +1,12 @@
 {
 	"name": "menuScene",
 	
-	"config":{
-		"clearColor": "000000"
-	},
+	"maxShadows":2,
+	"clearColor":"003777",
+	"ambient":"000000",
+	"fogColor":"003399",
+	"fogNear":1000,
+	"fogFar":10000,
 	
 	"layers": [
 		{	"name": "camera",
@@ -107,9 +110,5 @@
 			"scale":5,
 			"loopFrom":["burn", 2]
 		}
-		
-	],
-
-	"assets": [
 	]
 }

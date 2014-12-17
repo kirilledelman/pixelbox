@@ -2,7 +2,7 @@
 
 /* editor */
 
-.submenu { z-index: 1000; }
+.submenu { z-index: 1000100; }
 
 .submenu.shortcuts .ui-menu-item {
 	padding-right:5em;
@@ -10,7 +10,7 @@
 
 .ui-menu .ui-menu-item em { position: absolute; right: 0.5em; top: 0.2em; }
 
-#undo-buttons, #menu-bar { z-index: 100; }
+#undo-buttons, #menu-bar { z-index: 1000000; }
 
 #editor-toolbar {
 	position: absolute;
@@ -40,6 +40,10 @@
 .editor hr {
 	margin: 5px 0px;
 	border: 2px dotted #666;
+}
+
+#editor-props .panel hr {
+	border: 1px dotted #666;
 }
 
 .subpalette {
@@ -84,8 +88,8 @@ label.object-label.selected {
 }
 
 #editor-scene {
-	width: 380px;
-	min-width: 380px;
+	width: 395px;
+	min-width: 395px;
 	overflow: hidden;
 }
 #editor-scene.collapsed { width: 150px; min-width: 150px; }
@@ -98,8 +102,8 @@ label.object-label.selected {
 #editor-assets.collapsed { width: 150px; min-width: 150px;}
 
 #editor-props {
-	width: 380px;
-	min-width: 380px;
+	width: 395px;
+	min-width: 395px;
 	overflow: hidden;
 }
 #editor-props.collapsed { width: 190px; min-width: 190px; }
@@ -111,7 +115,7 @@ label.object-label.selected {
 
 #editor-props .panel {
 	padding: 15px 10px;
-	border-bottom: 1px dotted #666;
+	border-bottom: 2px dotted #666;
 	position: relative;
 	overflow: visible;
 }
@@ -196,7 +200,6 @@ label.object-label.selected {
 #scene-list div.row, #asset-list div.row {
 	min-height: 35px;
 	font-size: 14px;
-	background-color: #000;
 	position: relative;
 	overflow: hidden;
 	clear: both;
@@ -219,15 +222,22 @@ label.object-label.selected {
 	display:none;
 }
 
-#scene-list div.row.hidden {
-	opacity: 0.7;
-}
 #scene-list div.row.hidden > label {
 	text-decoration: line-through;
+	color: #999;
+}
+
+#scene-list div.row.hidden div.row > label {
+	text-decoration: line-through;
+	color: #999;
 }
 
 #scene-list div.row.template {
-	background-color: #32507a;
+	background-color: rgba(50,81,123,0.5);
+}
+
+#scene-list div.row.default > label {
+	font-weight: bold;
 }
 
 #scene-list div.row {
@@ -238,7 +248,7 @@ label.object-label.selected {
 
 #scene-list div.row > div.selection {
 	display: none;
-	background-color: #666;
+	background-color: rgba(102,102,102,0.7);
 	height: 36px;
 	width: 100%;
 	position: absolute;
@@ -248,6 +258,7 @@ label.object-label.selected {
 #scene-list div.row.helper {
 	max-width: 200px;
 	border: 1px solid black;
+	background-color: #333;
 	opacity: 0.7;
 	font-size: 15px;
 }
@@ -297,9 +308,6 @@ label.object-label.selected {
 	border:1px solid #fff;
 }
 
-#scene-list div.row.template .tiny-swatch {
-	border: 1px dotted #999;
-}
 
 
 #scene-list div.row label,
@@ -321,10 +329,14 @@ label.object-label.selected {
 	top: 10px; right:10px;
 }
 
+#asset-list div.row span.used a:hover {
+	text-decoration: underline;
+}
+
 .clear { clear: both;}
 
 #anim-list div.anim-row.selected, #anchor-list div.anchor-row.selected, #asset-list div.row.selected {
-	background-color: #666;
+	background-color: rgba(102,102,102,0.7);
 }
 
 #anim-list div.anim-row label { overflow: hidden; width: 70%; }
@@ -368,7 +380,7 @@ label.object-label.selected {
 	color: black;
 }
 
-#editor-load #drop-files {
+#drop-files {
 	width: 90%;
 	border: 2px solid #666;
 	background-color: #000;
@@ -379,7 +391,7 @@ label.object-label.selected {
 	overflow-y: scroll;
 }
 
-#editor-load #drop-files span.file {
+#drop-files span.file {
 	background-color: #333;
 	padding: 0.5em;
 	font-size: 0.8em;
@@ -395,7 +407,11 @@ label.object-label.selected {
 	overflow: hidden;
 }
 
-#editor-load #drop-files span.file.scene {
+.handcursor {
+	cursor: pointer;
+}
+
+#drop-files span.file.scene {
 	background-color: #692626;
 }
 
@@ -420,7 +436,7 @@ a.toggleCollapse {
 .floating-panel {
 	position:absolute;
 	padding:5px;
-	z-index: 100;
+	z-index: 1000000;
 }
 
 #editor-anims {	width: 320px; }
@@ -661,6 +677,18 @@ input {
 	margin:0.25em;
 }
 
+div.bigMessage {
+	position: absolute;
+	z-index: 10000000;
+	background-color: rgba(255,255,255,0.7);
+	padding: 30px;
+	border-radius: 20px;
+	color:black;
+	font-size: 25px;
+	font-weight: bold;
+}
+
+
 input.error {
 	border: 2px solid #de6b39;
 }
@@ -674,9 +702,12 @@ input[type=text][disabled]{
 	color:#AAA;
 }
 
-input[type=checkbox] {
-	width: 30px;
-	padding: 10px;
+input[type=checkbox]{
+	margin: 5px 10px 5px 5px;
+}
+
+input[type=checkbox].multiple + label {
+	color: #666;
 }
 
 ::-webkit-input-placeholder { /* WebKit browsers */
@@ -795,6 +826,9 @@ li em { margin-left:20px; color: 888888; }
 	text-align: right;
 }
 
+.float-right {
+	float: right;
+}
 .left-align {
 	text-align: left;
 }

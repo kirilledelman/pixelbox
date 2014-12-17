@@ -745,6 +745,10 @@ EditScene.prototype = {
 /* ------------------- ------------------- ------------------- ------------------- ------------------- Mouse handling */
 	
 	mouseDown:function(e){
+		editScene.shift = e.shiftKey;
+		editScene.alt = e.altKey;
+		editScene.ctrl = e.ctrlKey;
+	
 		// ignore right button
 		if(e.button === 2 || this.playing || !this.canvasInteractionsEnabled) return;
 		
@@ -2111,7 +2115,7 @@ EditScene.prototype = {
 	
 	resetZoom:function(){
 		this.camera.position.set(512, 512, 512);
-		this.camera.lookAt(0,0,0);
+		this.camera.lookAt(new THREE.Vector3(0,0,0));
 		this.controls.focus(this.maskBox, true);
   		this.refreshThumbnails(); // side affect after loading
 	},
@@ -3683,7 +3687,8 @@ EditScene.prototype = {
 			pointSize: editScene.doc.pointSize
 		}, true);
 		
-		window.sceneEditor.importSceneAsset(data);		
+		window.sceneEditor.assetUpdated(data);
+		this.showMessage('<em>'+data.name+'</em> updated');
 	},
 
 	/* export doc */
@@ -3807,6 +3812,8 @@ EditScene.prototype = {
 
 	/* imports frames from JSON'ed object */
 	newDocFromData:function(dataObject){
+	
+		this.showMessage(dataObject.name);
 	
 		// init new document
 		this.newDoc(dataObject.width, dataObject.height, dataObject.depth);
@@ -4753,8 +4760,10 @@ EditScene.prototype = {
 	
 	enableCanvasInteractions:function(all){
 		this.disableCanvasInteractionsOnRelease = false;
-		this.canvasInteractionsEnabled = true;
 		if(all === true){
+			if(this.canvasInteractionsEnabled){
+				$(window).off('.editor');
+			}
 			this.enableKeyboardShortcuts();
 			$(window).on('keydown.editor', this.keyDown.bind(this));
 			$(window).on('keyup.editor', this.keyUp.bind(this));
@@ -4762,6 +4771,7 @@ EditScene.prototype = {
 			$(window).on('mousemove.editor', this.mouseMove.bind(this));
 			$(window).on('mousedown.editor', this.mouseDown.bind(this));
 		}
+		this.canvasInteractionsEnabled = true;
 	},
 
 /* ------------------- ------------------- ------------------- ------------------- ------------------- Keyboard functions */
@@ -4898,6 +4908,18 @@ EditScene.prototype = {
 		if(!this.stroking && !this._pasteMode) editScene.enableMaskControls(editScene.shift && editScene.ctrl);
 		
 	},
+	
+	showMessage:function(html){
+		var msg = $('div.bigMessage');
+		msg.each(function(i, el){
+			var offs = $(el).offset();
+			$(el).offset({top:offs.top + 100, left: offs.left });
+		});
+		msg = $('<div class="bigMessage"/>').html(html);
+		$('body').append(msg);
+		msg.offset({top: 60, left: Math.floor(0.5 * (window.innerWidth - msg.width())) });
+		setTimeout(function(){ msg.fadeOut(function(){ msg.remove(); }); }, 2000);
+	},
 
 /* ------------------- ------------------- ------------------- ------------------- ------------------- Framework */
 
@@ -4945,13 +4967,13 @@ EditScene.prototype = {
 		// camera
 		this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 2000000 );
 		this.camera.position.set(512, 512, 512);
-		this.camera.lookAt(0,0,0);
+		this.camera.lookAt(new THREE.Vector3(0,0,0));
 		this.scene.add(this.camera);
 		this.controls = new THREE.EditorControls(this.camera, renderer.webgl.domElement);
 
 		this.thumbnailCamera = new THREE.OrthographicCamera( 64 / - 2, 64 / 2, 64 / 2, 64 / - 2, 0.25, 10000);
 		this.thumbnailCamera.position.set(512, 512, 512);
-		this.thumbnailCamera.lookAt(0,0,0);
+		this.thumbnailCamera.lookAt(new THREE.Vector3(0,0,0));
 		this.scene.add(this.thumbnailCamera);
 
 	    // spot
@@ -5038,8 +5060,6 @@ EditScene.prototype = {
 		
 		if(window.opener && window.loadAsset){
       		console.log("Loading ", window.loadAsset);
-			//this.newDoc(4,4,4);
-			//setTimeout(function(){ editScene.newDocFromData(window.loadAsset); delete window.loadAsset; }, 1000);
 			editScene.newDocFromData(window.loadAsset); 
 			window.loadAsset = true;
 		} else {

@@ -114,7 +114,7 @@ THREE.EditorControls = function ( object, domElement ) {
 	// mouse
 
 	function onMouseDown( event ) {
-		if(event.target.nodeName != 'CANVAS' && !$(event.target).hasClass('object-label')) return;
+		if(event.target.nodeName != 'CANVAS' && !($(event.target).hasClass('object-label') || $(event.target).hasClass('bigMessage'))) return;
 		
 		if ( event.button === 0 && scope.rotateEnabled) {
 
@@ -177,7 +177,7 @@ THREE.EditorControls = function ( object, domElement ) {
 	}
 
 	function onMouseUp( event ) {
-		if(event.target.nodeName != 'CANVAS' && !$(event.target).hasClass('object-label')) return;
+		if(event.target.nodeName != 'CANVAS' && !($(event.target).hasClass('object-label') || $(event.target).hasClass('bigMessage'))) return;
 
 		domElement.removeEventListener( 'mousemove', onMouseMove, false );
 		domElement.removeEventListener( 'mouseup', onMouseUp, false );

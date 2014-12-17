@@ -5,7 +5,7 @@
   "minimum_chrome_version": "39",
   "permissions":[
   	"http://localhost/",
-  	"storage", "unlimitedStorage"
+  	"storage", "unlimitedStorage", {"fileSystem": ["write"]}
   ],
   "icons": { "16": "images/icon-16.png", "128": "images/icon-128.png" },
   "app": {
