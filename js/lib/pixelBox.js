@@ -603,6 +603,78 @@ THREE.PixelBoxMeshShader = {
 	"			}",
 	"		}",
 	"#endif",
+	"#if MAX_SHADOWS >= 5",
+	"		else ",
+	"		if(shadowIndex == 4){",
+	"			vec4 sm = shadowMatrix[ 4 ] * mPosition;",
+	"			vec3 shadowCoord = sm.xyz / sm.w;",
+	"			bvec4 inFrustumVec = bvec4 ( shadowCoord.x >= 0.0, shadowCoord.x <= 1.0, shadowCoord.y >= 0.0, shadowCoord.y <= 1.0 );",
+	"			bool inFrustum = all( inFrustumVec );",
+	"			bvec2 frustumTestVec = bvec2( inFrustum, shadowCoord.z <= 1.0 );",
+	"			bool frustumTest = all( frustumTestVec );",
+	"			if ( frustumTest ) {",
+	"				shadowCoord.z += shadowBias[ 4 ];",
+	"				float fDepth = unpackDepth( texture2D( shadowMap[ 4 ], shadowCoord.xy ) );",
+	"				if ( fDepth < shadowCoord.z ){",
+	"					shadowColor = vec3(0.0);",
+	"				}",
+	"			}",
+	"		}",
+	"#endif",
+	"#if MAX_SHADOWS >= 6",
+	"		else ",
+	"		if(shadowIndex == 5){",
+	"			vec4 sm = shadowMatrix[ 5 ] * mPosition;",
+	"			vec3 shadowCoord = sm.xyz / sm.w;",
+	"			bvec4 inFrustumVec = bvec4 ( shadowCoord.x >= 0.0, shadowCoord.x <= 1.0, shadowCoord.y >= 0.0, shadowCoord.y <= 1.0 );",
+	"			bool inFrustum = all( inFrustumVec );",
+	"			bvec2 frustumTestVec = bvec2( inFrustum, shadowCoord.z <= 1.0 );",
+	"			bool frustumTest = all( frustumTestVec );",
+	"			if ( frustumTest ) {",
+	"				shadowCoord.z += shadowBias[ 5 ];",
+	"				float fDepth = unpackDepth( texture2D( shadowMap[ 5 ], shadowCoord.xy ) );",
+	"				if ( fDepth < shadowCoord.z ){",
+	"					shadowColor = vec3(0.0);",
+	"				}",
+	"			}",
+	"		}",
+	"#endif",
+	"#if MAX_SHADOWS >= 7",
+	"		else ",
+	"		if(shadowIndex == 6){",
+	"			vec4 sm = shadowMatrix[ 6 ] * mPosition;",
+	"			vec3 shadowCoord = sm.xyz / sm.w;",
+	"			bvec4 inFrustumVec = bvec4 ( shadowCoord.x >= 0.0, shadowCoord.x <= 1.0, shadowCoord.y >= 0.0, shadowCoord.y <= 1.0 );",
+	"			bool inFrustum = all( inFrustumVec );",
+	"			bvec2 frustumTestVec = bvec2( inFrustum, shadowCoord.z <= 1.0 );",
+	"			bool frustumTest = all( frustumTestVec );",
+	"			if ( frustumTest ) {",
+	"				shadowCoord.z += shadowBias[ 6 ];",
+	"				float fDepth = unpackDepth( texture2D( shadowMap[ 6 ], shadowCoord.xy ) );",
+	"				if ( fDepth < shadowCoord.z ){",
+	"					shadowColor = vec3(0.0);",
+	"				}",
+	"			}",
+	"		}",
+	"#endif",
+	"#if MAX_SHADOWS >= 8",
+	"		else ",
+	"		if(shadowIndex == 7){",
+	"			vec4 sm = shadowMatrix[ 7 ] * mPosition;",
+	"			vec3 shadowCoord = sm.xyz / sm.w;",
+	"			bvec4 inFrustumVec = bvec4 ( shadowCoord.x >= 0.0, shadowCoord.x <= 1.0, shadowCoord.y >= 0.0, shadowCoord.y <= 1.0 );",
+	"			bool inFrustum = all( inFrustumVec );",
+	"			bvec2 frustumTestVec = bvec2( inFrustum, shadowCoord.z <= 1.0 );",
+	"			bool frustumTest = all( frustumTestVec );",
+	"			if ( frustumTest ) {",
+	"				shadowCoord.z += shadowBias[ 7 ];",
+	"				float fDepth = unpackDepth( texture2D( shadowMap[ 7 ], shadowCoord.xy ) );",
+	"				if ( fDepth < shadowCoord.z ){",
+	"					shadowColor = vec3(0.0);",
+	"				}",
+	"			}",
+	"		}",
+	"#endif",
 	"		return shadowColor;",
 	"	}",
 	
@@ -641,8 +713,8 @@ THREE.PixelBoxMeshShader = {
 	"	float a = 12.9898;",
 	"	float b = 78.233;",
 	"   float c = 43758.5453;",
-	"   float dt= dot(co.xy ,vec2(a,b));",
-	"   float sn= mod(dt,3.14);",
+	"   float dt = dot(co.xy ,vec2(a,b));",
+	"   float sn = mod(dt,3.14);",
 	"   return fract(sin(sn) * c);",
 	"}",
 	
@@ -801,6 +873,8 @@ THREE.MeshPixelBoxMaterial = function(params){
 	});
 	
 	function param(pname, defaultValue){ if(params[pname] != undefined) return params[pname]; return defaultValue; }
+	
+	material.side = THREE.DoubleSide;
 	
 	var uniforms = material.uniforms;
 	uniforms.tintColor.value.set(param('color', 0xffffff));
@@ -1018,6 +1092,10 @@ THREE.PixelBox = function(data){
 	pc.addEventListener('removed', THREE.PointCloud.prototype.stopAnim);
 	pc.addEventListener('removed', THREE.PointCloud.prototype.stopTweens);
 	
+	Object.defineProperty(pc, 'asset', {
+		get: function(){ return this.geometry.data; },
+	});
+	
 	// add shorthand accessors for shader
 	Object.defineProperty(pc, 'alpha', {
 		get: function(){ return material.uniforms.tintAlpha.value; },
@@ -1078,13 +1156,24 @@ THREE.PixelBox.prototype.depthMaterial = new THREE.ShaderMaterial( {
 });
 THREE.PixelBox.prototype.depthMaterial._shadowPass = true;
 THREE.PixelBox.prototype.updateViewPortUniform = function(event){ 
-	var fov = (renderer.scene && renderer.scene.camera) ? renderer.scene.camera.fov : 60;
-	THREE.PixelBox.prototype['material'].uniforms.viewPortScale.value = renderer.webgl.domElement.height / (2 * Math.tan(0.5 * fov * Math.PI / 180.0));
+	var cam = (renderer.scene && renderer.scene.camera) ? renderer.scene.camera : null;
+	if(!cam) return;
+	// get cam scale	
+	var camWorldScale = new THREE.Vector3();
+	renderer.scene.scene.updateMatrixWorld(true);
+	camWorldScale.setFromMatrixScale(cam.matrixWorld);
+	// perspective camera
+	if(cam.fov){
+		THREE.PixelBox.prototype['material'].uniforms.viewPortScale.value = renderer.webgl.domElement.height / (2 * Math.tan(0.5 * cam.fov * Math.PI / 180.0)) / camWorldScale.x;
+	// ortho
+	} else {
+		THREE.PixelBox.prototype['material'].uniforms.viewPortScale.value = 1.0 / camWorldScale.x;
+	}
 };
 $(window).on('resize.PixelBox', THREE.PixelBox.prototype.updateViewPortUniform);
 
 THREE.PixelBox.prototype.dispose = function(data){
-	if(data){
+	if(data && data.frameData){
 		var _gl = renderer.webgl.context;
 		for(var f = 0; f < data.frameData.length; f++){
 			if(!data.frameData[f]['p']) continue; // skip empty
@@ -1175,6 +1264,13 @@ THREE.PixelBox.updateLights = function(scene, updateAllMaterials){
 		
 		if(updateAllMaterials && obj.material) obj.material.needsUpdate = true;
 	});
+	
+	if(!uniforms.directionalLightShadowMap.value.length){
+		uniforms.spotLightShadowMap.value.push(0);
+	}
+	if(!uniforms.directionalLightShadowMap.value.length){
+		uniforms.directionalLightShadowMap.value.push(0);
+	}
 };
 
 /* 
@@ -1269,6 +1365,7 @@ THREE.PointCloud.prototype.tween = function(obj){
 	if(!this._tweenInterval) setTimeout(this.advanceTweenFrame, 1000 / this.tweenFps);
 };
 
+/* stops all tweens */
 THREE.PointCloud.prototype.stopTweens = function(){
 	this._tweens.length = 0;
 	delete this._tweens;
@@ -1277,6 +1374,7 @@ THREE.PointCloud.prototype.stopTweens = function(){
 	this._tweenInterval = 0;
 };
 
+/* stops specific tween */
 THREE.PointCloud.prototype.stopTween = function(obj){
 	var index = this._tweens.indexOf(obj);
 	if(index !== -1){
@@ -1291,10 +1389,10 @@ THREE.PointCloud.prototype.stopTween = function(obj){
 /* 
 	Animation functions 
 
-		.animSpeed = 1 ( can be negative?)
-		playAnim(animname, fromBeginning)
-		loopAnim(animName, numLoops, fromBeginning)
-		gotoAndStop(animname, posWithinAnim)
+		.animSpeed = 1
+		playAnim(animname, [ BOOL fromBeginning ])
+		loopAnim(animName, [ INT numLoops | Infinity, [BOOL fromBeginning] ] )
+		gotoAndStop(animname, [ FLOAT PosWithinAnim | INT frameNumber])
 
 
 */
@@ -1383,6 +1481,7 @@ THREE.PointCloud.prototype.loopAnim = function(animName, numLoops, fromCurrentFr
 THREE.PointCloud.prototype.gotoAndStop = function(animName, positionWithinAnimation){
 	var anim = this.geometry.data.anims[animName];
 	var diff = (this.currentAnimation != anim);
+	positionWithinAnimation = (positionWithinAnimation === undefined ? 0 : positionWithinAnimation);
 	if(!anim){ 
 		console.log("Animation "+animName+" not found in ", this.data); 
 		return;

@@ -26,7 +26,7 @@ function Scene(){
 	this.scene.fog = new THREE.Fog(0x0, 100000, 10000000 );
 	
 	// camera & control
-	this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 2000000 );
+	this.camera = new THREE.PerspectiveCamera(60, renderer.webgl.domElement.width / renderer.webgl.domElement.height, 1, 2000000 );
 	this.camera.name = 'camera';
 	this.camera.position.set(70,70,70);
 	this.camera.lookAt(0,0,0);
@@ -38,7 +38,7 @@ function Scene(){
 		magFilter: THREE.NearestFilter,
 		format: THREE.RGBFormat, 
 		stencilBuffer: false };
-	this.fbo = new THREE.WebGLRenderTarget( window.innerWidth * renderer.scale, window.innerHeight * renderer.scale, renderTargetParameters );
+	this.fbo = new THREE.WebGLRenderTarget( renderer.webgl.domElement.width * renderer.scale, renderer.webgl.domElement.height * renderer.scale, renderTargetParameters );
 	
 	/*
 	// composer
@@ -104,7 +104,40 @@ Scene.prototype = {
 			}
 		}
 		
-		this.populateObject(this.scene, sceneDef.layers);
+		// prepare maxShadows placeholders
+		var numShadows = 0;
+		var addedObjects = this.populateObject(this.scene, sceneDef.layers);
+		for(var i = 0, l = addedObjects.length; i < l; i++){
+			var obj = addedObjects[i];
+			if((obj instanceof THREE.DirectionalLight || obj instanceof THREE.SpotLight) && obj.castShadow) numShadows++;
+		}
+		var maxShadows = Math.max(0, sceneDef.maxShadows - numShadows);
+		this.placeHolderLights = [];
+		while(maxShadows){
+			var sun;
+			if(this.placeHolderLights.length) sun = new THREE.SpotLight(0x0, 1);
+			sun = new THREE.DirectionalLight(0x0, 1);
+			sun.castShadow = true;
+			sun.shadowMapWidth = sun.shadowMapHeight = 128;
+			this.scene.add(sun);
+			this.placeHolderLights.push(sun);
+			maxShadows--;
+		}
+		
+		// update camera viewport
+		THREE.PixelBox.prototype.updateViewPortUniform(null);
+	},
+	
+	/* removes maxShadows placeholders */
+	removePlaceHolderLights:function(){
+		for(var i = 0; i < this.placeHolderLights.length; i++){
+			this.scene.remove(this.placeHolderLights[i]);
+		}
+		this.putObjectsToPool(this.placeHolderLights);
+		this.placeHolderLights.length = 0;
+		this.placeHolderLights = null;
+		
+		THREE.PixelBox.updateLights(this.scene, true);
 	},
 	
 	/* recursively populates object by adding layers */
@@ -136,18 +169,33 @@ Scene.prototype = {
 			// Special types of layers - lights, etc
 			switch(layer.asset){
 			case 'Camera':
-				if(options.createCameras){
-					obj3d = new THREE.PerspectiveCamera(60, 1, 1, 1000);
-					if(layer.fov != undefined) obj3d.fov = layer.fov;
-					if(layer.near != undefined) obj3d.near = layer.near;
-					if(layer.far != undefined) obj3d.far = layer.far;
-					if(layer.isDefault && (this instanceof Scene) && !this.camera.def) { 
-						this.camera.parent.remove(this.camera);
-						this.camera = obj3d;
-					}
-					obj3d.isDefault = layer.isDefault ? true : false;
-				} else {
-					obj3d = this.camera; // only one camera - link to scene's camera
+				obj3d = new THREE.PerspectiveCamera(60, 1, 1, 1000);
+				if(layer.fov != undefined) obj3d.fov = layer.fov;
+				if(layer.near != undefined) obj3d.near = layer.near;
+				if(layer.far != undefined) obj3d.far = layer.far;
+				obj3d.isDefault = layer.isDefault ? true : false;
+				if(!options.keepSceneCamera && obj3d.isDefault){
+					if(this.camera && this.camera.parent) this.camera.parent.remove(this.camera);
+					this.camera = obj3d;
+					console.log(obj3d);
+				}
+				if(options.helpers){
+					helper = new THREE.CameraHelper(obj3d);
+				}
+				break;
+			case 'OrthographicCamera':
+				obj3d = new THREE.PerspectiveCamera(60, 1, 1, 1000);
+				if(layer.fov != undefined) obj3d.fov = layer.fov;
+				if(layer.near != undefined) obj3d.near = layer.near;
+				if(layer.far != undefined) obj3d.far = layer.far;
+				if(layer.isDefault && (this instanceof Scene) && !this.camera.def) { 
+					this.camera.parent.remove(this.camera);
+					this.camera = obj3d;
+				}
+				obj3d.isDefault = layer.isDefault ? true : false;
+				if(!options.keepSceneCamera && obj3d.isDefault){
+					if(this.camera && this.camera.parent) this.camera.parent.remove(this.camera);
+					this.camera = obj3d;
 				}
 				if(options.helpers){
 					helper = new THREE.CameraHelper(obj3d);
@@ -163,7 +211,16 @@ Scene.prototype = {
 				obj3d.shadowCameraTop = (layer.shadowVolumeHeight != undefined ? layer.shadowVolumeHeight : (obj3d.shadowCameraRight * 2)) * 0.5;
 				obj3d.shadowCameraBottom = -obj3d.shadowCameraTop;
 				obj3d.shadowBias = (layer.shadowBias != undefined ? layer.shadowBias : -0.0005);
-										
+				if(obj3d.shadowMap){
+					obj3d.shadowMap.dispose();
+					obj3d.shadowMap = null;
+				}					
+				if(obj3d.shadowCamera){
+					if(obj3d.shadowCamera.parent){
+						obj3d.shadowCamera.parent.remove(obj3d.shadowCamera);
+					}
+					obj3d.shadowCamera = null;
+				}
 				if(layer.color != undefined) obj3d.color.set(parseInt(layer.color, 16));
 				if(layer.intensity != undefined) obj3d.intensity = layer.intensity;
 				if(layer.shadowMapWidth != undefined) obj3d.shadowMapWidth = obj3d.shadowMapHeight = layer.shadowMapWidth;
@@ -184,12 +241,17 @@ Scene.prototype = {
 			    obj3d.shadowMapWidth = obj3d.shadowMapHeight = 1024;
 			    obj3d.shadowCameraNear = 5;
 				obj3d.shadowCameraFar = obj3d.distance;
-				/*obj3d.shadowCameraRight = (layer.shadowVolumeWidth != undefined ? layer.shadowVolumeWidth : 256) * 0.5;
-			    obj3d.shadowCameraLeft = -obj3d.shadowCameraRight;
-				obj3d.shadowCameraTop = (layer.shadowVolumeHeight != undefined ? layer.shadowVolumeHeight : (obj3d.shadowCameraRight * 2)) * 0.5;
-				obj3d.shadowCameraBottom = -obj3d.shadowCameraTop;*/
 				obj3d.shadowBias = (layer.shadowBias != undefined ? layer.shadowBias : -0.0005);
-										
+				if(obj3d.shadowMap){
+					obj3d.shadowMap.dispose();
+					obj3d.shadowMap = null;
+				}					
+				if(obj3d.shadowCamera){
+					if(obj3d.shadowCamera.parent){
+						obj3d.shadowCamera.parent.remove(obj3d.shadowCamera);
+					}
+					obj3d.shadowCamera = null;
+				}
 				if(layer.color != undefined) obj3d.color.set(parseInt(layer.color, 16));
 				if(layer.intensity != undefined) obj3d.intensity = layer.intensity;
 				if(layer.distance != undefined) obj3d.shadowCameraFar = obj3d.distance = layer.distance;
@@ -369,24 +431,23 @@ Scene.prototype = {
 					obj3d.stipple = 0;
 				}
 				if(layer.animSpeed != undefined) obj3d.animSpeed = layer.animSpeed;
-				if(layer.gotoAndStop != undefined){
-					if(_.isArray(layer.gotoAndStop)){
-						obj3d.gotoAndStop(layer.gotoAndStop[0], layer.gotoAndStop[1]);
-					} else if(typeof(layer.gotoAndStop) == 'string'){
-						obj3d.gotoAndStop(layer.gotoAndStop, 0);
-					} else {
-						obj3d.frame = layer.gotoAndStop;
+				
+				if(layer.animName != undefined && obj3d.animNamed(layer.animName) != undefined){
+					var animOption = layer.animOption ? layer.animOption : 'gotoAndStop';
+					var animFrame = layer.animFrame != undefined ? layer.animFrame : 0;
+					
+					if(animOption == 'gotoAndStop'){
+						obj3d.gotoAndStop(layer.animName, animFrame);
+					} else if(animOption == 'loopAnim'){
+						obj3d.loopAnim(layer.animName, true);
+					} else if(animOption == 'loopFrom') { 
+						obj3d.gotoAndStop(layer.animName, animFrame); 
+						obj3d.loopAnim(layer.animName,Infinity,true);
+					} else if(animOption == 'playAnim') { 
+						obj3d.playAnim(layer.animName);
 					}
 				}
-				if(layer.loopAnim != undefined) obj3d.loopAnim(layer.loopAnim,Infinity,true);
-				if(layer.loopFrom != undefined) { 
-					obj3d.gotoAndStop(layer.loopFrom[0], layer.loopFrom[1]); 
-					obj3d.loopAnim(layer.loopFrom[0],Infinity,true);
-				}
-				if(layer.playAnim != undefined) { 
-					obj3d.playAnim(layer.playAnim);
-				}
-
+				
 				// re-add anchors if removed
 				for(var a in obj3d.anchors){
 					if(!obj3d.anchors[a].parent){
@@ -472,9 +533,9 @@ Scene.prototype = {
 	
 	/* convert 3d pos to 2d for html */
 	getScreenCoord:function(pos){
-		var vector = pos.project(this.camera); // this.projector.projectVector(pos, this.camera);
-        vector.x = (vector.x + 1) * window.innerWidth * 0.5;
-        vector.y = (1.0 - vector.y) * window.innerHeight * 0.5;
+		var vector = pos.project(this.camera);
+        vector.x = (vector.x + 1) * renderer.webgl.domElement.width * 0.5;
+        vector.y = (1.0 - vector.y) * renderer.webgl.domElement.height * 0.5;
         return vector;
 	},
 	
@@ -525,18 +586,23 @@ Scene.prototype = {
 		
 		if (rtt) renderer.webgl.render( this.scene, this.camera, this.fbo, true );
 		else renderer.webgl.render( this.scene, this.camera );
+		
+		if(this.placeHolderLights){
+			this.removePlaceHolderLights();
+		}
 	},
 	
 	/* resize callback */
 	onResized: function(){
-		this.camera.aspect = window.innerWidth / window.innerHeight;
+		this.camera.aspect = renderer.webgl.domElement.width / renderer.webgl.domElement.height;
 		this.camera.updateProjectionMatrix();
 		var renderTargetParameters = { 
 			minFilter: THREE.NearestFilter,//THREE.LinearFilter, 
 			magFilter: THREE.NearestFilter,//THREE.LinearFilter, 
 			format: THREE.RGBFormat, 
 			stencilBuffer: false };
-		this.fbo = new THREE.WebGLRenderTarget( window.innerWidth * renderer.scale, window.innerHeight * renderer.scale, renderTargetParameters );
+		this.fbo = new THREE.WebGLRenderTarget( renderer.webgl.domElement.width * renderer.scale, 
+												renderer.webgl.domElement.height * renderer.scale, renderTargetParameters );
 		/* this.screenPass.onResized();	
 		this.composer.reset(this.fbo);*/
     }

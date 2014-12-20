@@ -6,7 +6,7 @@ function Renderer(){
 	this.paused = false;
 	
 	/* init */
-	this.init = function(scale){
+	this.init = function(scale, stats){
 		// check webgl support
 		var webgl = false;
 		try { 
@@ -18,7 +18,7 @@ function Renderer(){
 		this.scale = 1.0 / (scale != undefined ? scale : 1.0);
 		
 		// create renderer
-		this.webgl = webgl = new THREE.WebGLRenderer({devicePixelRatio:1.0, antialias: false, autoClear: false, alpha: false, maxLights:16, preserveDrawingBuffer: false, precision:'highp' });//0.5 for double
+		this.webgl = webgl = new THREE.WebGLRenderer({devicePixelRatio:1.0, antialias: false, autoClear: false, alpha: false, maxLights:16, preserveDrawingBuffer: false, precision:'highp' });
 		document.body.appendChild(webgl.domElement);
 		webgl.updateStyle = false;
 		webgl.setSize(window.innerWidth * this.scale, window.innerHeight * this.scale);
@@ -26,17 +26,8 @@ function Renderer(){
 	    // shadowing
 	    webgl.shadowMapEnabled = true;
 	    webgl.sortObjects = false;
-	    /*if(window['olderDevice'] != undefined){ // ios hook
-			webgl.shadowMapSoft = !window['olderDevice'];
-			webgl.shadowMapType = window['olderDevice'] ? THREE.BasicShadowMap : THREE.PCFSoftShadowMap;
-	    } else {
-			webgl.shadowMapSoft = true;
-			webgl.shadowMapType = THREE.PCFSoftShadowMap;
-	    }*/	    
 	    webgl.shadowMapSoft = false;
 		webgl.shadowMapType = THREE.BasicShadowMap;
-		//webgl.shadowMapSoft = true;
-		//webgl.shadowMapType = THREE.PCFSoftShadowMap;
 		
 		// default transition params
 		this.transitionParams = {
@@ -45,13 +36,15 @@ function Renderer(){
 			useTexture: true
 		}
 		
-		/*var stats = this.stats = new Stats();
-		stats.domElement.style.position = 'absolute';
-		stats.domElement.style.bottom = '0px';
-		stats.domElement.style.right = '0px';
-		stats.domElement.style.zIndex = 100;
-		document.body.appendChild( stats.domElement );
-		this.stats = stats;*/
+		if(stats){
+			var stats = this.stats = new Stats();
+			stats.domElement.style.position = 'absolute';
+			stats.domElement.style.bottom = '0px';
+			stats.domElement.style.right = '0px';
+			stats.domElement.style.zIndex = 100;
+			document.body.appendChild( stats.domElement );
+			this.stats = stats;
+		}
 		
 		// window resized listener
 		$(window).on('resize.renderer',this._windowResized);
@@ -77,9 +70,9 @@ function Renderer(){
 		}
 	
 		// check if size changed
-		/*if(newScene.fbo && 
+		if(newScene.fbo && 
 			(newScene.fbo.width != window.innerWidth * this.scale || newScene.fbo.height != window.innerHeight * this.scale) &&
-			newScene.onResized) newScene.onResized();*/
+			newScene.onResized) newScene.onResized();
 	
 		// with transition
 		if(transType != undefined && transType > 0){
@@ -123,12 +116,6 @@ function Renderer(){
 			// set new scene
 			this.scene = newScene;
 			
-			// refresh shadowMapPlugin
-			/*this.webgl.renderPluginsPre.length = 0;
-			delete this.webgl.shadowMapPlugin;
-			this.webgl.shadowMapPlugin = new THREE.ShadowMapPlugin();
-			this.webgl.addPrePlugin(this.webgl.shadowMapPlugin);*/
-			
 			// callback when scene transition is complete
 			if(transType == undefined && newScene['onWillAdd']) newScene.onWillAdd();
 			if(newScene['onAdded']) newScene.onAdded();
@@ -145,6 +132,8 @@ function Renderer(){
 		if(renderer.scene){ // assumes Transition or Scene
 			renderer.scene.render(deltaTime);
 		}
+		
+		if(renderer.stats) renderer.stats.update();
 	}
 
 	/* window resized callback */

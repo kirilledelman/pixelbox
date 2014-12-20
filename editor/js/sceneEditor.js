@@ -20,13 +20,24 @@
 		
 	TODO:
 	
-	mouse move tool
+	Meta field for all objects
+	"custom" objects (Container)
+	
+	mouse move tool (with Shift?)
 	
 	make transform(max scale) affect pointSize
 	
 	? Camera default + template
 			
 	? copy, paste when asset has been deleted
+
+	LATER:
+
+	add under View:
+		[x] Show labels
+
+	add textures to planes
+	texture as a resource
 
 */
 
@@ -52,33 +63,46 @@ EditSceneScene.prototype = {
 
 /* ------------------- ------------------- ------------------- ------------------- ------------------- Undo functions */
 
-	/* undo queue */
-	initUndo:function(){
-		if(this._undo){
-			// clean up / dispose
-			var checkArgs = function(arg){
-				if(typeof(arg)!='object') return;
-				for(var p in arg){
-					var val = arg[p];
-					if(typeof(val)!='object') continue;
-					if(val && val instanceof THREE.Object3D){
-						if(val instanceof THREE.PointCloud) val.dispose();
-						checkArgs(p.children);
-					}
+	resetAssets:function(){
+		var children = this.scene.recursiveRemoveChildren([this.camera, this.axis, this.ambient, this.scene.fog]);
+		// clean up
+		for(var i = 0; i < children.length; i++){
+			var obj = children[i];
+			if(obj.dispose) obj.dispose();
+			else if(obj.shadowMap) obj.shadowMap.dispose();
+		}
+		for(var a in assets.cache.files){
+			THREE.PixelBox.prototype.dispose(assets.cache.files[a]);
+		}
+		// clear assets
+		assets.cache.clear();
+		// clean up / dispose of assets cached in undo
+		var checkArgs = function(arg){
+			if(typeof(arg)!='object') return;
+			for(var p in arg){
+				var val = arg[p];
+				if(typeof(val)!='object') continue;
+				if(val && val instanceof THREE.Object3D){
+					if(val instanceof THREE.PointCloud) val.dispose();
+					checkArgs(p.children);
+				} else if(val && val.frameData && val.width){
+					THREE.PixelBox.prototype.dispose(val);
 				}
 			}
-			
-			// process undo and redo
-			for(var i = 0; i < this._undo.length; i++){
-				checkArgs(this._undo[i].undo);	
-				checkArgs(this._undo[i].redo);	
-			}
-			for(var i = 0; i < this._redo.length; i++){
-				checkArgs(this._redo[i].undo);	
-				checkArgs0(this._redo[i].redo);	
-			}
+		}		
+		// process undo and redo
+		for(var i = 0; i < this._undo.length; i++){
+			checkArgs(this._undo[i].undo);	
+			checkArgs(this._undo[i].redo);	
 		}
-		
+		for(var i = 0; i < this._redo.length; i++){
+			checkArgs(this._redo[i].undo);	
+			checkArgs(this._redo[i].redo);	
+		}
+	},
+
+	/* undo queue */
+	initUndo:function(){
 		this._undoing = false;
 		this._undo = [];
 		this._redo = [];
@@ -467,6 +491,12 @@ EditSceneScene.prototype = {
 		if(obj.helper && obj.helper.parent){
 			obj.helper.parent.remove(obj.helper);
 		}
+		if(obj.shadowMap){
+			// renderer.webgl.clearTarget(obj.shadowMap);
+			obj.shadowMap.dispose();
+			obj.shadowMap = null;
+		}
+
 		for(var i = 0; i < obj.children.length; i++){
 			this.objectDeletedRecusive(obj.children[i]);
 		}
@@ -475,13 +505,14 @@ EditSceneScene.prototype = {
 	deleteObjects:function(objs){
 		for(var i = 0; i < objs.length; i++){
 			var obj = objs[i];
-			obj.selected = false;
+			if(obj.selected) this.selectObject(obj, false);
 			this.objectDeletedRecusive(obj);
 			obj.parent.remove(objs[i]);
 		}
-		THREE.PixelBox.updateLights(this.scene, true);
+		this.updateLights = true;
 		this.refreshScene();
 		this.refreshAssets();
+		this.refreshProps();
 	},
 	
 	addObjects:function(objParArr){
@@ -491,10 +522,10 @@ EditSceneScene.prototype = {
 			p.add(obj);
 			this.objectAddedRecusive(obj);
 		}
-		THREE.PixelBox.updateLights(this.scene, true);
 		this.updateTextLabels(this.container, 0);
 		this.refreshScene();
 		this.refreshAssets();
+		this.updateLights = true;
 	},
 	
 	deleteSelection:function(){
@@ -516,6 +547,7 @@ EditSceneScene.prototype = {
 	
 	copySelection:function(){
 		var toCopy = [];
+		var copiedAssets = {};
 		for(var i = 0; i < this.selectedObjects.length; i++){
 			var obj = this.selectedObjects[i];
 			if(obj.isAnchor) continue;
@@ -534,16 +566,30 @@ EditSceneScene.prototype = {
 			}
 		}
 		if(!toCopy.length) return;
+		// copy assets
+		function addAssetsRecursive(obj){
+			if(obj instanceof THREE.PointCloud){
+				if(!copiedAssets[obj.asset.name]){
+					copiedAssets[obj.asset.name] = obj.asset.importedAsset;
+				}
+			}
+			for(var j = 0; j < obj.children.length; j++){
+				addAssetsRecursive(obj.children[j]);
+			}
+		}
 		for(var i = toCopy.length - 1; i >= 0; i--){
-			toCopy[i] = toCopy[i].serialize(null);
+			var obj = toCopy[i];
+			addAssetsRecursive(obj);
+			toCopy[i] = obj.serialize(null);
 		}
 		
+		// copied
+		this.sceneCopyItem = {objects:toCopy,assets:copiedAssets}; 
+
 		// store
-		var ss = JSON.stringify(toCopy);
-		localStorage_setItem("sceneCopy", ss);
+		localStorage_setItem("sceneCopy", JSON.stringify(this.sceneCopyItem));
+		console.log(this.sceneCopyItem);
 		
-		console.log(toCopy);
-		this.sceneCopyItem = toCopy;// copied
 	},
 	
 	cutSelection:function(){
@@ -551,30 +597,61 @@ EditSceneScene.prototype = {
 		this.deleteSelection();
 	},
 	
-	pasteSelection:function(){
+	pasteSelection:function(e){
 		if(this.objectPickMode){ this.objectPickMode(null); }
 		
-		var pasteTarget = this.selectedObjects.length ? this.selectedObjects[0].parent : this.container;
+		var pasteTarget;
+		if(e.shiftKey || (e.target && e.target.id == 'edit-paste-into')) pasteTarget = this.selectedObjects.length ? this.selectedObjects[0] : this.container;
+		else pasteTarget = this.selectedObjects.length ? this.selectedObjects[0].parent : this.container;
 		
 		this.deselectAll();
 		
-		var addedObjects = this.populateObject(pasteTarget, this.sceneCopyItem, { helpers: true, createCameras:true, noNameReferences:true });
-		THREE.PixelBox.updateLights(this.scene, true);
+		// import assets
+		var importedAssetsUndoItem = [];
+		for(var aname in this.sceneCopyItem.assets){
+			var asset = this.sceneCopyItem.assets[aname];
+			if(!assets.cache.files[aname]){
+				asset = _.deepClone(asset, 100);
+				importedAssetsUndoItem.push({name:"addAsset",undo:[editScene.deleteAsset, asset],
+											redo:[editScene.importSceneAsset, asset]});
+	      		editScene.importSceneAsset(asset);
+			}
+		}
+		
+		var addedObjects = this.populateObject(pasteTarget, this.sceneCopyItem.objects, { helpers: true, keepSceneCamera:true, noNameReferences:true });
+		this.updateLights = true;
 		var doAdd = [];
 		var undoAdd = [];
 		for(var i = 0; i < addedObjects.length; i++){
-			doAdd.push([addedObjects[i], pasteTarget]);
-			undoAdd.push(addedObjects[i]);
-			if(addedObjects[i] instanceof THREE.Camera && addedObjects[i].isDefault){
-				addedObjects[i].isDefault = false;
+			var obj = addedObjects[i];
+			if(obj instanceof THREE.Camera && obj.isDefault) obj.isDefault = false;
+			var isTopLevel = (this.sceneCopyItem.objects.indexOf(obj.def) != -1);
+			if(isTopLevel){
+				doAdd.push([obj, pasteTarget]);
+				undoAdd.push(obj);
 			}
-			this.selectObject(addedObjects[i], true);
 		}
-		this.addUndo({name:"paste", redo:[this.addObjects, doAdd], undo:[this.deleteObjects, undoAdd] });
+		
+		if(importedAssetsUndoItem.length){
+			importedAssetsUndoItem.push({name:"paste", redo:[this.addObjects, doAdd], undo:[this.deleteObjects, undoAdd] });
+			this.addUndo(importedAssetsUndoItem);
+		} else {
+			this.addUndo({name:"paste", redo:[this.addObjects, doAdd], undo:[this.deleteObjects, undoAdd] });
+		}
 		
 		this.refreshScene();
+		
+		this.updateTextLabels(this.container, 0);
+		for(var i = 0; i < addedObjects.length; i++) {
+			if(this.sceneCopyItem.objects.indexOf(addedObjects[i].def) != -1){
+				this.selectObject(addedObjects[i], true);
+			}
+		}
 		this.selectionChanged();
-		this.controls.focus(pasteTarget, true);
+		this.controls.center.copy(pasteTarget.parent.localToWorld(pasteTarget.position.clone()));
+		this.camera.lookAt(this.controls.center);
+		this.refreshAssets();
+		//this.controls.focus(pasteTarget, true);
 	},
 	
 /* ------------------- ------------------- ------------------- ------------------- ------------------- Reparent */
@@ -608,7 +685,7 @@ EditSceneScene.prototype = {
 	createContainer:function(){
 		// clear container
 		if(this.container){
-			this.scene.recursiveRemoveChildren([this.camera, this.axis, this.ambient, this.scene.fog]);
+			var children = this.scene.recursiveRemoveChildren([this.camera, this.axis, this.ambient, this.scene.fog]);
 		} else if(!this.axis){
 			var axis = this.axis = new THREE.AxisHelper(10);
 			axis.raycast = function(){ return; };// skip raycase
@@ -618,6 +695,20 @@ EditSceneScene.prototype = {
 		this.container = new THREE.Object3D();
 		this.container.visibleRecursive = true;
 		this.scene.add(this.container);
+		
+		// add placeholder shadow lights
+		// couldn't get adding dynamic shadows after scene has been created any other way
+		var maxShadows = 8;
+		this.placeHolderLights = [];
+		while(maxShadows){
+			var sun = new THREE.DirectionalLight(0x0, 1);
+			sun.castShadow = true;
+			sun.shadowMapWidth = sun.shadowMapHeight = 128;
+			this.scene.add(sun);
+			this.placeHolderLights.push(sun);
+			maxShadows--;
+		}
+
 	},
 	
 	resetZoom:function(){
@@ -869,8 +960,9 @@ EditSceneScene.prototype = {
 	      		// unload assets first if loading a scene
 	      		for(var i in editScene.toImport){
 		      		if(editScene.toImport[i].name.indexOf('.scene') > 0){
-		      			editScene.newDoc(true, false);
-			      		assets.unload();
+		      			//editScene.newDoc(true, false);
+			      		//assets.unload();
+			      		editScene.resetAssets();
 			      		break;
 		      		}
 	      		}
@@ -892,7 +984,7 @@ EditSceneScene.prototype = {
 	},
 
 	/* new document */
-	newDoc:function(e, createDefaults){
+	newDoc:function(e){
 		if(e === true){
 			this.doc = {
 				name: "newScene",
@@ -906,12 +998,7 @@ EditSceneScene.prototype = {
 			this.deselectAll();
 			$('.object-label').remove();
 			this.createContainer();
-			if(createDefaults){
-				this.newDocFromData(this.defaultSceneDef);
-			} else {
-				this.initUndo();
-				setTimeout(this.resetZoom.bind(this), 500);
-			}
+			this.newDocFromData(_.deepClone(this.defaultSceneDef,100));
 			this.refreshAssets();
 			this.refreshProps();
 			this.refreshScene();
@@ -924,11 +1011,11 @@ EditSceneScene.prototype = {
 			}
 	      	editScene.disableCanvasInteractions(true);
 			$('#new-doc').dialog({
-		      resizable: false, width: 250, height:360, modal: true, dialogClass:'no-close', title:"Create New",
+		      resizable: false, width: 250, height:260, modal: true, dialogClass:'no-close', title:"Create New",
 		      buttons: {
 		        "Create": function() {
-		          assets.unload();
-		          editScene.newDoc(true, true);
+			      editScene.resetAssets();
+		          editScene.newDoc(true);
 		          $(this).dialog("close");
 		        },
 		        Cancel: function() {
@@ -944,7 +1031,7 @@ EditSceneScene.prototype = {
 	},
 
 	/* imports frames from JSON'ed object */
-	newDocFromData:function(dataObject, skipNewDoc){
+	newDocFromData:function(dataObject){
 	
 		this.deselectAll();
 		$('.object-label').remove();
@@ -987,7 +1074,7 @@ EditSceneScene.prototype = {
 		}
 		
 		// populate
-		var opts = { helpers: true, createCameras:true, noNameReferences: true, templates: dataObject.templates };
+		var opts = { helpers: true, keepSceneCamera:true, noNameReferences: true, templates: dataObject.templates };
 		this.populateObject(this.container, dataObject.layers, opts);
 		if(dataObject.containsTemplates){
 			for(var ti = 0; ti < dataObject.containsTemplates.length; ti++){
@@ -995,7 +1082,7 @@ EditSceneScene.prototype = {
 				if(td) this.populateObject(this.container, [ dataObject.templates[dataObject.containsTemplates[ti]] ], opts);
 			}
 		}
-		THREE.PixelBox.updateLights(this.scene, true);
+		this.updateLights = true;
 		
 		// clear undo queue
 		this.initUndo();
@@ -1377,6 +1464,7 @@ EditSceneScene.prototype = {
 	exportScene:function(single, compress){
 		var obj = {
 			name: this.doc.name,
+			maxShadows: this.doc.maxShadows,
 			clearColor: this.doc.clearColor.getHexString(),
 			ambient: this.doc.ambient.getHexString(),
 			fogColor: this.doc.fogColor.getHexString(),
@@ -1616,8 +1704,10 @@ EditSceneScene.prototype = {
 			}
 			if(obj3d.selected) { 
 				obj3d.htmlRow.addClass('selected');
+				if(obj3d.htmlLabel) obj3d.htmlLabel.addClass('selected');
 			} else {
 				obj3d.htmlRow.removeClass('selected');
+				if(obj3d.htmlLabel) obj3d.htmlLabel.removeClass('selected');
 			}
 			if(obj3d.isDefault) { 
 				obj3d.htmlRow.addClass('default');
@@ -1823,6 +1913,8 @@ EditSceneScene.prototype = {
 			if(obj.htmlLabel) obj.htmlLabel.removeClass('selected');
 			if(obj.htmlRow) obj.htmlRow.removeClass('selected');
 		});
+		
+		window.selectedObject = null;
 	},
 	
 	selectObject:function(obj, select){
@@ -1851,6 +1943,8 @@ EditSceneScene.prototype = {
 			else 
 				obj.htmlRow.removeClass('selected');
 		}
+		
+		window.selectedObject = this.selectedObjects.length ? this.selectedObjects[this.selectedObjects.length - 1] : null;
 	},
 	
 	selectObjectsByAsset:function(e){
@@ -2165,6 +2259,14 @@ EditSceneScene.prototype = {
 		dlg.dialog(dlgDef);
 		
 		editScene.disableCanvasInteractions(true);
+	},
+	
+	assetAdd:function(e){
+		var selectedAsset = $('#asset-list .row.selected');
+		if(!selectedAsset.length) return;
+		var assetName = $('label:first', selectedAsset).text();
+		
+		editScene.addObjectMenuItemClicked(e, assetName);
 	},
 
 /* ------------------- ------------------- ------------------- ------------------- ------------------- Name */
@@ -2712,12 +2814,15 @@ EditSceneScene.prototype = {
 			doArr.push([obj, val]);
 			undoArr.push([obj, obj[prop]]);
 			if(obj.shadowMap){
-				renderer.webgl.clearTarget(obj.shadowMap);
+				// renderer.webgl.clearTarget(obj.shadowMap);
+				obj.shadowMap.dispose();
+				obj.shadowMap = null;
 			}
 		}
 		editScene.addUndo({name:"castShadow", undo:[editScene.setObjectProperty, undoArr, prop],
 											redo:[editScene.setObjectProperty, doArr, prop]});
-		editScene.setObjectProperty(doArr, prop);	
+		editScene.setObjectProperty(doArr, prop);
+		this.updateLights = true;
 	},
 
 	receiveShadowChanged:function(val){
@@ -2732,6 +2837,7 @@ EditSceneScene.prototype = {
 		editScene.addUndo({name:"receiveShadow", undo:[editScene.setObjectProperty, undoArr, prop],
 											redo:[editScene.setObjectProperty, doArr, prop]});
 		editScene.setObjectProperty(doArr, prop);	
+		this.updateLights = true;
 	},
 	
 	transformObjectToCam:function(e){
@@ -2912,13 +3018,6 @@ EditSceneScene.prototype = {
 			var obj = editScene.selectedObjects[i];
 			doArr.push([obj, val]);
 			undoArr.push([obj, obj[prop]]);
-			/*if(obj.shadowCamera){
-				if(obj.shadowCamera.parent){
-					obj.shadowCameraFov = val;
-					obj.shadowCamera.parent.remove(obj.shadowCamera);
-				}
-				obj.shadowCamera = null;
-			}*/
 		}
 		editScene.addUndo({name:"lightAngle", mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
 											redo:[editScene.setObjectProperty, doArr, prop]});
@@ -3129,27 +3228,153 @@ EditSceneScene.prototype = {
 		editScene.setObjectProperty(doArr, prop);
 	},
 	
+/*
+		vc = valueChanged(this.pixelboxPointSizeChanged);
+		$('#pixelbox-pointSize').spinner({step:0.1, min:0, change:vc, stop:vc});
+		vc = valueChanged(this.pixelboxStippleChanged);
+		$('#pixelbox-stipple').spinner({step:1, min:0, max:2, change:vc, stop:vc});
+		vc = valueChanged(this.pixelboxAlphaChanged);
+		$('#pixelbox-alpha').spinner({step:0.1, min:0, max:1, change:vc, stop:vc});
+		vc = valueChanged(this.pixelboxOcclusionChanged);
+		$('#pixelbox-occlusion').spinner({step:0.1, min:0, max:1, change:vc, stop:vc});
+		//$('#pixelbox-cullBack').click(this.pixelboxCullBackChanged);
+		$('#panel-pixelbox input[name=pixelbox-anim]').click(this.pixelboxAnimTypeChanged);
+		vc = valueChanged(this.pixelboxStartFrameChanged);
+		$('#pixelbox-animFrame').spinner({step:1, min:0, change:vc, stop:vc});
+		//$('#pixelbox-animName').change(this.pixelboxAnimNameChanged);
+		//editScene.pixelboxSetTint(parseInt(hex,16)); //pixelboxSetAddColor
+*/
+
+/* ------------------- ------------------- ------------------- ------------------- ------------------- PixelBox panel */
+
+	pixelboxPointSizeChanged:function(val){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'pointSize';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj[prop]]);
+		}
+		editScene.addUndo({name:prop, mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
+											redo:[editScene.setObjectProperty, doArr, prop]});
+		editScene.setObjectProperty(doArr, prop);
+	},
+
+	pixelboxStippleChanged:function(val){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'stipple';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj[prop]]);
+		}
+		editScene.addUndo({name:'pixelBoxStipple', mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
+											redo:[editScene.setObjectProperty, doArr, prop]});
+		editScene.setObjectProperty(doArr, prop);
+	},
+
+	pixelboxAlphaChanged:function(val){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'alpha';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj[prop]]);
+		}
+		editScene.addUndo({name:'pixelBoxAlpha', mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
+											redo:[editScene.setObjectProperty, doArr, prop]});
+		editScene.setObjectProperty(doArr, prop);
+	},
+
+	pixelboxOcclusionChanged:function(val){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'occlusion';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj[prop]]);
+		}
+		editScene.addUndo({name:prop, mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
+											redo:[editScene.setObjectProperty, doArr, prop]});
+		editScene.setObjectProperty(doArr, prop);
+	},
+
+	pixelboxCullBackChanged:function(e){
+		var val = $('#pixelbox-cullBack')[0].checked;
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'cullBack';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj[prop]]);
+		}
+		editScene.addUndo({name:prop, mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
+											redo:[editScene.setObjectProperty, doArr, prop]});
+		editScene.setObjectProperty(doArr, prop);
+	},
+
+	pixelboxAnimTypeChanged:function(val){
+	},
+
+	pixelboxStartFrameChanged:function(val){
+	},
+	
+	pixelboxAnimNameChanged:function(val){
+	},
+
+	pixelboxSetTint:function(val){//int
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'tint';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj.storedColor]);
+			obj.storedColor = val;
+		}
+		editScene.addUndo({name:"tint", undo:[editScene.setObjectProperty, undoArr, prop],
+											redo:[editScene.setObjectProperty, doArr, prop]});
+		editScene.setObjectProperty(doArr, prop);
+	},
+
+	pixelboxSetAddColor:function(val){//int
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'addColor';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj.storedColor]);
+			obj.storedColor = val;
+		}
+		editScene.addUndo({name:"addColor", undo:[editScene.setObjectProperty, undoArr, prop],
+											redo:[editScene.setObjectProperty, doArr, prop]});
+		editScene.setObjectProperty(doArr, prop);
+	},
 
 /* ------------------- ------------------- ------------------- ------------------- ------------------- Properties panel */
 
-	previewScene:function(camera){
+	previewScene:function(e){
+	 	var loadScene = editScene.exportScene(true, false);
+	 	
 		if(chrome && chrome.storage){
 			chrome.app.window.create('editor/preview.html', { 
 				outerBounds: {
-			      width: Math.max(800, window.outerWidth),
-			      height: Math.max(600, window.outerHeight)
+			      width: Math.max(400, Math.floor(window.outerWidth / 2)),
+			      height: Math.max(300, Math.floor(window.outerHeight / 2))
 			    }
 			 }, function(win){
-		 		win.contentWindow.loadScene = editScene.exportScene(true, false);
-		 		win.contentWindow.startCamera = camera.name;
-		 		win.contentWindow.sceneEditor = editScene;
+		 		win.contentWindow.loadScene = loadScene;
 			 	win.focus();
 			});
 		} else {
 			var win = window.open('preview.html', '_blank');
-	 		win.loadScene = editScene.exportScene(true, false);
-	 		win.startCamera = camera.name;
-	 		win.sceneEditor = editScene;
+	 		win.loadScene = loadScene;
 		 	win.focus();
 		}
 	},
@@ -3168,13 +3393,17 @@ EditSceneScene.prototype = {
 			$('#scene-max-shadows').val(this.doc.maxShadows != undefined ? this.doc.maxShadows : 0).data('prevVal', $('#scene-max-shadows').val().toString());
 			$('#scene-fog-near').val(this.doc.fogNear != undefined ? this.doc.fogNear : this.scene.fog.near).data('prevVal', $('#scene-fog-near').val().toString());
 			$('#scene-fog-far').val(this.doc.fogFar != undefined ? this.doc.fogFar : this.scene.fog.far).data('prevVal', $('#scene-fog-far').val().toString());
+			$('#test-scene').show();
 			return;
 		}
+		$('#test-scene').hide();
 		$('#prop-name').attr('placeholder','Object name');
 		$('#prop-object-type').text('');
 		$('#panel-move').show();
+
+		$('#editor-props input[type=checkbox].multiple,#panel-pixelbox input[name=pixelbox-anim].multiple').removeClass('multiple').removeAttr('checked');
 		
-		$('#editor-props input[type=checkbox].multiple').removeClass('multiple');
+		$('#pixelbox-animName').empty();
 		
 		var prevObj = null;
 		var mults = {};
@@ -3190,7 +3419,7 @@ EditSceneScene.prototype = {
 		var containsPointLights = false;
 		var radToDeg = 180 / Math.PI;
 		var commonType = null;
-				
+			
 		for(var i = 0; i < this.selectedObjects.length; i++){
 			var obj = this.selectedObjects[i];
 			// name
@@ -3214,8 +3443,9 @@ EditSceneScene.prototype = {
 			containsPointLights = containsPointLights | (obj instanceof THREE.PointLight);
 			
 			// type
-			var type = (obj.isAnchor ? 'Anchor' : (obj instanceof THREE.PointCloud ? obj.geometry.data.name : obj.def.asset));
-			if(prevObj && (prevObj.isAnchor ? 'Anchor' : prevObj.def.asset) != type){
+			var type = (obj.isAnchor ? 'Anchor' : (obj instanceof THREE.PointCloud ? 'PixelBox' : obj.def.asset));
+			var prevType = (prevObj ? (prevObj.isAnchor ? 'Anchor' : (prevObj instanceof THREE.PointCloud ? 'PixelBox' : prevObj.def.asset)) : type);
+			if(prevObj && prevType != type){
 				$('#prop-object-type').text('Multiple types');
 				mults['type'] = true;
 				commonType = null;
@@ -3337,7 +3567,7 @@ EditSceneScene.prototype = {
 				if(this.selectedObjects.length == 1){
 					$('#cam-default')[0].checked = !!obj.isDefault;
 				}
-			}
+			} else 
 			
 			// lights
 			if(obj instanceof THREE.Light){
@@ -3421,8 +3651,83 @@ EditSceneScene.prototype = {
 					$('#light-shadow-map-height').attr('placeholder','').val(newVal).data('prevVal', newVal);
 				}
 
+			} else 
+			if(commonType == 'PixelBox'){
+				if(prevObj && prevObj.pointSize != obj.pointSize){
+					$('#pixelbox-pointSize').attr('placeholder','M').val('').data('prevVal',''); mults['pointSize'] = true;
+				} else if(!mults['pointSize']){
+					var newVal = obj.pointSize;
+					$('#pixelbox-pointSize').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}
+				if(prevObj && prevObj.stipple != obj.stipple){
+					$('#pixelbox-stipple').attr('placeholder','M').val('').data('prevVal',''); mults['stipple'] = true;
+				} else if(!mults['stipple']){
+					var newVal = obj.stipple;
+					$('#pixelbox-stipple').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}
+				if(prevObj && prevObj.alpha != obj.alpha){
+					$('#pixelbox-alpha').attr('placeholder','M').val('').data('prevVal',''); mults['pixelbox-alpha'] = true;
+				} else if(!mults['pixelbox-alpha']){
+					var newVal = obj.alpha;
+					$('#pixelbox-alpha').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}
+				if(prevObj && prevObj.occlusion != obj.occlusion){
+					$('#pixelbox-occlusion').attr('placeholder','M').val('').data('prevVal',''); mults['occlusion'] = true;
+				} else if(!mults['occlusion']){
+					var newVal = obj.occlusion;
+					$('#pixelbox-occlusion').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}
+				if(prevObj && prevObj.cullBack != obj.cullBack){
+					$('#pixelbox-cullBack').addClass('multiple')[0].checked = false;
+					mults['cullBack'] = true;
+				} else if(!mults['cullBack']){
+					$('#pixelbox-cullBack')[0].checked = obj.cullBack;
+				}
+				if(prevObj && prevObj.def['animOption'] != obj.def['animOption']){
+					$('#panel-pixelbox input[name=pixelbox-anim]').addClass('multiple').attr('checked',false);
+					mults['animOption'] = true;
+				} else if(!mults['animOption']){
+					var animOption = obj.def['animOption'] ? obj.def['animOption'] : 'gotoAndStop';
+					$('#panel-pixelbox input[value='+animOption+']')[0].checked = true;
+				}
+				
+				// add anims to anim name box
+				var sel = $('#pixelbox-animName');
+				for(var aname in obj.asset.anims){
+					var opt = $('option[value='+aname+']');
+					if(!opt.length){
+						opt = $('<option/>').text(aname).val(aname);
+						sel.append(opt);
+					}
+				}
+				if(prevObj && (prevObj.def['animName'] != obj.def['animName'])){
+					mults['animName'] = true;
+				} else if(!mults['animName']){
+					var animNames = _.keys(obj.asset.anims);
+					if(!animNames.length) animNames = ['default'];
+					var animName = obj.def['animName'] ? obj.def['animName'] : animNames[0];
+					$('#pixelbox-animName[value='+animName+']').attr('checked',true);
+				}			
+				if(prevObj && prevObj.def['animFrame'] != obj.def['animFrame']){
+					$('#pixelbox-animFrame').attr('placeholder','M').val('').data('prevVal',''); mults['animFrame'] = true;
+				} else if(!mults['animFrame']){
+					var newVal = obj.def['animFrame'] ? obj.def['animFrame'] : 0;
+					$('#pixelbox-animFrame').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}
+				if(prevObj && prevObj.tint.getHex() != obj.tint.getHex()){
+					$('#pixelbox-tint').css({backgroundColor:'transparent'}); mults['pixelbox-tint'] = true;
+				} else if(!mults['pixelbox-tint']){
+					$('#pixelbox-tint').css({backgroundColor:'#'+obj.tint.getHexString()});
+				}
+				if(prevObj && prevObj.addColor.getHex() != obj.addColor.getHex()){
+					$('#pixelbox-add').css({backgroundColor:'transparent'}); mults['pixelbox-add'] = true;
+				} else if(!mults['pixelbox-add']){
+					$('#pixelbox-add').css({backgroundColor:'#'+obj.addColor.getHexString()});
+				}
+
 			}
 			
+			// end loop
 			prevObj = obj;
 		}
 		
@@ -3430,7 +3735,14 @@ EditSceneScene.prototype = {
 		if(commonType == 'Camera'){
 			$('#panel-camera').show();
 			$('#cam-default,#cam-default~label').css({ visibility: (this.selectedObjects.length != 1) ? 'hidden' : 'visible'});
-		}		
+		}
+		
+		if(commonType == 'PixelBox'){
+			$('#panel-pixelbox').show();
+			if(mults['animName']){
+				$('#pixelbox-animName').prepend('<option value="" selected="selected">- multiple -</option>');
+			}
+		}
 		
 		if((containsDirLights || containsHemiLights || containsPointLights || containsSpotLights) &&
 			!(containsAnchors || containsCameras || containsContainers || containsInstances || containsPlanes || containsPointClouds)){
@@ -3474,7 +3786,7 @@ EditSceneScene.prototype = {
 			$('#obj-from-cam').attr('disabled','disabled');
 		}
 		
-				this.updateStoredPosition();
+		this.updateStoredPosition();
 		
 		// if(containsSpotLights || containsDirLights){ $('#look-at').attr('disabled', 'disabled'); }
 	},
@@ -3504,6 +3816,7 @@ EditSceneScene.prototype = {
 			<li id="edit-cut">Cut <em><span class="ctrl"/>X</em></li>\
 			<li id="edit-copy">Copy <em><span class="ctrl"/>C</em></li>\
 			<li id="edit-paste">Paste <em><span class="ctrl"/>V</em></li>\
+			<li id="edit-paste-into">Paste Into <em>Shift+<span class="ctrl"/>V</em></li>\
 			<hr/>\
 			<li id="edit-delete">Delete selection <em>Delete</em></li>\
 		</ul>\
@@ -3542,6 +3855,7 @@ EditSceneScene.prototype = {
 		$('#edit-copy').click(editScene.copySelection.bind(editScene));
 		$('#edit-cut').click(editScene.cutSelection.bind(editScene));
 		$('#edit-paste').click(editScene.pasteSelection.bind(editScene));
+		$('#edit-paste-into').click(editScene.pasteSelection.bind(editScene));
 		
 // view menu
 		$('#view').click(function(){
@@ -3565,6 +3879,7 @@ EditSceneScene.prototype = {
 		<div id="panel-common" class="panel">\
 			<label for="prop-name" class="w2">Name</label><input type="text" size="10" id="prop-name"/>\
 			<span id="prop-object-type">Nothing selected</span>\
+			&nbsp;<button id="test-scene">Preview</button>\
 		</div>\
 		<div class="panels">\
 			<div id="panel-move" class="panel"><h4>Object3D</h4>\
@@ -3616,6 +3931,7 @@ EditSceneScene.prototype = {
 		$('#restore-pos').click(this.restorePosition.bind(this));
 		$('#obj-from-cam').click(this.transformObjectToCam.bind(this));
 		$('#obj-to-cam').click(this.transformCamToObject.bind(this));
+		$('#test-scene').button().hide().click(this.previewScene.bind(this));
 		
 // scene panel
 		$('#editor-props .panels').append('<div id="panel-scene" class="panel"><h4>Scene</h4>\
@@ -3640,7 +3956,7 @@ EditSceneScene.prototype = {
 			}	
 		};
 		var vc = valueChanged(this.setSceneMaxShadows);
-		$('#scene-max-shadows').spinner({step:1, min:1, max:8, change:vc, stop:vc});
+		$('#scene-max-shadows').spinner({step:1, min:0, max:8, change:vc, stop:vc});
 		vc = valueChanged(this.setSceneFogNear);
 		$('#scene-fog-near').spinner({step:10, min:0, change:vc, stop:vc});//
 		vc = valueChanged(this.setSceneFogFar);
@@ -3736,16 +4052,16 @@ EditSceneScene.prototype = {
 				$(dom).css({zIndex: 10000001});
 				var src = $(this);
 				var css = src.css('background-color');
+				// store preselection color
+				for(var i = 0; i < editScene.selectedObjects.length; i++){
+					var obj = editScene.selectedObjects[i];
+					obj.storedColor = obj.color.getHex();
+				}
 				if(css != 'transparent'){
 					var clr = new THREE.Color(css);
 					var hex = clr.getHexString();
 					$(src).data('prevVal', hex);
 					src.colpickSetColor(hex, true);
-				}
-				// store preselection color
-				for(var i = 0; i < editScene.selectedObjects.length; i++){
-					var obj = editScene.selectedObjects[i];
-					obj.storedColor = obj.color.getHex();
 				}
 			},
 			onHide:function(){ 
@@ -3773,16 +4089,16 @@ EditSceneScene.prototype = {
 				$(dom).css({zIndex: 10000001});
 				var src = $(this);
 				var css = src.css('background-color');
+				// store preselection color
+				for(var i = 0; i < editScene.selectedObjects.length; i++){
+					var obj = editScene.selectedObjects[i];
+					obj.storedColor = obj.groundColor.getHex();
+				}
 				if(css != 'transparent'){
 					var clr = new THREE.Color(css);
 					var hex = clr.getHexString();
 					$(src).data('prevVal', hex);
 					src.colpickSetColor(hex, true);
-				}
-				// store preselection color
-				for(var i = 0; i < editScene.selectedObjects.length; i++){
-					var obj = editScene.selectedObjects[i];
-					obj.storedColor = obj.groundColor.getHex();
 				}
 			},
 			onHide:function(){ 
@@ -3828,6 +4144,114 @@ EditSceneScene.prototype = {
 		vc = valueChanged(this.lightShadowMapHeightChanged);
 		$('#light-shadow-map-height').spinner({step:256, min:64, max: 2048, change:vc, stop:vc});
 
+// pixelbox panel
+		$('#editor-props .panels').append('<div id="panel-pixelbox" class="panel"><h4>PixelBox</h4>\
+			<label for="pixelbox-pointSize" class="w32 pad5 right-align">Point size</label><input tabindex="0" type="text" class="center" id="pixelbox-pointSize" size="1"/>\
+			<label for="pixelbox-stipple" class="w32 pad5 right-align">Stipple</label><input tabindex="1" type="text" class="center" id="pixelbox-stipple" size="1"/><br/>\
+			<label for="pixelbox-alpha" class="w32 pad5 right-align">Alpha</label><input tabindex="2" type="text" class="center" id="pixelbox-alpha" size="1"/>\
+			<label for="pixelbox-occlusion" class="w32 pad5 right-align">Occlusion</label><input tabindex="3" type="text" class="center" id="pixelbox-occlusion" size="1"/><br/>\
+			<label class="w32 right-align pad5">Color tint</label><div id="pixelbox-tint" class="color-swatch"/>\
+			<label class="w31 right-align pad5">Add</label><div id="pixelbox-add" class="color-swatch"/><br/>\
+			<input tabindex="4" type="checkbox" id="pixelbox-cullBack"/><label for="pixelbox-cullBack" class="w3">Cull backface</label>\
+			<hr/>\
+			<input type="radio" name="pixelbox-anim" tabindex="6" id="pixelbox-gotoAndStop" value="gotoAndStop"/><label for="pixelbox-gotoAndStop" class="w4 pad5">gotoAndStop</label>\
+			<input type="radio" name="pixelbox-anim" tabindex="7" id="pixelbox-playAnim" value="playAnim"/><label for="pixelbox-playAnim" class="w4 pad5">playAnim</label><br/>\
+			<input type="radio" name="pixelbox-anim" tabindex="8" id="pixelbox-loopAnim" value="loopAnim"/><label for="pixelbox-loopAnim" class="w4 pad5">loopAnim</label>\
+			<input type="radio" name="pixelbox-anim" tabindex="9" id="pixelbox-loopFrom" value="loopFrom"/><label for="pixelbox-loopFrom" class="w4 pad5">loopFrom</label><br/>\
+			<label class="w1 right-align pad5">Anim </label><select id="pixelbox-animName" tabindex="5"/>\
+			<label for="pixelbox-animFrame" class="w2 right-align pad5">Frame</label><input tabindex="10" class="center" type="text" id="pixelbox-animFrame" size="1"/>\
+			</div>');
+
+		vc = valueChanged(this.pixelboxPointSizeChanged);
+		$('#pixelbox-pointSize').spinner({step:0.1, min:0, change:vc, stop:vc});
+		vc = valueChanged(this.pixelboxStippleChanged);
+		$('#pixelbox-stipple').spinner({step:1, min:0, max:2, change:vc, stop:vc});
+		vc = valueChanged(this.pixelboxAlphaChanged);
+		$('#pixelbox-alpha').spinner({step:0.1, min:0, max:1, change:vc, stop:vc});
+		vc = valueChanged(this.pixelboxOcclusionChanged);
+		$('#pixelbox-occlusion').spinner({step:0.1, min:0, max:1, change:vc, stop:vc});
+		$('#pixelbox-cullBack').click(this.pixelboxCullBackChanged);
+		$('#panel-pixelbox input[name=pixelbox-anim]').click(this.pixelboxAnimTypeChanged);
+		vc = valueChanged(this.pixelboxStartFrameChanged);
+		$('#pixelbox-animFrame').spinner({step:1, min:0, change:vc, stop:vc});
+		$('#pixelbox-animName').change(this.pixelboxAnimNameChanged);
+		//editScene.pixelboxSetTint(parseInt(hex,16)); //pixelboxSetAddColor
+		$('#pixelbox-tint').colpick({
+			colorScheme:'dark',
+			onShow:function(dom){ 
+				$(dom).css({zIndex: 10000001});
+				var src = $(this);
+				var css = src.css('background-color');
+				// store preselection color
+				for(var i = 0; i < editScene.selectedObjects.length; i++){
+					var obj = editScene.selectedObjects[i];
+					obj.storedColor = obj.tint.getHex();
+				}
+				if(css != 'transparent'){
+					var clr = new THREE.Color(css);
+					var hex = clr.getHexString();
+					$(src).data('prevVal', hex);
+					src.colpickSetColor(hex, true);
+				}
+			},
+			onHide:function(){ 
+				for(var i = 0; i < editScene.selectedObjects.length; i++){
+					var obj = editScene.selectedObjects[i];
+					obj.tint.setHex(obj.storedColor);
+				}
+			},
+			onSubmit:function(hsb, hex, rgb, el){
+				editScene.pixelboxSetTint(parseInt(hex,16));
+				$(el).colpickHide();
+				$('#pixelbox-tint').css({backgroundColor:'#'+hex});
+			},
+			onChange:function(hsb, hex, rgb, el){
+				var newColor = parseInt(hex,16);
+				for(var i = 0; i < editScene.selectedObjects.length; i++){
+					var obj = editScene.selectedObjects[i];
+					obj.tint.setHex(newColor);
+				}
+			}
+		});
+		$('#pixelbox-add').colpick({
+			colorScheme:'dark',
+			onShow:function(dom){ 
+				$(dom).css({zIndex: 10000001});
+				var src = $(this);
+				var css = src.css('background-color');
+				// store preselection color
+				for(var i = 0; i < editScene.selectedObjects.length; i++){
+					var obj = editScene.selectedObjects[i];
+					obj.storedColor = obj.addColor.getHex();
+				}
+				if(css != 'transparent'){
+					var clr = new THREE.Color(css);
+					var hex = clr.getHexString();
+					$(src).data('prevVal', hex);
+					src.colpickSetColor(hex, true);
+				}
+			},
+			onHide:function(){ 
+				for(var i = 0; i < editScene.selectedObjects.length; i++){
+					var obj = editScene.selectedObjects[i];
+					obj.addColor.setHex(obj.storedColor);
+				}
+			},
+			onSubmit:function(hsb, hex, rgb, el){
+				editScene.pixelboxSetAddColor(parseInt(hex,16));
+				$(el).colpickHide();
+				$('#pixelbox-tint').css({backgroundColor:'#'+hex});
+			},
+			onChange:function(hsb, hex, rgb, el){
+				var newColor = parseInt(hex,16);
+				for(var i = 0; i < editScene.selectedObjects.length; i++){
+					var obj = editScene.selectedObjects[i];
+					obj.addColor.setHex(newColor);
+				}
+			}
+		});	
+
+
 		var savePosOnDrop = function(e, ui) { localStorage_setItem(ui.helper.context.id + '-x', ui.position.left); localStorage_setItem(ui.helper.context.id + '-y', ui.position.top); };
 		var bringToFront = function(e, ui){ $('body').append(ui.helper.context); }
 		function makeDraggablePanel(id, defX, defY, defH, onResizeHandler){
@@ -3858,7 +4282,8 @@ EditSceneScene.prototype = {
 			var dy = localStorage_getItem(id+'-y');
 			dx = Math.min((dx === null) ? defX : dx, window.innerWidth - dw);
 			dy = Math.min((dy === null) ? defY : dy, window.innerHeight - dh);
-			panel.offset({left:dx, top: dy}).draggable({ snap: ".editor", containment: "body", cancel: '.ui-widget,input,a,button,#scene-list', start: bringToFront, stop: savePosOnDrop });
+			panel.offset({left:dx, top: dy}).draggable({ snap: ".editor", containment: "body", cancel: '.ui-widget,input,a,button,#scene-list,select', 
+															start: bringToFront, stop: savePosOnDrop });
 			panel.mousedown(function(){ $('.floating-panel').css({zIndex:1000000}); $(this).css({zIndex:1000001}); $('.submenu').hide();});
 		}
 		
@@ -3867,26 +4292,33 @@ EditSceneScene.prototype = {
 		'<div id="editor-scene" class="ui-widget-header ui-corner-all editor floating-panel">\
 		<h1>Scene</h1>\
 		<hr/>\
-		<button id="scene-add">Add Object</button><!-- <button id="scene-dupe">Dupe</button><span class="separator-left"/>-->\
+		<button id="scene-add">Add Object</button>\
 		<hr/>\
 		<div id="scene-list"></div>\
 		<hr/>\
 		<button id="scene-delete">Delete</button>\
 		</div>\
-		<ul id="scene-add-menu" class="editor submenu absolute-pos">\
-			<li id="scene-add-point-light">PixelBox asset</li><hr/>\
+		<ul id="scene-add-menu" class="editor submenu absolute-pos shortcuts">\
+			<li id="scene-add-asset">PixelBox Asset ...<em>&#10095;</em></li><hr/>\
+			<li id="scene-add-instance">Instance (Template) ...<em>&#10095;</em></li>\
 			<li id="scene-add-container">Object3D (Container)</li><hr/>\
-			<li id="scene-add-point-light">Point Light</li>\
-  		</ul>');
+			<li id="scene-add-plane">Plane</li><hr/>\
+			<li id="scene-add-hemi">Hemisphere Light (Ambient)</li>\
+			<li id="scene-add-dir">Directional Light</li>\
+			<li id="scene-add-spot">Spot Light</li>\
+			<li id="scene-add-point">Point Light</li><hr/>\
+			<li id="scene-add-camera">Camera</li>\
+  		</ul>\
+		</ul>');
 		$('#scene-add').button({icons:{secondary:'ui-icon-triangle-1-n'}}).click(function(){
 		    $('#scene-add-menu').show().position({
 	            at: "right top",
 	            my: "right bottom",
 	            of: this
-	          });
+	          });	       
           return false;
 	    })
-	    $('#scene-add-menu').hide().menu();
+	    $('#scene-add-menu').hide().menu().click(this.addObjectMenuItemClicked.bind(this));
 	    $('#scene-dupe').button();
 	    $('#scene-delete').button().click(this.deleteSelection.bind(this));
 
@@ -3895,14 +4327,16 @@ EditSceneScene.prototype = {
 		'<div id="editor-assets" class="ui-widget-header ui-corner-all editor floating-panel">\
 		<h1>Assets</h1>\
 		<hr/>\
-		<button id="asset-new">New</button><span class="separator-left"/>\
-		<button id="asset-rename">Rename</button>\
+		<button id="asset-add">Add to Scene</button><span class="separator-left"/>\
+		<button id="asset-new">New</button>\
 		<hr/>\
 		<div id="asset-list"></div>\
 		<hr/>\
-		<button id="asset-delete">Delete</button>\
+		<button id="asset-rename">Rename</button>\
+		<button id="asset-delete" class="float-right">Delete</button>\
 		</div>');
 		$('#asset-new').button().click(this.assetNew.bind(this));
+		$('#asset-add').button().click(this.assetAdd);
 		$('#asset-rename').button().click(this.assetRename.bind(this));
 	    $('#asset-delete').button().click(this.assetDelete.bind(this));
 	    
@@ -3976,10 +4410,121 @@ EditSceneScene.prototype = {
 		$('body').off('mouseup.editor');
 	},
 	
+	addObjectMenuItemClicked:function(e, asset, instance){
+		var objDef = null;
+		var addTarget;
+		var addPos = new THREE.Vector3();
+		// add into
+		if(e.shiftKey) {
+			addTarget = this.selectedObjects.length ? this.selectedObjects[0] : this.container;
+		// add next to
+		} else {
+			addTarget = this.selectedObjects.length ? this.selectedObjects[0].parent : this.container;
+			if(this.selectedObjects.length) addPos.copy(this.selectedObjects[0].position);
+		}
+		var addWorldPos = addTarget.parent.localToWorld(addPos.clone());
+		
+		switch(e.target.id){
+		case 'scene-add-asset':
+		
+	// populate:
+			$('#scene-add-submenu').remove();
+			var submenu = $('<ul id="scene-add-submenu" class="editor submenu absolute-pos">');
+			var numRows = 0;
+			for(var aname in assets.cache.files){
+				var row = $('<li/>');
+				row.text(aname);
+				var func = (function(assetName){ 
+					return function(e){
+						editScene.addObjectMenuItemClicked(e, assetName);
+					};
+				})(aname);
+				row.click(func);
+				submenu.append(row);
+				numRows++;
+			}
+			if(!numRows) submenu.append('<span class="info">- No Assets in Scene -</span>');			
+			submenu.menu().position({
+	            at: "right top",
+	            my: "right bottom",
+	            of: $('#scene-add')
+	          });
+	        $('body').append(submenu);
+			break;					
+		case 'scene-add-instance':
+			// TODO
+			return;
+		case 'scene-add-container':
+			objDef = { asset: 'Object3D', name:'container' };
+			break;
+			
+		case 'scene-add-plane':
+			objDef = { asset: 'Plane', name:'floor', color:'999999', receiveShadow:true, scale:[100,100,10], rotation:[-90,0,0] };
+			break;
+		
+		case 'scene-add-hemi':
+			objDef = { asset: 'HemisphereLight', name:'ambient', colors:["2f62ff", "333399"], intensity:0.5 };
+			break;
+			
+		case 'scene-add-dir':
+			objDef = { asset: 'DirectionalLight', name:'sun', castShadow: true, receiveShadow: false, color:"ffffff", intensity:0.5,
+						target:[addWorldPos.x, addWorldPos.y - 100, addWorldPos.z] };
+			break;
+		
+		case 'scene-add-spot':
+			objDef = { asset: 'SpotLight', name:'spotlight', castShadow: true, receiveShadow: false, color:"ffffff", 
+				intensity:0.5, angle:30, distance:100, target:[addWorldPos.x, addWorldPos.y - 100, addWorldPos.z] };
+			break;
+		
+		case 'scene-add-point':
+			objDef = { asset: 'PointLight', name:'pointlight', color:"ffffff", intensity:0.5, distance:10 };
+			break;
+			
+		case 'scene-add-camera':
+			objDef = { asset: 'Camera', name:'camera', fov:60, near:1, far:500 };
+			break;
+		
+		default:
+			if(asset){
+				var anims = assets.cache.files[asset].anims;
+				var anames = _.keys(anims);
+				var firstAnim = anames.length ? anames[0] : '';				
+				objDef = { asset: asset, name:asset, animOption: 'gotoAndStop', animFrame: 0, animName: firstAnim };
+			}
+			break;
+		
+		}
+		
+		if(objDef){
+			objDef.position = [addPos.x, addPos.y, addPos.z];
+			this.deselectAll();
+			
+			var addedObject = (this.populateObject(addTarget, [ objDef ], { helpers: true, keepSceneCamera:true, noNameReferences:true }))[0];
+			var doAdd = [ [addedObject, addTarget] ];
+			var undoAdd = [ addedObject ];
+			this.addUndo({name:"add object", redo:[this.addObjects, doAdd], undo:[this.deleteObjects, undoAdd] });
+			
+			this.refreshScene();
+			this.updateLights = true;
+
+			this.updateTextLabels(this.container, 0);
+			this.selectObject(addedObject, true);
+			
+			this.camera.lookAt(addWorldPos);
+			this.controls.center.copy(addWorldPos);
+			
+			this.selectionChanged();
+			this.refreshProps();
+		}	
+	},
+
 	showHelp:function(){
 		$('.submenu').hide();
 		if(!$('#help-view').length){
 			$('body').append('<div id="help-view" class="no-close">\
+			<span class="info">PixelBox and related tools created by Kirill Edelman.<br/>\
+			Huge thanks to mrdoob for creating <a href="http://threejs.org/" target="_blank">three.js</a></span>\
+			<hr/>\
 			<h2>Shortcuts</h2>\
 			<em>Ctrl + N</em> create new<br/>\
 			<em>Ctrl + S</em> hold<br/>\
@@ -4045,7 +4590,8 @@ EditSceneScene.prototype = {
 		//key('ctrl+shift+v,⌘+shift+v', function(){ editScene.frameRangePaste({}); return false; });
 		//key('ctrl+shift+x,⌘+shift+x', function(){ editScene.frameRangeCut({}); return false; });
 		key('ctrl+c,⌘+c', function(){ editScene.copySelection(); return false; });
-		key('ctrl+v,⌘+v', function(){ editScene.pasteSelection(); return false; });
+		key('ctrl+v,⌘+v', function(){ editScene.pasteSelection({shiftKey:false}); return false; });
+		key('shift+ctrl+v,shift+⌘+v', function(){ editScene.pasteSelection({shiftKey:true}); return false; });
 		key('ctrl+x,⌘+x', function(){ editScene.cutSelection(); return false; });
 		//key('escape', function(){ editScene.cancelPaste(); return false; });
 		//key('ctrl+s,⌘+s', function(){ editScene.holdDoc(); return false; });
@@ -4059,6 +4605,7 @@ EditSceneScene.prototype = {
 		key.unbind('ctrl+c,⌘+c');
 		key.unbind('ctrl+x,⌘+x');
 		key.unbind('ctrl+v,⌘+v');
+		key.unbind('shift+ctrl+v,shift+⌘+v');
 		//key.unbind('ctrl+shift+c,⌘+shift+c');
 		//key.unbind('ctrl+shift+x,⌘+shift+x');
 		//key.unbind('ctrl+shift+v,⌘+shift+v');
@@ -4270,7 +4817,7 @@ EditSceneScene.prototype = {
 				"color": "FFFFFF",			
 				"castShadow": true,
 				"shadowBias": -0.00015,
-				"intensity": 0.8,
+				"intensity": 0.5,
 				"shadowVolumeWidth": 256,
 				"shadowVolumeHeight": 256,
 				"shadowMapWidth": 1024
@@ -4314,7 +4861,7 @@ EditSceneScene.prototype = {
       	if(data){ 
       		this.newDocFromData(JSON.parse(data));
       	} else {
-			this.newDoc(true, true);
+			this.newDoc(true);
 		}
 		this.resetZoom();
 	},
@@ -4335,6 +4882,19 @@ EditSceneScene.prototype = {
 		else renderer.webgl.render( this.scene, this.camera );
 		
 		this.updateTextLabels(this.container, 0);
+		if(this.updateLights){
+			THREE.PixelBox.updateLights(this.scene, true);
+			this.updateLights = false;
+		}
+		
+		if(this.placeHolderLights){
+			while(this.placeHolderLights.length){
+				var sun = this.placeHolderLights[0];
+				this.scene.remove(sun);
+				this.placeHolderLights.splice(0,1);
+				sun.shadowMap.dispose();
+			}
+		}
 	},
 	
 	onResized: function(e){
@@ -4504,10 +5064,9 @@ THREE.Object3D.prototype.serialize = function(templates){
 				}
 			}
 		}
-		if(this.def.gotoAndStop != undefined) def.gotoAndStop = this.def.gotoAndStop;
-		if(this.def.loopAnim != undefined) def.loopAnim = this.def.loopAnim;
-		if(this.def.loopFrom != undefined) def.loopFrom = this.def.loopFrom;
-		if(this.def.playAnim != undefined) def.playAnim = this.def.playAnim;
+		if(this.def.animName != undefined) def.animName = this.def.animName;
+		if(this.def.animOption != undefined) def.animOption = this.def.animOption;
+		if(this.def.animFrame != undefined) def.animFrame = this.def.animFrame;
 		
 	} else {
 		//console.log("Serializing an unknown type", this);
@@ -4554,6 +5113,13 @@ function documentReady(){
 	} else {
 		console.log("WebGL initialized");
 	}
+	
+	/* stop / resume render on window focus */
+	$(window).focus(function(){ 
+		renderer.pause(false);
+	}).blur(function(){ 
+		renderer.pause(true);
+	});
 	
 	// init localstorage, then start
 	localStorage_init(function(){

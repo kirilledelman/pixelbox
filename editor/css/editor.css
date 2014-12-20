@@ -2,7 +2,13 @@
 
 /* editor */
 
-.submenu { z-index: 1000100; }
+.submenu { 
+	z-index: 1000100; 
+	overflow-y: auto;
+	max-height: 300px;
+	min-width: 100px;
+	border-bottom: 1px solid #333;
+}
 
 .submenu.shortcuts .ui-menu-item {
 	padding-right:5em;
@@ -151,6 +157,10 @@ label.object-label.selected {
 #prop-object-type {
 	color: #999;
 	font-size: 12px;
+	max-width: 160px;
+	overflow: hidden;
+	display: inline-block;
+	margin-right: 10px;
 }
 
 #panel-common {
@@ -706,7 +716,7 @@ input[type=checkbox]{
 	margin: 5px 10px 5px 5px;
 }
 
-input[type=checkbox].multiple + label {
+input[type=checkbox].multiple + label, input[type=radio].multiple + label{
 	color: #666;
 }
 

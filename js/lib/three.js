@@ -20439,7 +20439,7 @@ THREE.WebGLRenderer = function ( parameters ) {
 			*/
 			
 			if(object.pixelBox){
-				_gl.drawArrays( _gl.POINTS, object.vertexBufferStart, object.vertexBufferLength);//position.array.length / 3);
+				_gl.drawArrays( _gl.POINTS, object.vertexBufferStart, object.vertexBufferLength);
 				_this.info.render.points += object.vertexBufferLength;
 			} else {
 				_gl.drawArrays( _gl.POINTS, 0, position.array.length / 3 );

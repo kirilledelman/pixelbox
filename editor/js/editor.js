@@ -1902,7 +1902,7 @@ EditScene.prototype = {
 			frames:[],
 			anchors:{},
 			anims: this.doc.anims,
-			meta: this.doc.meta
+			meta: this.doc.meta != undefined ? this.doc.meta : ''
 		};
 		
 		this.model.geometry.data.optimize = false;
@@ -2114,6 +2114,7 @@ EditScene.prototype = {
 	},
 	
 	resetZoom:function(){
+		THREE.PixelBox.prototype.updateViewPortUniform(null);
 		this.camera.position.set(512, 512, 512);
 		this.camera.lookAt(new THREE.Vector3(0,0,0));
 		this.controls.focus(this.maskBox, true);
@@ -3685,9 +3686,14 @@ EditScene.prototype = {
 			smoothNormals: editScene.doc.smoothNormals,
 			occlusion: editScene.doc.occlusion,				
 			pointSize: editScene.doc.pointSize
-		}, true);
+		}, false);
 		
-		window.sceneEditor.assetUpdated(data);
+		if(window.loadAsset == editScene.doc.name){
+			window.sceneEditor.assetUpdated(data);
+		} else {
+			window.loadAsset = editScene.doc.name;
+			window.sceneEditor.importSceneAsset(data);
+		}
 		this.showMessage('<em>'+data.name+'</em> updated');
 	},
 
@@ -4079,7 +4085,7 @@ EditScene.prototype = {
 		
 		if(window.loadAsset){
 			$('#file-putback').show();
-			$('#file-import,#file-new').hide();
+			$('#file-new').hide();
 		}
 		
 		// file menu
@@ -4692,6 +4698,9 @@ EditScene.prototype = {
 		$('.submenu').hide();
 		if(!$('#help-view').length){
 			$('body').append('<div id="help-view" class="no-close">\
+			<span class="info">PixelBox and related tools created by Kirill Edelman.<br/>\
+			Huge thanks to mrdoob for creating <a href="http://threejs.org/" target="_blank">three.js</a></span>\
+			<hr/>\
 			<h2>Shortcuts</h2>\
 			<em>Ctrl + N</em> create new<br/>\
 			<em>Ctrl + S</em> hold<br/>\
@@ -5011,7 +5020,7 @@ EditScene.prototype = {
 		intensity = localStorage_getItem('direct-intensity');
 		this.sun = new THREE.DirectionalLight(pointColor !== null ? parseInt(pointColor, 16) : 0xfff0ee, intensity !== null ? parseFloat(intensity) : 0.8);
 		this.sun.shadowCameraVisible = false;
-		this.sun.castShadow = true;//(localStorage_getItem('direct-shadow') !== 'false');
+		this.sun.castShadow = true;
 		this.sun.shadowDarkness = Math.min(1.0, this.sun.intensity * 0.5);
 	    this.sun.shadowMapWidth = this.sun.shadowMapHeight = 2048;
 	    this.sun.shadowCameraNear = 0;
@@ -5061,7 +5070,7 @@ EditScene.prototype = {
 		if(window.opener && window.loadAsset){
       		console.log("Loading ", window.loadAsset);
 			editScene.newDocFromData(window.loadAsset); 
-			window.loadAsset = true;
+			window.loadAsset = window.loadAsset.name;
 		} else {
 			var data = localStorage_getItem('holdDoc');
 	      	if(data){ 
