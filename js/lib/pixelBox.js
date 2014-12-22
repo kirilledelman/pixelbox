@@ -1,5 +1,7 @@
 /*
-
+	// functions have to be object properties
+	// prototype functions kill performance
+	// (tested and it was 4x slower !!!)
 
 
 	Events:
@@ -12,7 +14,7 @@
 		anim-finish		
 		
 	# problems
-	fog color for Mesh shader needs to be moved to pixel shader
+	(?) fog color for Mesh shader needs to be moved to pixel shader
 */
 
 THREE.PixelBoxDepthShader = {
@@ -872,13 +874,14 @@ THREE.MeshPixelBoxMaterial = function(params){
 		fog:true
 	});
 	
-	function param(pname, defaultValue){ if(params[pname] != undefined) return params[pname]; return defaultValue; }
+	function param(pname, defaultValue){ if(params && params[pname] != undefined) return params[pname]; return defaultValue; }
 	
 	material.side = THREE.DoubleSide;
 	
 	var uniforms = material.uniforms;
-	uniforms.tintColor.value.set(param('color', 0xffffff));
-	uniforms.tintAlpha.value = param('opacity', 1.0);
+	uniforms.tintColor.value.set(param('tint', 0xffffff));
+	uniforms.addColor.value.set(param('addColor', 0x0));
+	uniforms.tintAlpha.value = param('alpha', 1.0);
 	uniforms.brightness.value = param('brightness', 0.0);
 	
 	// share uniforms with prototype
@@ -889,9 +892,13 @@ THREE.MeshPixelBoxMaterial = function(params){
 	uniforms.directionalLightShadowMap = THREE.PixelBox.prototype.material.uniforms.directionalLightShadowMap;
 	uniforms.spotLightShadowMap = THREE.PixelBox.prototype.material.uniforms.spotLightShadowMap;
 	
-	Object.defineProperty(material, 'color', {
+	Object.defineProperty(material, 'tint', {
 		get: function(){ return this.uniforms.tintColor.value; },
 		set: function(v){ this.uniforms.tintColor.value.copy(v); },
+	});
+	Object.defineProperty(material, 'addColor', {
+		get: function(){ return this.uniforms.addColor.value; },
+		set: function(v){ this.uniforms.addColor.value.copy(v); },
 	});
 	Object.defineProperty(material, 'alpha', {
 		get: function(){ return this.uniforms.tintAlpha.value; },
@@ -900,6 +907,10 @@ THREE.MeshPixelBoxMaterial = function(params){
 	Object.defineProperty(material, 'brightness', {
 		get: function(){ return this.uniforms.brightness.value; },
 		set: function(v){ this.uniforms.brightness.value = v; },
+	});
+	Object.defineProperty(material, 'stipple', {
+		get: function(){ return this.uniforms.stipple.value; },
+		set: function(v){ this.uniforms.stipple.value = v; },
 	});
 	
 	return material;	
@@ -1163,11 +1174,12 @@ THREE.PixelBox.prototype.updateViewPortUniform = function(event){
 	renderer.scene.scene.updateMatrixWorld(true);
 	camWorldScale.setFromMatrixScale(cam.matrixWorld);
 	// perspective camera
-	if(cam.fov){
-		THREE.PixelBox.prototype['material'].uniforms.viewPortScale.value = renderer.webgl.domElement.height / (2 * Math.tan(0.5 * cam.fov * Math.PI / 180.0)) / camWorldScale.x;
+	if(cam instanceof THREE.PerspectiveCamera){
+		THREE.PixelBox.prototype['material'].uniforms.viewPortScale.value = (renderer.webgl.domElement.height / (2 * Math.tan(0.5 * cam.fov * Math.PI / 180.0))) / camWorldScale.x;
 	// ortho
 	} else {
-		THREE.PixelBox.prototype['material'].uniforms.viewPortScale.value = 1.0 / camWorldScale.x;
+		var h = cam.zoom * renderer.webgl.domElement.height / (cam.top * 2);
+		THREE.PixelBox.prototype['material'].uniforms.viewPortScale.value = h / camWorldScale.x;
 	}
 };
 $(window).on('resize.PixelBox', THREE.PixelBox.prototype.updateViewPortUniform);
@@ -1493,7 +1505,7 @@ THREE.PointCloud.prototype.gotoAndStop = function(animName, positionWithinAnimat
 	
 	// current anim
 	this.currentAnimation = anim;
-	this.currentAnimationPosition = (positionWithinAnimation < 1.0 ? positionWithinAnimation : (positionWithinAnimation / anim.length));
+	this.currentAnimationPosition = (positionWithinAnimation < 1.0 ? positionWithinAnimation : ((positionWithinAnimation / anim.length) % 1.0));
 	this._animLoops = -1;	
 
 	// anim meta
@@ -2034,8 +2046,15 @@ THREE.PointCloud.prototype.pixelBoxRaycast = ( function () {
 
 THREE.PointCloud.prototype.encodeRawFrame = function(dataObject, frameNumber){
 	var obj = {p:new Array(), n:new Array(), c:new Array(), o:new Array()};
+	var ff = this.geometry.data.frameData[0];
 	var fd = this.geometry.data.frameData[frameNumber];
-	var total = fd.o.length;
+	var fdc = (fd.l ? ff.c : fd.c);
+	var fdp = (fd.l ? ff.p : fd.p);
+	var fdn = (fd.l ? ff.n : fd.n);
+	var fdo = (fd.l ? ff.o : fd.o);
+	
+	var start = (fd.s ? fd.s : 0);
+	var end = start + (fd.l ? fd.l : ff.o.length);
 	
 	var trunc = function(number) {
 	  var places = 4;
@@ -2043,12 +2062,12 @@ THREE.PointCloud.prototype.encodeRawFrame = function(dataObject, frameNumber){
 	  return ((number * shift) | 0) / shift;
 	};
 	
-	for(var i = 0; i < total; i++){
+	for(var i = start; i < end; i++){
 		if(fd.c.array[i * 4 + 3] > 0){
-			obj.c.push(trunc(fd.c.array[i * 4]), trunc(fd.c.array[i * 4 + 1]), trunc(fd.c.array[i * 4 + 2]), trunc(fd.c.array[i * 4 + 3]));
-			obj.p.push(fd.p.array[i * 3] - this.geometry.data.width * 0.5, fd.p.array[i * 3 + 1] - this.geometry.data.height * 0.5, fd.p.array[i * 3 + 2] - this.geometry.data.depth * 0.5);
-			obj.n.push(trunc(fd.n.array[i * 3]), trunc(fd.n.array[i * 3 + 1]), trunc(fd.n.array[i * 3 + 2]));
-			obj.o.push(trunc(fd.o.array[i]));
+			obj.c.push(trunc(fdc.array[i * 4]), trunc(fdc.array[i * 4 + 1]), trunc(fdc.array[i * 4 + 2]), trunc(fdc.array[i * 4 + 3]));
+			obj.p.push(fdp.array[i * 3] - this.geometry.data.width * 0.5, fdp.array[i * 3 + 1] - this.geometry.data.height * 0.5, fdp.array[i * 3 + 2] - this.geometry.data.depth * 0.5);
+			obj.n.push(trunc(fdn.array[i * 3]), trunc(fdn.array[i * 3 + 1]), trunc(fdn.array[i * 3 + 2]));
+			obj.o.push(trunc(fdo.array[i]));
 		}
 	}
 	dataObject.frames[frameNumber] = obj;

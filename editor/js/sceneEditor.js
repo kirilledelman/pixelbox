@@ -1,24 +1,24 @@
 /*
 
 
-	screenshot or test scene mode (maybe select camera, Test Scene button in props?)
-
 	Properties:
 
-		Object3D
-			set to camera | set from camera
-		
-		PixelBox:
-		Animation (dropdown) playAnim, loopAnim, gotoAndStop (Animation list dropdown) (frame spinner)
-		...
-		[Swap Asset]
-		
-		
+
 	Object type - instance of template	
 		dynamic updates when template is edited
+	* Global instance refreshing can occur on selection change, if any objects selected are or descendents of instances
+		
+	When renaming objects, if instance, don't allow duplicate names globally
+	
+	custom properties def.props
+		
 	
 		
-	TODO:
+		
+		
+		
+	NEXT:
+	
 	
 	Meta field for all objects
 	"custom" objects (Container)
@@ -27,11 +27,14 @@
 	
 	make transform(max scale) affect pointSize
 	
+	? camera FOV / updateViewPortUniform code is incorrect
+	
 	? Camera default + template
 			
-	? copy, paste when asset has been deleted
 
 	LATER:
+
+	[Swap Asset]
 
 	add under View:
 		[x] Show labels
@@ -124,9 +127,6 @@ EditSceneScene.prototype = {
 		var undo1 = this._undo[this._undo.length - 1];
 		var undo2 = this._undo[this._undo.length - 2];
 		if(undo1.mergeable && undo2.mergeable && undo1.name == undo2.name){
-			// common
-			undo2.redo = undo1.redo;
-			
 			// merge to undo2
 			switch(undo1.name){
 			case 'moveBy':
@@ -135,16 +135,24 @@ EditSceneScene.prototype = {
 			case 'rotateTo':
 			case 'scaleBy':
 			case 'scaleTo':
+			case 'cameraFOV':
+			case 'cameraZoom':
 				// compare operands
 				if(undo1.redo[1].length != undo2.redo[1].length) return;
 				for(var i = 0; i < undo1.redo[1].length; i++){
-					if(undo1.redo[1][i][0] != undo2.redo[1][i][0]) return;
+					if(undo1.redo[1][i][0] != undo2.redo[1][i][0]) {
+						return;
+					}
 				}
+				break;
+			default:
+				console.log("merged undo type without checing args: "+undo1.name);
 				break;
 			// case 'sceneMaxShadows':
 			}
 			
-			// remove undo1
+			// merge and remove undo1
+			undo2.redo = undo1.redo;
 			this._undo.pop(); 
 		}
 	},
@@ -187,12 +195,12 @@ EditSceneScene.prototype = {
 		
 		// update helpers
 		if(this.container) {
-			this.container.traverse(function(obj){ 
-				if(obj.helper) {
-					obj.updateMatrixWorld(true);
-					obj.helper.update();
+			for(var i = 0, l = this.scene.children.length; i < l; i++){
+				var obj = this.scene.children[i];
+				if(obj.isHelper) {
+					obj.update();
 				}
-			});
+			}
 		}
 	},
 	
@@ -771,6 +779,8 @@ EditSceneScene.prototype = {
 
 	/* used during loading */
 	populateObject: Scene.prototype.populateObject,
+
+	linkObjects: Scene.prototype.linkObjects,
 	
 	getObjectFromPool:function(){ return null; },
 	
@@ -1075,13 +1085,14 @@ EditSceneScene.prototype = {
 		
 		// populate
 		var opts = { helpers: true, keepSceneCamera:true, noNameReferences: true, templates: dataObject.templates };
-		this.populateObject(this.container, dataObject.layers, opts);
+		var addedObjects = this.populateObject(this.container, dataObject.layers, opts);
 		if(dataObject.containsTemplates){
 			for(var ti = 0; ti < dataObject.containsTemplates.length; ti++){
 				var td = dataObject.templates[dataObject.containsTemplates[ti]];
 				if(td) this.populateObject(this.container, [ dataObject.templates[dataObject.containsTemplates[ti]] ], opts);
 			}
 		}
+		this.linkObjects(addedObjects, this.container);
 		this.updateLights = true;
 		
 		// clear undo queue
@@ -1357,22 +1368,8 @@ EditSceneScene.prototype = {
 						newObj.stipple = 0;
 					}
 					if(layer.animSpeed != undefined) newObj.animSpeed = layer.animSpeed;
-					if(layer.gotoAndStop != undefined){
-						if(_.isArray(layer.gotoAndStop)){
-							newObj.gotoAndStop(layer.gotoAndStop[0], layer.gotoAndStop[1]);
-						} else if(typeof(layer.gotoAndStop) == 'string'){
-							newObj.gotoAndStop(layer.gotoAndStop, 0);
-						} else {
-							newObj.frame = layer.gotoAndStop;
-						}
-					}
-					if(layer.loopAnim != undefined) newObj.loopAnim(layer.loopAnim,Infinity,true);
-					if(layer.loopFrom != undefined) { 
-						newObj.gotoAndStop(layer.loopFrom[0], layer.loopFrom[1]); 
-						newObj.loopAnim(layer.loopFrom[0],Infinity,true);
-					}
-					if(layer.playAnim != undefined) { 
-						newObj.playAnim(layer.playAnim);
+					if(newObj instanceof THREE.PointCloud && layer.animOption != undefined){
+						editScene.pixelboxApplyAnimationParams(newObj);
 					}					
 					
 					// add to same parent
@@ -1628,7 +1625,7 @@ EditSceneScene.prototype = {
 		if(!sceneRow.length){
 		 	sceneRow = $('<div class="row" id="scene"><div class="selection"/><div class="droptarget"/><a class="toggle">-</a><label/></div>');
 		 	list.append(sceneRow);
- 			sceneRow.click(editScene.objectRowClicked);
+ 			sceneRow.click(this.objectRowClicked);
  			list.disableSelection();
 		} else {
 			sceneRow.children('div.row').detach();
@@ -1659,7 +1656,7 @@ EditSceneScene.prototype = {
 				if(obj3d.isPlaceholder) obj3d.htmlRow.addClass('missing');
 				
 				// click
-				obj3d.htmlRow.click(editScene.objectRowClicked);
+				obj3d.htmlRow.click(editScene.objectRowClicked).dblclick(editScene.objectRowDoubleClicked);
 				
 				// draggable
 				if(!obj3d.isAnchor) { 
@@ -1815,6 +1812,22 @@ EditSceneScene.prototype = {
 		list.animate({ scrollTop:p }, 250);
 	},
 	
+	objectRowDoubleClicked:function(e){
+		// find object
+		var targ = $(e.target);
+		var row = targ.closest('.row');
+		var rid = row.attr('id');
+		var uuid = rid.substr(4);
+		
+		if(targ.hasClass('toggle')){ return; }
+		
+		// find object
+		var object = (rid == 'scene') ? editScene.container : editScene.container.getObjectByUUID(uuid);
+		
+		if(object) {
+			editScene.controls.focus(object, true);
+		}
+	},
 	objectRowClicked:function(e){
 		// find object
 		var targ = $(e.target);
@@ -1847,7 +1860,11 @@ EditSceneScene.prototype = {
 			return;			
 		}
 		
-		if(rid == 'scene') return;
+		if(rid == 'scene') {
+			editScene.deselectAll();
+			editScene.refreshProps();
+			return;
+		}
 		
 		// find object
 		var object = editScene.container.getObjectByUUID(uuid);
@@ -2930,12 +2947,13 @@ EditSceneScene.prototype = {
 			} else {
 				obj[prop] = val;
 			}
-			if(obj instanceof THREE.PerspectiveCamera){
+			if(obj instanceof THREE.Camera){
 				obj.updateProjectionMatrix();				
 			}
 			if(obj.helper) obj.helper.update();
 		}
 	},
+	
 	cameraFovChanged:function(val){
 		var doArr = [];
 		var undoArr = [];
@@ -2946,6 +2964,21 @@ EditSceneScene.prototype = {
 			undoArr.push([obj, obj[prop]]);
 		}
 		editScene.addUndo({name:"cameraFOV", mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
+											redo:[editScene.setObjectProperty, doArr, prop]});
+		editScene.setObjectProperty(doArr, prop);
+	},
+
+	cameraZoomChanged:function(val){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'zoom';
+		val *= 0.01;
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj[prop]]);
+		}
+		editScene.addUndo({name:"cameraZoom", mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
 											redo:[editScene.setObjectProperty, doArr, prop]});
 		editScene.setObjectProperty(doArr, prop);
 	},
@@ -3228,24 +3261,52 @@ EditSceneScene.prototype = {
 		editScene.setObjectProperty(doArr, prop);
 	},
 	
-/*
-		vc = valueChanged(this.pixelboxPointSizeChanged);
-		$('#pixelbox-pointSize').spinner({step:0.1, min:0, change:vc, stop:vc});
-		vc = valueChanged(this.pixelboxStippleChanged);
-		$('#pixelbox-stipple').spinner({step:1, min:0, max:2, change:vc, stop:vc});
-		vc = valueChanged(this.pixelboxAlphaChanged);
-		$('#pixelbox-alpha').spinner({step:0.1, min:0, max:1, change:vc, stop:vc});
-		vc = valueChanged(this.pixelboxOcclusionChanged);
-		$('#pixelbox-occlusion').spinner({step:0.1, min:0, max:1, change:vc, stop:vc});
-		//$('#pixelbox-cullBack').click(this.pixelboxCullBackChanged);
-		$('#panel-pixelbox input[name=pixelbox-anim]').click(this.pixelboxAnimTypeChanged);
-		vc = valueChanged(this.pixelboxStartFrameChanged);
-		$('#pixelbox-animFrame').spinner({step:1, min:0, change:vc, stop:vc});
-		//$('#pixelbox-animName').change(this.pixelboxAnimNameChanged);
-		//editScene.pixelboxSetTint(parseInt(hex,16)); //pixelboxSetAddColor
-*/
-
 /* ------------------- ------------------- ------------------- ------------------- ------------------- PixelBox panel */
+
+	setAnimProperty:function(arr, prop){
+		for(var i = 0; i < arr.length; i++){
+			var obj = arr[i][0];
+			var val = arr[i][1];
+			if(prop == 'animSpeed'){
+				obj[prop] = val;
+			} else {
+				obj.def[prop] = val;
+			}
+			this.pixelboxApplyAnimationParams(obj);
+		}		
+	},
+	
+	restartAllAnims:function(){
+		editScene.container.traverseVisible(function(obj){
+			if(obj instanceof THREE.PointCloud){
+				obj.stopAnim();
+				obj.frame = 0;
+				editScene.pixelboxApplyAnimationParams(obj);
+			}
+		});
+	},
+	
+	pixelboxApplyAnimationParams:function(obj3d){
+		var layer = obj3d.def;
+		if(layer.animName != undefined && obj3d.animNamed(layer.animName) != undefined){
+			var animOption = layer.animOption ? layer.animOption : 'gotoAndStop';
+			var animFrame = layer.animFrame != undefined ? layer.animFrame : 0;
+			
+			if(animOption == 'loopAnim'){
+				obj3d.loopAnim(layer.animName, Infinity, false);
+			} else if(animOption == 'loopFrom') { 
+				obj3d.gotoAndStop(layer.animName, animFrame + 1); 
+				obj3d.loopAnim(layer.animName, Infinity, true);
+			} else if(animOption == 'playAnim') { 
+				obj3d.playAnim(layer.animName);
+			} else {
+				obj3d.gotoAndStop(layer.animName, animFrame);
+			}
+		} else {
+			obj3d.stopAnim();
+			obj3d.frame = layer.animFrame != undefined ? layer.animFrame : 0;
+		}
+	},
 
 	pixelboxPointSizeChanged:function(val){
 		var doArr = [];
@@ -3259,6 +3320,7 @@ EditSceneScene.prototype = {
 		editScene.addUndo({name:prop, mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
 											redo:[editScene.setObjectProperty, doArr, prop]});
 		editScene.setObjectProperty(doArr, prop);
+		editScene.refreshProps();
 	},
 
 	pixelboxStippleChanged:function(val){
@@ -3273,6 +3335,7 @@ EditSceneScene.prototype = {
 		editScene.addUndo({name:'pixelBoxStipple', mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
 											redo:[editScene.setObjectProperty, doArr, prop]});
 		editScene.setObjectProperty(doArr, prop);
+		editScene.refreshProps();
 	},
 
 	pixelboxAlphaChanged:function(val){
@@ -3287,6 +3350,7 @@ EditSceneScene.prototype = {
 		editScene.addUndo({name:'pixelBoxAlpha', mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
 											redo:[editScene.setObjectProperty, doArr, prop]});
 		editScene.setObjectProperty(doArr, prop);
+		editScene.refreshProps();
 	},
 
 	pixelboxOcclusionChanged:function(val){
@@ -3301,6 +3365,7 @@ EditSceneScene.prototype = {
 		editScene.addUndo({name:prop, mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
 											redo:[editScene.setObjectProperty, doArr, prop]});
 		editScene.setObjectProperty(doArr, prop);
+		editScene.refreshProps();
 	},
 
 	pixelboxCullBackChanged:function(e){
@@ -3316,15 +3381,69 @@ EditSceneScene.prototype = {
 		editScene.addUndo({name:prop, mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
 											redo:[editScene.setObjectProperty, doArr, prop]});
 		editScene.setObjectProperty(doArr, prop);
+		editScene.refreshProps();
 	},
 
-	pixelboxAnimTypeChanged:function(val){
+	pixelboxAnimSpeedChanged:function(val){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'animSpeed';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj[prop]]);
+		}
+		editScene.addUndo({name:prop, mergeable:true, undo:[editScene.setAnimProperty, undoArr, prop],
+											redo:[editScene.setAnimProperty, doArr, prop]});
+		editScene.setAnimProperty(doArr, prop);
+		editScene.refreshProps();
+	},
+	
+	pixelboxAnimTypeChanged:function(e){
+		var val = $('#panel-pixelbox input[name=pixelbox-animOption]:checked').val();
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'animOption';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj[prop]]);
+		}
+		editScene.addUndo({name:prop, mergeable:true, undo:[editScene.setAnimProperty, undoArr, prop],
+											redo:[editScene.setAnimProperty, doArr, prop]});
+		editScene.setAnimProperty(doArr, prop);
+		editScene.refreshProps();
 	},
 
 	pixelboxStartFrameChanged:function(val){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'animFrame';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj[prop]]);
+		}
+		editScene.addUndo({name:prop, mergeable:true, undo:[editScene.setAnimProperty, undoArr, prop],
+											redo:[editScene.setAnimProperty, doArr, prop]});
+		editScene.setAnimProperty(doArr, prop);
+		editScene.refreshProps();
 	},
 	
-	pixelboxAnimNameChanged:function(val){
+	pixelboxAnimNameChanged:function(e){
+		var val = $('#pixelbox-animName')[0].value;
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'animName';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj[prop]]);
+		}
+		editScene.addUndo({name:prop, mergeable:true, undo:[editScene.setAnimProperty, undoArr, prop],
+											redo:[editScene.setAnimProperty, doArr, prop]});
+		editScene.setAnimProperty(doArr, prop);
+		editScene.refreshProps();
 	},
 
 	pixelboxSetTint:function(val){//int
@@ -3340,6 +3459,7 @@ EditSceneScene.prototype = {
 		editScene.addUndo({name:"tint", undo:[editScene.setObjectProperty, undoArr, prop],
 											redo:[editScene.setObjectProperty, doArr, prop]});
 		editScene.setObjectProperty(doArr, prop);
+		editScene.refreshProps();
 	},
 
 	pixelboxSetAddColor:function(val){//int
@@ -3355,13 +3475,106 @@ EditSceneScene.prototype = {
 		editScene.addUndo({name:"addColor", undo:[editScene.setObjectProperty, undoArr, prop],
 											redo:[editScene.setObjectProperty, doArr, prop]});
 		editScene.setObjectProperty(doArr, prop);
+		editScene.refreshProps();
+	},
+
+
+/* ------------------- ------------------- ------------------- ------------------- ------------------- Geometry panel */
+
+	setMaterialProperty:function(arr, prop){
+		for(var i = 0; i < arr.length; i++){
+			var obj = arr[i][0];
+			var val = arr[i][1];
+			if(obj.material[prop] instanceof THREE.Color){
+				obj.material[prop].set(val);
+			} else {
+				obj.material[prop] = val;
+			}
+		}		
+	},
+
+	geometryStippleChanged:function(val){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'stipple';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj[prop]]);
+		}
+		editScene.addUndo({name:'geometryStipple', mergeable:true, undo:[editScene.setMaterialProperty, undoArr, prop],
+											redo:[editScene.setMaterialProperty, doArr, prop]});
+		editScene.setMaterialProperty(doArr, prop);
+		editScene.refreshProps();
+	},
+
+	geometryAlphaChanged:function(val){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'alpha';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj[prop]]);
+		}
+		editScene.addUndo({name:'geometryStipple', mergeable:true, undo:[editScene.setMaterialProperty, undoArr, prop],
+											redo:[editScene.setMaterialProperty, doArr, prop]});
+		editScene.setMaterialProperty(doArr, prop);
+		editScene.refreshProps();
+	},
+
+	geometryBrightnessChanged:function(val){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'brightness';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj[prop]]);
+		}
+		editScene.addUndo({name:'brightness', mergeable:true, undo:[editScene.setMaterialProperty, undoArr, prop],
+											redo:[editScene.setMaterialProperty, doArr, prop]});
+		editScene.setMaterialProperty(doArr, prop);
+		editScene.refreshProps();
+	},
+
+	setGeometryTint:function(val){//int
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'tint';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj.storedColor]);
+			obj.storedColor = val;
+		}
+		editScene.addUndo({name:"tint", undo:[editScene.setMaterialProperty, undoArr, prop],
+											redo:[editScene.setMaterialProperty, doArr, prop]});
+		editScene.setMaterialProperty(doArr, prop);
+		editScene.refreshProps();
+	},
+	
+	setGeometryAddColor:function(val){//int
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'addColor';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj.storedColor]);
+			obj.storedColor = val;
+		}
+		editScene.addUndo({name:"addColor", undo:[editScene.setMaterialProperty, undoArr, prop],
+											redo:[editScene.setMaterialProperty, doArr, prop]});
+		editScene.setMaterialProperty(doArr, prop);
+		editScene.refreshProps();
 	},
 
 /* ------------------- ------------------- ------------------- ------------------- ------------------- Properties panel */
 
 	previewScene:function(e){
 	 	var loadScene = editScene.exportScene(true, false);
-	 	
+	 	console.log(JSON.parse(loadScene));
 		if(chrome && chrome.storage){
 			chrome.app.window.create('editor/preview.html', { 
 				outerBounds: {
@@ -3393,17 +3606,15 @@ EditSceneScene.prototype = {
 			$('#scene-max-shadows').val(this.doc.maxShadows != undefined ? this.doc.maxShadows : 0).data('prevVal', $('#scene-max-shadows').val().toString());
 			$('#scene-fog-near').val(this.doc.fogNear != undefined ? this.doc.fogNear : this.scene.fog.near).data('prevVal', $('#scene-fog-near').val().toString());
 			$('#scene-fog-far').val(this.doc.fogFar != undefined ? this.doc.fogFar : this.scene.fog.far).data('prevVal', $('#scene-fog-far').val().toString());
-			$('#test-scene').show();
 			return;
 		}
-		$('#test-scene').hide();
 		$('#prop-name').attr('placeholder','Object name');
 		$('#prop-object-type').text('');
 		$('#panel-move').show();
 
-		$('#editor-props input[type=checkbox].multiple,#panel-pixelbox input[name=pixelbox-anim].multiple').removeClass('multiple').removeAttr('checked');
+		$('#editor-props input[type=checkbox].multiple,#panel-pixelbox input[name=pixelbox-animOption].multiple').removeClass('multiple').removeAttr('checked');
 		
-		$('#pixelbox-animName').empty();
+		$('#pixelbox-animName').empty().append('<option value=""/>');
 		
 		var prevObj = null;
 		var mults = {};
@@ -3412,13 +3623,28 @@ EditSceneScene.prototype = {
 		var containsPointClouds = false;
 		var containsInstances = false;
 		var containsCameras = false;
-		var containsPlanes = false;
+		var containsGeometry = false;
 		var containsSpotLights = false;
 		var containsDirLights = false;
 		var containsHemiLights = false;
 		var containsPointLights = false;
 		var radToDeg = 180 / Math.PI;
 		var commonType = null;
+			
+		function getType(o){
+			if(o.def){
+				switch(o.def.asset){
+				case 'Camera':
+				case 'OrthographicCamera':
+					return 'Camera';
+				default:
+					return (o instanceof THREE.PointCloud) ? 'PixelBox' : o.def.asset;
+				}
+			} else if(o.isAnchor){
+				return 'Anchor';
+			}
+			return null;
+		}	
 			
 		for(var i = 0; i < this.selectedObjects.length; i++){
 			var obj = this.selectedObjects[i];
@@ -3436,23 +3662,24 @@ EditSceneScene.prototype = {
 			containsPointClouds = containsPointClouds | (obj instanceof THREE.PointCloud);
 			containsInstances = containsInstances | (obj.isInstance);
 			containsCameras = containsCameras | (obj instanceof THREE.Camera);
-			containsPlanes = containsPlanes | (obj instanceof THREE.Mesh);
+			containsGeometry = containsGeometry | (obj instanceof THREE.Mesh);
 			containsSpotLights = containsSpotLights | (obj instanceof THREE.SpotLight);
 			containsDirLights = containsDirLights | (obj instanceof THREE.DirectionalLight);
 			containsHemiLights = containsHemiLights | (obj instanceof THREE.HemisphereLight);
 			containsPointLights = containsPointLights | (obj instanceof THREE.PointLight);
 			
 			// type
-			var type = (obj.isAnchor ? 'Anchor' : (obj instanceof THREE.PointCloud ? 'PixelBox' : obj.def.asset));
-			var prevType = (prevObj ? (prevObj.isAnchor ? 'Anchor' : (prevObj instanceof THREE.PointCloud ? 'PixelBox' : prevObj.def.asset)) : type);
+			var type = getType(obj);
+			var prevType = prevObj ? getType(prevObj) : null;
+			
 			if(prevObj && prevType != type){
 				$('#prop-object-type').text('Multiple types');
 				mults['type'] = true;
 				commonType = null;
 			} else if(!mults['type']){
-				$('#prop-object-type').text(type);
+				$('#prop-object-type').text(this.selectedObjects.length > 1 ? type : (obj.isAnchor ? 'Anchor' : ((obj instanceof THREE.PointCloud) ? 'PixelBox' : obj.def.asset)));
 				commonType = type;
-			}
+			} 
 			
 			// visible
 			if(prevObj && prevObj.visible != obj.visible){
@@ -3552,6 +3779,12 @@ EditSceneScene.prototype = {
 					var newVal = obj.fov;
 					$('#cam-fov').attr('placeholder','').val(newVal).data('prevVal', newVal);
 				}
+				if(prevObj && prevObj.zoom != obj.zoom){
+					$('#cam-zoom').attr('placeholder','M').val('').data('prevVal',''); mults['cam-zoom'] = true;
+				} else if(!mults['cam-zoom']){
+					var newVal = Math.floor(obj.zoom * 100);
+					$('#cam-zoom').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}
 				if(prevObj && prevObj.near != obj.near){
 					$('#cam-near').attr('placeholder','M').val('').data('prevVal',''); mults['cam-near'] = true;
 				} else if(!mults['cam-near']){
@@ -3567,6 +3800,17 @@ EditSceneScene.prototype = {
 				if(this.selectedObjects.length == 1){
 					$('#cam-default')[0].checked = !!obj.isDefault;
 				}
+				if(prevObj && prevObj.def.asset != obj.def.asset){
+					mults['cam-type'] = true;
+					$('#cam-fov,label[for=cam-fov],#cam-zoom,label[for=cam-zoom]').hide();
+				} else if(!mults['cam-type'] && obj.def.asset == 'Camera'){
+					$('#cam-fov,label[for=cam-fov]').show();
+					$('#cam-zoom,label[for=cam-zoom]').hide();
+				} else if(!mults['cam-type'] && obj.def.asset == 'OrthographicCamera'){
+					$('#cam-fov,label[for=cam-fov]').hide();
+					$('#cam-zoom,label[for=cam-zoom]').show();
+				}
+
 			} else 
 			
 			// lights
@@ -3650,7 +3894,42 @@ EditSceneScene.prototype = {
 					var newVal = notNaN(parseFloat(obj.shadowMapHeight));
 					$('#light-shadow-map-height').attr('placeholder','').val(newVal).data('prevVal', newVal);
 				}
-
+				if(prevObj && prevObj.target && obj.target && prevObj.target != obj.target){
+					$('#light-target').attr('placeholder','M').val('').data('prevVal',''); mults['light-target'] = true;
+				} else if(obj.target && !mults['light-target']){
+					var newVal = obj.target.name ? obj.target.name : '';
+					$('#light-target').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}
+			} else 
+			if(commonType == 'Geometry'){
+				if(prevObj && prevObj.material.stipple != obj.material.stipple){
+					$('#geometry-stipple').attr('placeholder','M').val('').data('prevVal',''); mults['geometry-stipple'] = true;
+				} else if(!mults['geometry-stipple']){
+					var newVal = obj.material.stipple;
+					$('#geometry-stipple').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}
+				if(prevObj && prevObj.material.alpha != obj.material.alpha){
+					$('#geometry-alpha').attr('placeholder','M').val('').data('prevVal',''); mults['geometry-alpha'] = true;
+				} else if(!mults['geometry-alpha']){
+					var newVal = obj.material.alpha;
+					$('#geometry-alpha').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}
+				if(prevObj && prevObj.material.brightness != obj.material.brightness){
+					$('#geometry-brightness').attr('placeholder','M').val('').data('prevVal',''); mults['geometry-brightness'] = true;
+				} else if(!mults['geometry-occlusion']){
+					var newVal = obj.material.brightness;
+					$('#geometry-brightness').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}
+				if(prevObj && prevObj.material.tint.getHex() != obj.material.tint.getHex()){
+					$('#geometry-tint').css({backgroundColor:'transparent'}); mults['geometry-tint'] = true;
+				} else if(!mults['geometry-tint']){
+					$('#geometry-tint').css({backgroundColor:'#'+obj.material.tint.getHexString()});
+				}
+				if(prevObj && prevObj.material.addColor.getHex() != obj.material.addColor.getHex()){
+					$('#geometry-addColor').css({backgroundColor:'transparent'}); mults['geometry-addColor'] = true;
+				} else if(!mults['geometry-addColor']){
+					$('#geometry-addColor').css({backgroundColor:'#'+obj.material.addColor.getHexString()});
+				}
 			} else 
 			if(commonType == 'PixelBox'){
 				if(prevObj && prevObj.pointSize != obj.pointSize){
@@ -3684,11 +3963,17 @@ EditSceneScene.prototype = {
 					$('#pixelbox-cullBack')[0].checked = obj.cullBack;
 				}
 				if(prevObj && prevObj.def['animOption'] != obj.def['animOption']){
-					$('#panel-pixelbox input[name=pixelbox-anim]').addClass('multiple').attr('checked',false);
+					$('#panel-pixelbox input[name=pixelbox-animOption]').addClass('multiple').attr('checked',false);
 					mults['animOption'] = true;
 				} else if(!mults['animOption']){
 					var animOption = obj.def['animOption'] ? obj.def['animOption'] : 'gotoAndStop';
 					$('#panel-pixelbox input[value='+animOption+']')[0].checked = true;
+				}
+				if(prevObj && prevObj.animSpeed != obj.animSpeed){
+					$('#pixelbox-animSpeed').attr('placeholder','M').val('').data('prevVal',''); mults['animSpeed'] = true;
+				} else if(!mults['animSpeed']){
+					var newVal = obj.animSpeed;
+					$('#pixelbox-animSpeed').attr('placeholder','').val(newVal).data('prevVal', newVal);
 				}
 				
 				// add anims to anim name box
@@ -3703,10 +3988,10 @@ EditSceneScene.prototype = {
 				if(prevObj && (prevObj.def['animName'] != obj.def['animName'])){
 					mults['animName'] = true;
 				} else if(!mults['animName']){
-					var animNames = _.keys(obj.asset.anims);
-					if(!animNames.length) animNames = ['default'];
-					var animName = obj.def['animName'] ? obj.def['animName'] : animNames[0];
-					$('#pixelbox-animName[value='+animName+']').attr('checked',true);
+					var animName = obj.def['animName'];
+					if(animName != undefined && obj.animNamed(animName)){
+						$('#pixelbox-animName').val(animName);
+					}
 				}			
 				if(prevObj && prevObj.def['animFrame'] != obj.def['animFrame']){
 					$('#pixelbox-animFrame').attr('placeholder','M').val('').data('prevVal',''); mults['animFrame'] = true;
@@ -3731,10 +4016,17 @@ EditSceneScene.prototype = {
 			prevObj = obj;
 		}
 		
-		// show camera panel
 		if(commonType == 'Camera'){
 			$('#panel-camera').show();
-			$('#cam-default,#cam-default~label').css({ visibility: (this.selectedObjects.length != 1) ? 'hidden' : 'visible'});
+			if(this.selectedObjects.length != 1) {
+				$('#cam-default,#cam-default~label:first').attr('disabled', 'disabled').addClass('multiple').removeAttr('checked');
+			} else {
+				$('#cam-default,#cam-default~label:first').removeAttr('disabled').removeClass('multiple');
+			}			
+		}
+		
+		if(commonType == 'Geometry'){
+			$('#panel-geometry').show();
 		}
 		
 		if(commonType == 'PixelBox'){
@@ -3745,7 +4037,7 @@ EditSceneScene.prototype = {
 		}
 		
 		if((containsDirLights || containsHemiLights || containsPointLights || containsSpotLights) &&
-			!(containsAnchors || containsCameras || containsContainers || containsInstances || containsPlanes || containsPointClouds)){
+			!(containsAnchors || containsCameras || containsContainers || containsInstances || containsGeometry || containsPointClouds)){
 			$('#panel-light').show();
 			
 			$('#light-distance,#light-exponent,#light-angle').spinner('enable');
@@ -3758,7 +4050,11 @@ EditSceneScene.prototype = {
 			}
 			if(containsDirLights) $('#light-distance').spinner('disable');
 			if(containsSpotLights) $('#light-shadow-vol-width,#light-shadow-vol-height').spinner('disable');
-
+			if((containsDirLights || containsSpotLights) && !(containsHemiLights || containsPointLights)){
+				$('#light-target').show();
+			} else {
+				$('#light-target').hide();
+			}
 		}
 		
 		// disable move if anchors selected
@@ -3773,12 +4069,7 @@ EditSceneScene.prototype = {
 		}
 		
 		// only hemi lights have ground color
-		if(containsHemiLights){
-			$('#light-ground-color').css({visibility: ((containsSpotLights || containsDirLights || containsPointLights) ? 'hidden' : 'visible')});
-		} else {
-			$('#light-ground-color').css({visibility: 'hidden'});
-		}
-		
+		$('#light-ground-color').css({display: ((containsSpotLights || containsDirLights || containsPointLights) ? 'none' : 'inline-block')});
 		
 		if(this.selectedObjects.length == 1){
 			$('#obj-from-cam').removeAttr('disabled');
@@ -3879,7 +4170,6 @@ EditSceneScene.prototype = {
 		<div id="panel-common" class="panel">\
 			<label for="prop-name" class="w2">Name</label><input type="text" size="10" id="prop-name"/>\
 			<span id="prop-object-type">Nothing selected</span>\
-			&nbsp;<button id="test-scene">Preview</button>\
 		</div>\
 		<div class="panels">\
 			<div id="panel-move" class="panel"><h4>Object3D</h4>\
@@ -3896,10 +4186,10 @@ EditSceneScene.prototype = {
 			<label for="prop-z" class="w0 right-align">Z</label><input tabindex="2" type="text" class="center position" id="prop-z" size="1"/>\
 			<label for="prop-rz" class="w1 right-align">Rot Z</label><input tabindex="5" type="text" class="center rotation" id="prop-rz" size="1"/>\
 			<label for="prop-sz" class="w1 right-align">Scale Z</label><input tabindex="8" type="text" class="center scale" id="prop-sz" size="1"/><br/>\
-			<hr/><div class="sub">Store <a id="store-pos">position</a> <a id="store-rot">rotation</a> <a id="store-scale">scale</a><span class="separator-left"/><a id="restore-pos" disabled="disabled">restore</a>\
+			<hr/><div class="sub">Store <a id="store-pos">XYZ</a> <a id="store-rot">rotation</a> <a id="store-scale">scale</a><span class="separator-left"/><a id="restore-pos" disabled="disabled">restore</a>\
 			<span class="separator-left"/><a id="look-at">look at</a></div>\
-			<div class="sub">Clear <a id="clear-pos">position</a> <a id="clear-rot">rotation</a> <a id="clear-scale">scale</a>\
-			<span class="separator-left"/><a id="obj-from-cam">from cam</a><span class="separator-left"/><a id="obj-to-cam">to cam</a></div>\
+			<div class="sub">Clear <a id="clear-pos">XYZ</a> <a id="clear-rot">rotation</a> <a id="clear-scale">scale</a>\
+			<span class="separator-left"/><a id="obj-from-cam">from view</a><span class="separator-left"/><a id="obj-to-cam">to view</a></div>\
 			</div>\
 		</div>\
 		</div>');
@@ -3931,7 +4221,6 @@ EditSceneScene.prototype = {
 		$('#restore-pos').click(this.restorePosition.bind(this));
 		$('#obj-from-cam').click(this.transformObjectToCam.bind(this));
 		$('#obj-to-cam').click(this.transformCamToObject.bind(this));
-		$('#test-scene').button().hide().click(this.previewScene.bind(this));
 		
 // scene panel
 		$('#editor-props .panels').append('<div id="panel-scene" class="panel"><h4>Scene</h4>\
@@ -4013,12 +4302,15 @@ EditSceneScene.prototype = {
 		$('#editor-props .panels').append('<div id="panel-camera" class="panel"><h4>Camera</h4>\
 			<input tabindex="3" type="checkbox" id="cam-default"/><label for="cam-default" class="w3">Default camera</label>\
 			<hr/>\
-			<label for="cam-fov" class="w1 pad5 right-align">FOV</label><input tabindex="0" type="text" class="center" id="cam-fov" size="1"/><br/>\
+			<label for="cam-fov" class="w1 pad5 right-align">FOV</label><input tabindex="0" type="text" class="center" id="cam-fov" size="1"/>\
+			<label for="cam-zoom" class="w1 pad5 right-align">Zoom</label><input tabindex="0" type="text" class="center" id="cam-zoom" size="1"/><br/>\
 			<label for="cam-near" class="w1 pad5 right-align">Near</label><input tabindex="1" type="text" class="center" id="cam-near" size="2"/>\
 			<label for="cam-far" class="w1 pad5 right-align"> Far</label><input tabindex="2" type="text" class="center" id="cam-far" size="2"/><br/>\
 			</div>');
 		var vc = valueChanged(this.cameraFovChanged);
 		$('#cam-fov').spinner({step:5, min:1, max:180, change:vc, stop:vc});
+		var vc = valueChanged(this.cameraZoomChanged);
+		$('#cam-zoom').spinner({step:1, min:1, change:vc, stop:vc});
 		vc = valueChanged(this.cameraNearChanged);
 		$('#cam-near').spinner({step:10, min:0, change:vc, stop:vc});//
 		vc = valueChanged(this.cameraFarChanged);
@@ -4028,7 +4320,8 @@ EditSceneScene.prototype = {
 // Light panel
 		$('#editor-props .panels').append('<div id="panel-light" class="panel"><h4>Light</h4>\
 			<label class="w3 right-align pad5">Color</label><div id="light-color" class="color-swatch"/>&nbsp;\
-			<div id="light-ground-color" class="color-swatch"/><br/>\
+			<div id="light-ground-color" class="color-swatch"/>\
+			<label for="light-target" class="w3 right-align pad5">Target</label><input type="text" size="10" id="light-target" readonly="readonly"/><br/>\
 			<label for="light-intensity" class="w3 pad5 right-align">Intensity</label><input tabindex="0" type="text" class="center" id="light-intensity" size="2"/>\
 			<label for="light-shadow-near" class="w32 pad5 right-align">Shadow Near</label><input tabindex="0" type="text" class="center" id="light-shadow-near" size="2"/>\
 			<br/>\
@@ -4149,19 +4442,26 @@ EditSceneScene.prototype = {
 			<label for="pixelbox-pointSize" class="w32 pad5 right-align">Point size</label><input tabindex="0" type="text" class="center" id="pixelbox-pointSize" size="1"/>\
 			<label for="pixelbox-stipple" class="w32 pad5 right-align">Stipple</label><input tabindex="1" type="text" class="center" id="pixelbox-stipple" size="1"/><br/>\
 			<label for="pixelbox-alpha" class="w32 pad5 right-align">Alpha</label><input tabindex="2" type="text" class="center" id="pixelbox-alpha" size="1"/>\
-			<label for="pixelbox-occlusion" class="w32 pad5 right-align">Occlusion</label><input tabindex="3" type="text" class="center" id="pixelbox-occlusion" size="1"/><br/>\
+			<label for="pixelbox-occlusion" class="w32 pad5 right-align">Occlusion</label><input tabindex="3" type="text" class="center" id="pixelbox-occlusion" size="1"/><hr/>\
 			<label class="w32 right-align pad5">Color tint</label><div id="pixelbox-tint" class="color-swatch"/>\
-			<label class="w31 right-align pad5">Add</label><div id="pixelbox-add" class="color-swatch"/><br/>\
+			<label class="w31 right-align pad5">Add</label><div id="pixelbox-add" class="color-swatch"/><hr/>\
 			<input tabindex="4" type="checkbox" id="pixelbox-cullBack"/><label for="pixelbox-cullBack" class="w3">Cull backface</label>\
 			<hr/>\
-			<input type="radio" name="pixelbox-anim" tabindex="6" id="pixelbox-gotoAndStop" value="gotoAndStop"/><label for="pixelbox-gotoAndStop" class="w4 pad5">gotoAndStop</label>\
-			<input type="radio" name="pixelbox-anim" tabindex="7" id="pixelbox-playAnim" value="playAnim"/><label for="pixelbox-playAnim" class="w4 pad5">playAnim</label><br/>\
-			<input type="radio" name="pixelbox-anim" tabindex="8" id="pixelbox-loopAnim" value="loopAnim"/><label for="pixelbox-loopAnim" class="w4 pad5">loopAnim</label>\
-			<input type="radio" name="pixelbox-anim" tabindex="9" id="pixelbox-loopFrom" value="loopFrom"/><label for="pixelbox-loopFrom" class="w4 pad5">loopFrom</label><br/>\
-			<label class="w1 right-align pad5">Anim </label><select id="pixelbox-animName" tabindex="5"/>\
-			<label for="pixelbox-animFrame" class="w2 right-align pad5">Frame</label><input tabindex="10" class="center" type="text" id="pixelbox-animFrame" size="1"/>\
+			<label for="pixelbox-animSpeed" class="w4 pad5 right-align">Animation speed</label><input tabindex="5" type="text" class="center" id="pixelbox-animSpeed" size="1"/>\
+			<a id="anim-restart" class="sub float-right">restart all</a><br/>\
+			<input type="radio" name="pixelbox-animOption" tabindex="6" id="pixelbox-gotoAndStop" value="gotoAndStop"/>\
+			<label for="pixelbox-gotoAndStop" class="w32 pad5 left-align">gotoAndStop</label>\
+			<input type="radio" name="pixelbox-animOption" tabindex="7" id="pixelbox-playAnim" value="playAnim"/>\
+			<label for="pixelbox-playAnim" class="w32 pad5 left-align">playAnim</label><br/>\
+			<input type="radio" name="pixelbox-animOption" tabindex="8" id="pixelbox-loopAnim" value="loopAnim"/>\
+			<label for="pixelbox-loopAnim" class="w32 pad5 left-align">loopAnim</label>\
+			<input type="radio" name="pixelbox-animOption" tabindex="9" id="pixelbox-loopFrom" value="loopFrom"/>\
+			<label for="pixelbox-loopFrom" class="w32 pad5 left-align">loopFrom</label><br/>\
+			<label class="w1 right-align pad5">Anim </label><select id="pixelbox-animName" tabindex="10" class="w4"/>\
+			<label for="pixelbox-animFrame" class="w2 right-align pad5">Frame</label><input tabindex="11" class="center" type="text" id="pixelbox-animFrame" size="1"/>\
 			</div>');
 
+		$('#anim-restart').click(this.restartAllAnims);
 		vc = valueChanged(this.pixelboxPointSizeChanged);
 		$('#pixelbox-pointSize').spinner({step:0.1, min:0, change:vc, stop:vc});
 		vc = valueChanged(this.pixelboxStippleChanged);
@@ -4171,11 +4471,12 @@ EditSceneScene.prototype = {
 		vc = valueChanged(this.pixelboxOcclusionChanged);
 		$('#pixelbox-occlusion').spinner({step:0.1, min:0, max:1, change:vc, stop:vc});
 		$('#pixelbox-cullBack').click(this.pixelboxCullBackChanged);
-		$('#panel-pixelbox input[name=pixelbox-anim]').click(this.pixelboxAnimTypeChanged);
+		vc = valueChanged(this.pixelboxAnimSpeedChanged);
+		$('#pixelbox-animSpeed').spinner({step:0.1, change:vc, stop:vc});
+		$('#panel-pixelbox input[name=pixelbox-animOption]').click(this.pixelboxAnimTypeChanged);
 		vc = valueChanged(this.pixelboxStartFrameChanged);
 		$('#pixelbox-animFrame').spinner({step:1, min:0, change:vc, stop:vc});
 		$('#pixelbox-animName').change(this.pixelboxAnimNameChanged);
-		//editScene.pixelboxSetTint(parseInt(hex,16)); //pixelboxSetAddColor
 		$('#pixelbox-tint').colpick({
 			colorScheme:'dark',
 			onShow:function(dom){ 
@@ -4240,7 +4541,7 @@ EditSceneScene.prototype = {
 			onSubmit:function(hsb, hex, rgb, el){
 				editScene.pixelboxSetAddColor(parseInt(hex,16));
 				$(el).colpickHide();
-				$('#pixelbox-tint').css({backgroundColor:'#'+hex});
+				$('#pixelbox-add').css({backgroundColor:'#'+hex});
 			},
 			onChange:function(hsb, hex, rgb, el){
 				var newColor = parseInt(hex,16);
@@ -4251,6 +4552,95 @@ EditSceneScene.prototype = {
 			}
 		});	
 
+// Plane/mesh panel
+		$('#editor-props .panels').append('<div id="panel-geometry" class="panel"><h4>Geometry</h4>\
+			<label class="w32 right-align pad5">Color tint</label><div id="geometry-tint" class="color-swatch"/>\
+			<label class="w31 right-align pad5">Add</label><div id="geometry-addColor" class="color-swatch"/><hr/>\
+			<label for="geometry-alpha" class="w32 pad5 right-align">Alpha</label><input tabindex="0" type="text" class="center" id="geometry-alpha" size="1"/>\
+			<label for="geometry-brightness" class="w32 pad5 right-align">Brightness</label><input tabindex="1" type="text" class="center" id="geometry-brightness" size="1"/>\
+			<label for="geometry-stipple" class="w32 pad5 right-align">Stipple</label><input tabindex="2" type="text" class="center" id="geometry-stipple" size="1"/>\
+			</div>');
+		vc = valueChanged(this.geometryStippleChanged);
+		$('#geometry-stipple').spinner({step:1, min:0, max:2, change:vc, stop:vc});
+		vc = valueChanged(this.geometryAlphaChanged);
+		$('#geometry-alpha').spinner({step:0.1, min:0, max:1, change:vc, stop:vc});
+		vc = valueChanged(this.geometryBrightnessChanged);
+		$('#geometry-brightness').spinner({step:0.1, change:vc, stop:vc});
+
+		$('#geometry-tint').colpick({
+			colorScheme:'dark',
+			onShow:function(dom){ 
+				$(dom).css({zIndex: 10000001});
+				var src = $(this);
+				var css = src.css('background-color');
+				// store preselection color
+				for(var i = 0; i < editScene.selectedObjects.length; i++){
+					var obj = editScene.selectedObjects[i];
+					obj.storedColor = obj.material.tint.getHex();
+				}
+				if(css != 'transparent'){
+					var clr = new THREE.Color(css);
+					var hex = clr.getHexString();
+					$(src).data('prevVal', hex);
+					src.colpickSetColor(hex, true);
+				}
+			},
+			onHide:function(){ 
+				for(var i = 0; i < editScene.selectedObjects.length; i++){
+					var obj = editScene.selectedObjects[i];
+					obj.material.tint.setHex(obj.storedColor);
+				}
+			},
+			onSubmit:function(hsb, hex, rgb, el){
+				editScene.setGeometryTint(parseInt(hex,16));
+				$('#geometry-tint').css({backgroundColor:'#'+hex});
+				$(el).colpickHide();
+			},
+			onChange:function(hsb, hex, rgb, el){
+				var newColor = parseInt(hex,16);
+				for(var i = 0; i < editScene.selectedObjects.length; i++){
+					var obj = editScene.selectedObjects[i];
+					obj.material.tint.setHex(newColor);
+				}
+			}
+		});
+		$('#geometry-addColor').colpick({
+			colorScheme:'dark',
+			onShow:function(dom){ 
+				$(dom).css({zIndex: 10000001});
+				var src = $(this);
+				var css = src.css('background-color');
+				// store preselection color
+				for(var i = 0; i < editScene.selectedObjects.length; i++){
+					var obj = editScene.selectedObjects[i];
+					obj.storedColor = obj.material.addColor.getHex();
+				}
+				if(css != 'transparent'){
+					var clr = new THREE.Color(css);
+					var hex = clr.getHexString();
+					$(src).data('prevVal', hex);
+					src.colpickSetColor(hex, true);
+				}
+			},
+			onHide:function(){ 
+				for(var i = 0; i < editScene.selectedObjects.length; i++){
+					var obj = editScene.selectedObjects[i];
+					obj.material.addColor.setHex(obj.storedColor);
+				}
+			},
+			onSubmit:function(hsb, hex, rgb, el){
+				editScene.setGeometryAddColor(parseInt(hex,16));
+				$('#geometry-addColor').css({backgroundColor:'#'+hex});
+				$(el).colpickHide();
+			},
+			onChange:function(hsb, hex, rgb, el){
+				var newColor = parseInt(hex,16);
+				for(var i = 0; i < editScene.selectedObjects.length; i++){
+					var obj = editScene.selectedObjects[i];
+					obj.material.addColor.setHex(newColor);
+				}
+			}
+		});
 
 		var savePosOnDrop = function(e, ui) { localStorage_setItem(ui.helper.context.id + '-x', ui.position.left); localStorage_setItem(ui.helper.context.id + '-y', ui.position.top); };
 		var bringToFront = function(e, ui){ $('body').append(ui.helper.context); }
@@ -4293,6 +4683,7 @@ EditSceneScene.prototype = {
 		<h1>Scene</h1>\
 		<hr/>\
 		<button id="scene-add">Add Object</button>\
+		<div class="float-right"><button id="test-scene">Preview</button></div>\
 		<hr/>\
 		<div id="scene-list"></div>\
 		<hr/>\
@@ -4302,12 +4693,13 @@ EditSceneScene.prototype = {
 			<li id="scene-add-asset">PixelBox Asset ...<em>&#10095;</em></li><hr/>\
 			<li id="scene-add-instance">Instance (Template) ...<em>&#10095;</em></li>\
 			<li id="scene-add-container">Object3D (Container)</li><hr/>\
-			<li id="scene-add-plane">Plane</li><hr/>\
+			<li id="scene-add-geometry">Geometry</li><hr/>\
 			<li id="scene-add-hemi">Hemisphere Light (Ambient)</li>\
 			<li id="scene-add-dir">Directional Light</li>\
 			<li id="scene-add-spot">Spot Light</li>\
 			<li id="scene-add-point">Point Light</li><hr/>\
-			<li id="scene-add-camera">Camera</li>\
+			<li id="scene-add-camera">Perspective Camera</li>\
+			<li id="scene-add-ortho-camera">Orthographic Camera</li>\
   		</ul>\
 		</ul>');
 		$('#scene-add').button({icons:{secondary:'ui-icon-triangle-1-n'}}).click(function(){
@@ -4321,6 +4713,7 @@ EditSceneScene.prototype = {
 	    $('#scene-add-menu').hide().menu().click(this.addObjectMenuItemClicked.bind(this));
 	    $('#scene-dupe').button();
 	    $('#scene-delete').button().click(this.deleteSelection.bind(this));
+		$('#test-scene').button().click(this.previewScene.bind(this));
 
 // assets
 		$('body').append(
@@ -4427,7 +4820,7 @@ EditSceneScene.prototype = {
 		switch(e.target.id){
 		case 'scene-add-asset':
 		
-	// populate:
+		// populate:
 			$('#scene-add-submenu').remove();
 			var submenu = $('<ul id="scene-add-submenu" class="editor submenu absolute-pos">');
 			var numRows = 0;
@@ -4452,14 +4845,38 @@ EditSceneScene.prototype = {
 	        $('body').append(submenu);
 			break;					
 		case 'scene-add-instance':
-			// TODO
+			$('#scene-add-submenu').remove();
+			var submenu = $('<ul id="scene-add-submenu" class="editor submenu absolute-pos">');
+			var numRows = 0;
+			editScene.container.traverse(function(obj){
+				if(obj.isTemplate){
+					var row = $('<li/>');
+					row.text(obj.name);
+					var func = (function(templateName){ 
+						return function(e){
+							editScene.addObjectMenuItemClicked(e, null, templateName);
+						};
+					})(aname);
+					row.click(func);
+					submenu.append(row);
+					numRows++;
+				}
+			});
+			if(!numRows) submenu.append('<span class="info">- No Templates in Scene -</span>');			
+			submenu.menu().position({
+	            at: "right top",
+	            my: "right bottom",
+	            of: $('#scene-add')
+	          });
+	        $('body').append(submenu);
+			
 			return;
 		case 'scene-add-container':
 			objDef = { asset: 'Object3D', name:'container' };
 			break;
 			
-		case 'scene-add-plane':
-			objDef = { asset: 'Plane', name:'floor', color:'999999', receiveShadow:true, scale:[100,100,10], rotation:[-90,0,0] };
+		case 'scene-add-geometry':
+			objDef = { asset: 'Geometry', type:'Plane', name:'floor', color:'999999', receiveShadow:true, scale:[100,100,100], rotation:[-90,0,0] };
 			break;
 		
 		case 'scene-add-hemi':
@@ -4483,6 +4900,10 @@ EditSceneScene.prototype = {
 		case 'scene-add-camera':
 			objDef = { asset: 'Camera', name:'camera', fov:60, near:1, far:500 };
 			break;
+			
+		case 'scene-add-ortho-camera':
+			objDef = { asset: 'OrthographicCamera', name:'camera', fov:60, near:1, far:500 };
+			break;
 		
 		default:
 			if(asset){
@@ -4490,6 +4911,20 @@ EditSceneScene.prototype = {
 				var anames = _.keys(anims);
 				var firstAnim = anames.length ? anames[0] : '';				
 				objDef = { asset: asset, name:asset, animOption: 'gotoAndStop', animFrame: 0, animName: firstAnim };
+			}
+			
+			if(instance){
+				// find instance
+				var instanceObject = null;
+				editScene.container.traverse(function(obj){
+					if(!instanceObject && obj.isTemplate && obj.name == instance){
+						instanceObject = obj;
+					}
+				});
+				if(!instanceObject) return;
+				
+				// NEXT check nesting
+				// walk up parent line, if encountering instance of "instance", fail
 			}
 			break;
 		
@@ -4502,7 +4937,7 @@ EditSceneScene.prototype = {
 			var addedObject = (this.populateObject(addTarget, [ objDef ], { helpers: true, keepSceneCamera:true, noNameReferences:true }))[0];
 			var doAdd = [ [addedObject, addTarget] ];
 			var undoAdd = [ addedObject ];
-			this.addUndo({name:"add object", redo:[this.addObjects, doAdd], undo:[this.deleteObjects, undoAdd] });
+			this.addUndo({name:"addObject", redo:[this.addObjects, doAdd], undo:[this.deleteObjects, undoAdd] });
 			
 			this.refreshScene();
 			this.updateLights = true;
@@ -4916,8 +5351,20 @@ EditSceneScene.prototype = {
 
 editScene = new EditSceneScene();
 
-
 /* scene serializing */
+THREE.Object3D.prototype.getNearestTemplate = function(){
+	if(this.isTemplate) return this;
+	if(!this.parent) return null;
+	return this.parent.getNearestTemplate();
+};
+
+THREE.Object3D.prototype.getReferenceName = function(){
+	var nameString = (this.isAnchor ? '$' : '') + this.name;
+	if(this.parent && this.parent.name && this.parent.name.length && !this.parent.isTemplate){
+		return this.parent.getReferenceName() + '.' + nameString;
+	}
+	return nameString;
+};
 
 THREE.Object3D.prototype.serialize = function(templates){
 	var def = {
@@ -4942,8 +5389,13 @@ THREE.Object3D.prototype.serialize = function(templates){
 	
 	// types
 	if(this instanceof THREE.Camera){
-		def.asset = 'Camera';
-		def.fov = this.fov;
+		if(this instanceof THREE.PerspectiveCamera){
+			def.asset =  'Camera';
+			def.fov = this.fov;
+		} else {
+			def.asset =  'OrthographicCamera';
+			def.zoom = this.zoom;
+		}
 		def.near = this.near;
 		def.far = this.far;
 		def.isDefault = !!this.isDefault;
@@ -4955,19 +5407,18 @@ THREE.Object3D.prototype.serialize = function(templates){
 		def.color = this.color.getHexString();
 		def.intensity = this.intensity;
 		def.shadowMapWidth = Math.max(this.shadowMapWidth, this.shadowMapHeight);
-		// target is under the same parent/anchor
-		if(this.target.isAnchor && (this.parent == this.target.parent || (this.parent.isAnchor && this.target.parent == this.parent.parent))){
-			def.target = this.target.name;
-		} else if(this.target){
+		var myTemplate = this.getNearestTemplate();
+		var targetTemplate = this.target.getNearestTemplate();
+		if(myTemplate != targetTemplate || !this.target.parent || !this.target.name){
 			this.target.updateMatrixWorld(true);
 			var p = new THREE.Vector3();
 			this.target.localToWorld(p);
 			def.target = [p.x,p.y,p.z];
+		} else {
+			def.target = '#'+this.target.getReferenceName();
 		}
-	}  else if(this instanceof THREE.SpotLight){
+	} else if(this instanceof THREE.SpotLight){
 		def.asset = 'SpotLight';
-		//if(this.shadowCameraRight != 128) def.shadowVolumeWidth = this.shadowCameraRight * 2;
-		//if(this.shadowCameraTop != 128) def.shadowVolumeHeight = this.shadowCameraTop * 2;
 		def.shadowBias = this.shadowBias;
 		def.shadowMapWidth = Math.max(this.shadowMapWidth, this.shadowMapHeight);
 		def.color = this.color.getHexString();
@@ -4976,13 +5427,15 @@ THREE.Object3D.prototype.serialize = function(templates){
 		def.exponent = this.exponent;
 		def.angle = this.angle * radToDeg;
 		// target is under the same parent/anchor
-		if(this.target.isAnchor && (this.parent == this.target.parent || (this.parent.isAnchor && this.target.parent == this.parent.parent))){
-			def.target = this.target.name;
-		} else {
+		var myTemplate = this.getNearestTemplate();
+		var targetTemplate = this.target.getNearestTemplate();
+		if(myTemplate != targetTemplate || !this.target.parent || !this.target.name){
 			this.target.updateMatrixWorld(true);
 			var p = new THREE.Vector3();
 			this.target.localToWorld(p);
 			def.target = [p.x,p.y,p.z];
+		} else {
+			def.target = '#'+this.target.getReferenceName();
 		}
 	} else if(this instanceof THREE.PointLight){
 		def.asset = 'PointLight';
@@ -4996,11 +5449,16 @@ THREE.Object3D.prototype.serialize = function(templates){
 		def.intensity = this.intensity;
 	
 	} else if(this instanceof THREE.Mesh){
+		def.asset = 'Geometry';
 		if(this.geometry instanceof THREE.PlaneBufferGeometry){
-			def.asset = 'Plane';
+			def.mesh = 'Plane';
 		} // other types can be added later	
 		
-		def.color = this.material.color.getHexString();
+		def.tint = this.material.tint.getHexString();
+		def.addColor = this.material.addColor.getHexString();
+		if(this.material.alpha != 1.0) def.alpha = this.material.alpha;
+		if(this.material.brightness != 0) def.brightness = this.material.brightness;
+		if(this.material.stipple != 0) def.stipple = this.material.stipple;
 		
 	} else if(this.isContainer){
 		def.asset = 'Object3D';
@@ -5077,7 +5535,7 @@ THREE.Object3D.prototype.serialize = function(templates){
 	for(var i = 0; i < this.children.length; i++){
 		// skip anchors
 		var child = this.children[i];
-		if(child.isAnchor || child.anchored) continue;
+		if(child.isAnchor || (child.anchored && this.isAnchor)) continue;
 		var cdef = child.serialize(templates);
 		if(child.isTemplate && templates) {
 			// delete cdef.name;
@@ -5096,7 +5554,69 @@ THREE.Object3D.prototype.serialize = function(templates){
 	return def;
 };
 
-/* helper */
+/* helper for parented lights fixes */
+
+THREE.SpotLightHelper.prototype.update = function(){
+
+	var vector = new THREE.Vector3();
+	var vector2 = new THREE.Vector3();
+	
+	return function(){
+		// update cone like before
+		var coneLength = this.light.distance ? this.light.distance : 10000;
+		var coneWidth = coneLength * Math.tan( this.light.angle );
+	
+		this.cone.scale.set( coneWidth, coneWidth, coneLength );
+	
+		vector.setFromMatrixPosition( this.light.matrixWorld );
+		vector2.setFromMatrixPosition( this.light.target.matrixWorld );
+	
+		this.cone.lookAt( vector2.sub( vector ) );
+	
+		this.cone.material.color.copy( this.light.color ).multiplyScalar( this.light.intensity );
+	
+		// reset matrix - fixes spotlights under rotated parents
+		if(this.matrix == this.light.matrixWorld){
+			this.matrix = new THREE.Matrix4();
+		}
+		
+		this.position.copy(vector);
+		this.updateMatrix(true);
+	}
+}();
+
+THREE.DirectionalLightHelper.prototype.update = function () {
+
+	var v1 = new THREE.Vector3();
+	var v2 = new THREE.Vector3();
+	var v3 = new THREE.Vector3();
+
+	return function () {
+
+		v1.setFromMatrixPosition( this.light.matrixWorld );
+		v2.setFromMatrixPosition( this.light.target.matrixWorld );
+		v3.subVectors( v2, v1 );
+
+		this.lightPlane.lookAt( v3 );
+		this.lightPlane.material.color.copy( this.light.color ).multiplyScalar( this.light.intensity );
+
+		this.targetLine.geometry.vertices[ 1 ].copy( v3 );
+		this.targetLine.geometry.verticesNeedUpdate = true;
+		this.targetLine.material.color.copy( this.lightPlane.material.color );
+
+		// reset matrix - fixes spotlights under rotated parents
+		if(this.matrix == this.light.matrixWorld){
+			this.matrix = new THREE.Matrix4();
+		}
+		
+		this.position.copy(v1);
+		this.updateMatrix(true);
+
+	};
+
+}();
+
+
 function fake0(v){ if(Math.abs(v) < 0.01) return 0; else return v; }
 function not0(v){ if(Math.abs(v) < 0.01 || isNaN(v)) return 0.001; else return v; }
 function notNaN(v){ if(isNaN(v)) return 0; else return v; }

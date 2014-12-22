@@ -7,16 +7,16 @@ function PreviewScene(){
 	this.tick = function(delta){
 		Scene.prototype.tick.call(this, delta); // super.tick
 		
-		this.controls.update(delta);
+		//this.controls.update(delta);
 	};
 	
 /* scene callbacks */
 	
 	this.onAdded = function(){
 		Scene.prototype.onAdded.call(this);
-		$('body').append('<div style="position:absolute; top: 10px; left: 10px; padding: 5px; color:#fff; text-align: center;\
+		/*$('body').append('<div style="position:absolute; top: 10px; left: 10px; padding: 5px; color:#fff; text-align: center;\
 							background-color:rgba(0,0,0,0.5);">\
-							W A S D to move<br/>R F move up / down<br/>Arrow keys to look</div>');
+							W A S D to move<br/>R F move up / down<br/>Arrow keys to look</div>');*/
 	};
 	
 	this.onWillRemove = function(){
@@ -35,10 +35,12 @@ function PreviewScene(){
 		if(window.opener && window.loadScene){
 			this.populateWith(JSON.parse(window.loadScene));
 		}
-		this.controls = new THREE.FlyControls(this.camera, renderer.webgl.domElement);
-		this.controls.movementSpeed = 100;
-		this.controls.rollSpeed = 0.9;
-		this.controls.dragToLook = true;
+		this.scene.updateMatrixWorld(true);
+		this.controls = new THREE.EditorControls(this.camera, renderer.webgl.domElement);
+		this.controls.center.set(0, 0, -100);
+		this.camera.localToWorld(this.controls.center);
+		this.controls.panEnabled = this.controls.rotateEnabled = this.controls.zoomEnabled = true;
+		
 	};
 }
 

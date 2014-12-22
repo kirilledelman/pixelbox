@@ -5,7 +5,7 @@
 .submenu { 
 	z-index: 1000100; 
 	overflow-y: auto;
-	max-height: 300px;
+	max-height: 350px;
 	min-width: 100px;
 	border-bottom: 1px solid #333;
 }
@@ -161,6 +161,11 @@ label.object-label.selected {
 	overflow: hidden;
 	display: inline-block;
 	margin-right: 10px;
+}
+
+#anim-restart {
+	position: relative;
+	top: -5px;
 }
 
 #panel-common {
@@ -569,11 +574,12 @@ span#thumb-options {
 
 .color-swatch { 
 	display: inline-block;
-	width: 5em;
-	height: 1.5em;
+	width: 40px;
+	height: 20px;
 	border: 2px dotted #666666;
 	position: relative;
 	top: 5px;
+	margin-left: 5px;
 }
 
 .floating-panel.collapsed{
@@ -708,7 +714,7 @@ input:active, input:hover, input:focus {
 	outline: 0;
 }
 
-input[type=text][disabled]{
+input[type=text][disabled],input[type=text][readonly]{
 	color:#AAA;
 }
 

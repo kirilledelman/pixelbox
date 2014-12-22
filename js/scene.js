@@ -11,6 +11,10 @@ mesh.matrixWorld.decompose( position, quaternion, scale );
 
 
 
+* Make sure to call linkObjects when instantiating templates
+
+clean up
+
 */
 
 /* scene definition */
@@ -104,9 +108,11 @@ Scene.prototype = {
 			}
 		}
 		
+		// populate scene
+		var addedObjects = this.populateObject(this.scene, sceneDef.layers);
+
 		// prepare maxShadows placeholders
 		var numShadows = 0;
-		var addedObjects = this.populateObject(this.scene, sceneDef.layers);
 		for(var i = 0, l = addedObjects.length; i < l; i++){
 			var obj = addedObjects[i];
 			if((obj instanceof THREE.DirectionalLight || obj instanceof THREE.SpotLight) && obj.castShadow) numShadows++;
@@ -124,8 +130,73 @@ Scene.prototype = {
 			maxShadows--;
 		}
 		
+		// link up objects targets
+		this.linkObjects(addedObjects, this.scene);
+		
 		// update camera viewport
 		THREE.PixelBox.prototype.updateViewPortUniform(null);
+	},
+	
+	/* links "#targetName.$anchorname.targetName" style references to objects in the hierarchy
+		Used by Spot and Direct lights */
+	linkObjects:function(objs, top){
+		
+		function dereferenceObject(nameFragments, currentLevel){
+			// start
+			if(typeof(nameFragments) == 'string'){
+				nameFragments = nameFragments.split('.');
+				if(!nameFragments.length) return top;
+				return dereferenceObject(nameFragments, currentLevel);
+				
+			// descend
+			} else if(nameFragments.length){
+				var first = nameFragments[0];
+				nameFragments.splice(0, 1);
+				var obj = null;
+				if(first.substr(0, 1) == '$') { 
+					if(currentLevel.anchors)
+						obj = currentLevel.anchors[first.substr(1)];
+					else 
+						first = first.substr(1);
+				}
+				if(!obj){ 
+					for(var ci = 0, cl = currentLevel.children.length; ci < cl; ci++){
+						if(currentLevel.children[ci].name == first){
+							obj = currentLevel.children[ci];
+							break;
+						}
+					}
+				}
+				if(!obj) return null;
+				if(nameFragments.length) return dereferenceObject(nameFragments, obj);
+				return obj;
+			}
+			
+			return null;
+		}
+		// link
+		for(var i = 0, l = objs.length; i < l; i++){
+			var obj = objs[i];
+			// do .target prop first (for lights)
+			var propVal;
+			var found;
+			if(obj instanceof THREE.SpotLight || obj instanceof THREE.DirectionalLight){
+				propVal = obj.def.target;
+				if(typeof(propVal) == 'string' && propVal.substr(0,1) == '#'){
+					found = dereferenceObject(propVal.substr(1), top);
+					if(found) obj.target = found;
+				}
+			}
+			if(obj.def.props){
+				for(var propName in obj.def.props){
+					propVal = obj.def.props[propName];
+					if(typeof(propVal) == 'string' && propVal.substr(0,1) == '#'){
+						found = dereferenceObject(propVal.substr(1), top);
+						if(found) obj[propName] = found;
+					}
+				}
+			}
+		}
 	},
 	
 	/* removes maxShadows placeholders */
@@ -166,8 +237,16 @@ Scene.prototype = {
 			if(!obj3d) obj3d = this.getObjectFromPool(objType);
 			prevObj3d = obj3d;
 			
-			// Special types of layers - lights, etc
+			// Layer types
 			switch(layer.asset){
+			
+			case 'Instance':
+				//* Make sure to call linkObjects when instantiating templates
+
+				// TODO
+				
+				break;
+				
 			case 'Camera':
 				obj3d = new THREE.PerspectiveCamera(60, 1, 1, 1000);
 				if(layer.fov != undefined) obj3d.fov = layer.fov;
@@ -183,11 +262,20 @@ Scene.prototype = {
 					helper = new THREE.CameraHelper(obj3d);
 				}
 				break;
+				
 			case 'OrthographicCamera':
-				obj3d = new THREE.PerspectiveCamera(60, 1, 1, 1000);
-				if(layer.fov != undefined) obj3d.fov = layer.fov;
-				if(layer.near != undefined) obj3d.near = layer.near;
-				if(layer.far != undefined) obj3d.far = layer.far;
+				var sz = 64;
+				if(options.keepSceneCamera){ // inside editor
+					obj3d = new THREE.OrthographicCamera(-sz,sz,sz,-sz,1,1000);
+				} else {
+					var w = renderer.webgl.domElement.width * 0.22;
+					var h = renderer.webgl.domElement.height * 0.22;
+					obj3d = new THREE.OrthographicCamera(-w,w,h,-h,1,1000);
+				}
+				if(layer.zoom != undefined){
+					obj3d.zoom = layer.zoom;
+					obj3d.updateProjectionMatrix();
+				}
 				if(layer.isDefault && (this instanceof Scene) && !this.camera.def) { 
 					this.camera.parent.remove(this.camera);
 					this.camera = obj3d;
@@ -225,11 +313,9 @@ Scene.prototype = {
 				if(layer.intensity != undefined) obj3d.intensity = layer.intensity;
 				if(layer.shadowMapWidth != undefined) obj3d.shadowMapWidth = obj3d.shadowMapHeight = layer.shadowMapWidth;
 				if(layer.shadowMapHeight != undefined) obj3d.shadowMapHeight = layer.shadowMapHeight;
-				if(layer.target != undefined){
-					if(typeof(layer.target) == 'string' && object.anchors && object.anchors[layer.target]) obj3d.target = object.anchors[layer.target];
-					else if(layer.target.length == 3){// array of world pos
-						obj3d.target.position.set(layer.target[0],layer.target[1],layer.target[2]);
-					}
+				if(layer.target != undefined && layer.target.length == 3){// array of world pos
+					obj3d.target = new THREE.Object3D();
+					obj3d.target.position.set(layer.target[0],layer.target[1],layer.target[2]);
 				}
 				if(options.helpers) { 
 			    	helper = new THREE.DirectionalLightHelper(obj3d, 5);
@@ -262,12 +348,10 @@ Scene.prototype = {
 				}
 				if(layer.shadowMapWidth != undefined) obj3d.shadowMapWidth = obj3d.shadowMapHeight = layer.shadowMapWidth;
 				if(layer.shadowMapHeight != undefined) obj3d.shadowMapHeight = layer.shadowMapHeight;
-				if(layer.target != undefined){
-					if(typeof(layer.target) == 'string' && object.anchors && object.anchors[layer.target]) obj3d.target = object.anchors[layer.target];
-					else if(layer.target.length == 3){// array of world pos
-						obj3d.target.position.set(layer.target[0],layer.target[1],layer.target[2]);
-					}
-				} 
+				if(layer.target != undefined && layer.target.length == 3){// array of world pos
+					obj3d.target = new THREE.Object3D();
+					obj3d.target.position.set(layer.target[0],layer.target[1],layer.target[2]);
+				}
 				if(options.helpers) { 
 			    	helper = new THREE.SpotLightHelper(obj3d, 5);
 			    	//obj3d.shadowCameraVisible = true;
@@ -294,14 +378,20 @@ Scene.prototype = {
 				if(!obj3d) obj3d = new THREE.Object3D();
 				obj3d.isContainer = true;
 				break;					
-			case 'Plane':
+			case 'Geometry':
+				// TODO - add diff. types of geometry. Dispose of previous .geometry before continuing, if reusing an object
 				if(!obj3d) {
 					var geom = new THREE.PlaneBufferGeometry(1,1,2,2);
-					var mat = new THREE.MeshPixelBoxMaterial({ color: new THREE.Color(layer.color != undefined ? parseInt(layer.color,16) : 0xffffff) });
+					var mat = new THREE.MeshPixelBoxMaterial();
 					obj3d = new THREE.Mesh(geom, mat);
-				} else {
-					obj3d.material.color = (layer.color != undefined ? parseInt(layer.color, 16) : 0xffffff);
 				}
+				
+				//material
+				obj3d.material.tint.set(layer.tint != undefined ? parseInt(layer.tint, 16) : 0xffffff);
+				obj3d.material.addColor.set(layer.addColor != undefined ? parseInt(layer.addColor, 16) : 0x0);
+				obj3d.material.alpha = (layer.alpha != undefined ? layer.alpha : 1.0);
+				obj3d.material.brightness = (layer.brightness != undefined ? layer.brightness : 0.0);
+				obj3d.material.stipple = (layer.stipple != undefined ? layer.stipple : 0.0);
 				break;
 			
 			// lookup asset by name
@@ -436,16 +526,19 @@ Scene.prototype = {
 					var animOption = layer.animOption ? layer.animOption : 'gotoAndStop';
 					var animFrame = layer.animFrame != undefined ? layer.animFrame : 0;
 					
-					if(animOption == 'gotoAndStop'){
-						obj3d.gotoAndStop(layer.animName, animFrame);
-					} else if(animOption == 'loopAnim'){
-						obj3d.loopAnim(layer.animName, true);
+					if(animOption == 'loopAnim'){
+						obj3d.loopAnim(layer.animName, Infinity, false);
 					} else if(animOption == 'loopFrom') { 
-						obj3d.gotoAndStop(layer.animName, animFrame); 
-						obj3d.loopAnim(layer.animName,Infinity,true);
+						obj3d.gotoAndStop(layer.animName, animFrame + 1); 
+						obj3d.loopAnim(layer.animName, Infinity, true);
 					} else if(animOption == 'playAnim') { 
 						obj3d.playAnim(layer.animName);
+					} else {
+						obj3d.gotoAndStop(layer.animName, animFrame);
 					}
+				} else if(layer.animFrame != undefined){
+					obj3d.stopAnim();
+					obj3d.frame = layer.animFrame;
 				}
 				
 				// re-add anchors if removed
