@@ -1,4 +1,7 @@
 /*
+	Implement as ImmediateRenderObject
+
+	(?)
 	// functions have to be object properties
 	// prototype functions kill performance
 	// (tested and it was 4x slower !!!)
@@ -36,12 +39,15 @@ THREE.PixelBoxDepthShader = {
 		
 		"	vColor = vec4(color.rgb, color.a * tintAlpha);",
 		"	gl_Position = projectionMatrix * mvPosition;",
+		"	float pointScaleMult = max(length(vec3(modelMatrix[0][0],modelMatrix[1][0],modelMatrix[2][0] )),",
+		"		max(length(vec3(modelMatrix[0][1],modelMatrix[1][1],modelMatrix[2][1] )),",
+		"		length(vec3(modelMatrix[0][2],modelMatrix[1][2],modelMatrix[2][2] ))));",
 		"	if(projectionMatrix[3][3] == 0.0){",// perspective
 		"		float camDist = length((modelMatrix * vec4(position,1.0)).xyz - cameraPosition);",
 		"		float fov = 2.0 * atan(1.0 / projectionMatrix[1][1]);",
-		"		gl_PointSize = pointSize * 900.0 * fov / pow(gl_Position.w, 1.0);",
+		"		gl_PointSize = pointScaleMult * pointSize * 800.0 * fov / pow(gl_Position.w, 1.0);",
 		"	} else {", // ortho
-		"		gl_PointSize = pointSize * 10.0;",
+		"		gl_PointSize = pointScaleMult * pointSize * 6.0;",
 		"	} ",
 		"}"	].join("\n"),
 
@@ -99,7 +105,7 @@ THREE.PixelBoxShader = {
 	    stipple: { type: "f", value: 0 },
 	    
 	    // shared uniforms
-		viewPortScale: { type: "f", value: 1.0 },// viewport size
+		viewPortScale: { type: "f", value: 0.0 },// viewport size
 		actualHemiLights: { type: "i", value: 0 },	    
 		actualPointLights: { type: "i", value: 0 },
 		actualDirLights: { type: "i", value: 0 },
@@ -418,9 +424,16 @@ THREE.PixelBoxShader = {
 		"	} // end if cullBack ",
 		
 		"	gl_Position = projectionMatrix * mvPosition;",
-		"	gl_PointSize = viewPortScale * pointSize / gl_Position.w; // viewPortScale * pointSize * ( 128.0 / length( mvPosition.xyz ) );",
+		"	float pointScaleMult = max(length(vec3(modelMatrix[0][0],modelMatrix[1][0],modelMatrix[2][0] )),",
+		"		max(length(vec3(modelMatrix[0][1],modelMatrix[1][1],modelMatrix[2][1] )),",
+		"		length(vec3(modelMatrix[0][2],modelMatrix[1][2],modelMatrix[2][2] ))));",
+		"	gl_PointSize = pointScaleMult * viewPortScale * pointSize / gl_Position.w;",
 		"}"	].join("\n"),
-
+/*
+var sx = length(vec3( modelMatrix[ 0 ], modelMatrix[ 1 ], modelMatrix[ 2 ] ));
+		var sy = this.set( m.elements[ 4 ], m.elements[ 5 ], m.elements[  6 ] ).length();
+		var sz = this.set( m.elements[ 8 ], m.elements[ 9 ], m.elements[ 10 ] ).length();*/
+		
 	fragmentShader: [
 		"varying vec4 vColor;",
 		"uniform float stipple;",
@@ -885,12 +898,12 @@ THREE.MeshPixelBoxMaterial = function(params){
 	uniforms.brightness.value = param('brightness', 0.0);
 	
 	// share uniforms with prototype
-	uniforms.actualHemiLights = THREE.PixelBox.prototype.material.uniforms.actualHemiLights;
-	uniforms.actualDirLights = THREE.PixelBox.prototype.material.uniforms.actualDirLights;
-	uniforms.actualPointLights = THREE.PixelBox.prototype.material.uniforms.actualPointLights;
-	uniforms.actualSpotLights = THREE.PixelBox.prototype.material.uniforms.actualSpotLights;
-	uniforms.directionalLightShadowMap = THREE.PixelBox.prototype.material.uniforms.directionalLightShadowMap;
-	uniforms.spotLightShadowMap = THREE.PixelBox.prototype.material.uniforms.spotLightShadowMap;
+	uniforms.actualHemiLights = THREE.PixelBoxUtil.material.uniforms.actualHemiLights;
+	uniforms.actualDirLights = THREE.PixelBoxUtil.material.uniforms.actualDirLights;
+	uniforms.actualPointLights = THREE.PixelBoxUtil.material.uniforms.actualPointLights;
+	uniforms.actualSpotLights = THREE.PixelBoxUtil.material.uniforms.actualSpotLights;
+	uniforms.directionalLightShadowMap = THREE.PixelBoxUtil.material.uniforms.directionalLightShadowMap;
+	uniforms.spotLightShadowMap = THREE.PixelBoxUtil.material.uniforms.spotLightShadowMap;
 	
 	Object.defineProperty(material, 'tint', {
 		get: function(){ return this.uniforms.tintColor.value; },
@@ -916,48 +929,48 @@ THREE.MeshPixelBoxMaterial = function(params){
 	return material;	
 };
 
-
-/* data can be the data object, or cached object's name from assets cache */
 THREE.PixelBox = function(data){
-	THREE.PixelBox.prototype.updateViewPortUniform();
+	function param(pname, defaultValue){ if(data[pname] != undefined) return data[pname]; return defaultValue; }
 
-	// clone base material
-	var material = THREE.PixelBox.prototype.material.clone();
-	var depthMaterial = THREE.PixelBox.prototype.depthMaterial.clone();
+	// clone base materials
+	var material = THREE.PixelBoxUtil.material.clone();
+	var depthMaterial = THREE.PixelBoxUtil.depthMaterial.clone();
+	
 	// share uniforms with prototype
-	material.uniforms.viewPortScale = THREE.PixelBox.prototype.material.uniforms.viewPortScale;
-	material.uniforms.actualHemiLights = THREE.PixelBox.prototype.material.uniforms.actualHemiLights;
-	material.uniforms.actualDirLights = THREE.PixelBox.prototype.material.uniforms.actualDirLights;
-	material.uniforms.actualPointLights = THREE.PixelBox.prototype.material.uniforms.actualPointLights;
-	material.uniforms.actualSpotLights = THREE.PixelBox.prototype.material.uniforms.actualSpotLights;
-	material.uniforms.directionalLightShadowMap = THREE.PixelBox.prototype.material.uniforms.directionalLightShadowMap;
-	material.uniforms.spotLightShadowMap = THREE.PixelBox.prototype.material.uniforms.spotLightShadowMap;
+	material.uniforms.viewPortScale = THREE.PixelBoxUtil.material.uniforms.viewPortScale;
+	material.uniforms.actualHemiLights = THREE.PixelBoxUtil.material.uniforms.actualHemiLights;
+	material.uniforms.actualDirLights = THREE.PixelBoxUtil.material.uniforms.actualDirLights;
+	material.uniforms.actualPointLights = THREE.PixelBoxUtil.material.uniforms.actualPointLights;
+	material.uniforms.actualSpotLights = THREE.PixelBoxUtil.material.uniforms.actualSpotLights;
+	material.uniforms.directionalLightShadowMap = THREE.PixelBoxUtil.material.uniforms.directionalLightShadowMap;
+	material.uniforms.spotLightShadowMap = THREE.PixelBoxUtil.material.uniforms.spotLightShadowMap;
 			
 	// share unforms with depth material
-	depthMaterial.uniforms.viewPortScale = THREE.PixelBox.prototype.material.uniforms.viewPortScale;
+	depthMaterial.uniforms.viewPortScale = THREE.PixelBoxUtil.material.uniforms.viewPortScale;
 	depthMaterial.uniforms.tintAlpha = material.uniforms.tintAlpha;
 	depthMaterial.uniforms.pointSize = material.uniforms.pointSize;
 	
-	function param(pname, defaultValue){ if(data[pname] != undefined) return data[pname]; return defaultValue; }
-
+	// these uniforms' defaults come from data object
 	material.uniforms.occlusion.value = param('occlusion', 1.0);
 	material.uniforms.pointSize.value = param('pointSize', 1.0);
-	material.uniforms.addColor.value.set(0x0);
-	
+	material.uniforms.cullBack.value = param('cullBack', true);
+		
 	// create geometry
 	var geometry = new THREE.BufferGeometry();
 	
 	// process data
-	THREE.PixelBox.prototype.processPixelBoxFrames(data);
+	THREE.PixelBoxUtil.processPixelBoxFrames(data);
 	
-	// create PointCloud
-	var pc = new THREE.PointCloud(geometry, material);
-	pc.customDepthMaterial = depthMaterial;
-	pc.castShadow = pc.receiveShadow = true;
-	pc.pixelBox = true;
+	// init as PointCloud
+	THREE.PointCloud.call(this, geometry, material);
+	// this.immediateRenderCallback = function( program, _gl, _frustum ){};
+
+	this.customDepthMaterial = depthMaterial;
+	this.castShadow = true;
+	this.pixelBox = true;
 	
 	// create anchors
-	pc.anchors = {};
+	this.anchors = {};
 	if(data.anchors){
 		for(var aname in data.anchors){
 			var obj3d = new THREE.Object3D();
@@ -965,8 +978,8 @@ THREE.PixelBox = function(data){
 			obj3d.isAnchor = true;
 			obj3d.name = aname;
 			obj3d.visible = false;
-			pc.add(obj3d);
-			pc.anchors[aname] = obj3d;
+			this.add(obj3d);
+			this.anchors[aname] = obj3d;
 		}
 	} else {
 		data.anchors = {};
@@ -975,7 +988,7 @@ THREE.PixelBox = function(data){
 	// create frame setter on pointcloud
 	geometry.data = data;
 	geometry._frame = -1;
-	Object.defineProperty(pc, 'frame', {
+	Object.defineProperty(this, 'frame', {
 	get: (function(){ return this.geometry._frame; }),
 	set: (function(f){
 		var geom = this.geometry;
@@ -1044,16 +1057,16 @@ THREE.PixelBox = function(data){
 	});	
 	
 	// set frame / anim params
-	pc.vertexBufferStart = 0;
-	pc.vertexBufferLength = 0;
-	pc.frame = 0;
-	pc.totalFrames = data.frameData.length;
+	this.vertexBufferStart = 0;
+	this.vertexBufferLength = 0;
+	this.frame = 0;
+	this.totalFrames = data.frameData.length;
 	
 	// add dispose function for unloading
-	pc.dispose = function(){
+	this.dispose = function(){
 		if(this.geometry){
 			if(this.geometry.data){
-				THREE.PixelBox.prototype.dispose(this.geometry.data);
+				THREE.PixelBoxUtil.dispose(this.geometry.data);
 				console.log("Disposed of "+this.geometry.data.name);
 				delete this.geometry.data;
 			}
@@ -1063,9 +1076,9 @@ THREE.PixelBox = function(data){
 	};
 	
 	// add animation functions
-	pc.currentAnimation = null;
-	pc._animSpeed = 1.0;
-	Object.defineProperty(pc, 'animSpeed', {
+	this.currentAnimation = null;
+	this._animSpeed = 1.0;
+	Object.defineProperty(this, 'animSpeed', {
 		get: function(){ return this._animSpeed; },
 		set: function(v){ 
 			this._animSpeed = v;
@@ -1077,10 +1090,10 @@ THREE.PixelBox = function(data){
 			}
 		},
 	});
-	pc._animationInterval = 0;
-	pc._animLoops = -1;
-	pc._currentAnimationPosition = 0;
-	Object.defineProperty(pc, 'currentAnimationPosition', {
+	this._animationInterval = 0;
+	this._animLoops = -1;
+	this._currentAnimationPosition = 0;
+	Object.defineProperty(this, 'currentAnimationPosition', {
 		get: function(){ return this._currentAnimationPosition; },
 		set: function(v){ // set frame according to anim position
 			v = Math.min(1, Math.max(0, v));
@@ -1093,201 +1106,76 @@ THREE.PixelBox = function(data){
 		},
 	});
 	
-	pc.advanceAnimationFrame = THREE.PointCloud.prototype.advanceAnimationFrame.bind(pc);
-	pc.advanceTweenFrame = THREE.PointCloud.prototype.advanceTweenFrame.bind(pc);
+	// pre-bind
+	this.advanceAnimationFrame = THREE.PixelBox.prototype.advanceAnimationFrame.bind(this);
+	this.advanceTweenFrame = THREE.PixelBox.prototype.advanceTweenFrame.bind(this);
 
-	pc.tweenFps = 20;
-	pc._tweens = [];
-	pc._tweenInterval = 0;
+	this.tweenFps = 20;
+	this._tweens = [];
+	this._tweenInterval = 0;
 	
-	pc.addEventListener('removed', THREE.PointCloud.prototype.stopAnim);
-	pc.addEventListener('removed', THREE.PointCloud.prototype.stopTweens);
+	this.addEventListener('removed', this.stopAnim);
+	this.addEventListener('removed', this.stopTweens);
 	
-	Object.defineProperty(pc, 'asset', {
+	// add shorthand accessors
+	Object.defineProperty(this, 'asset', {
 		get: function(){ return this.geometry.data; },
 	});
 	
-	// add shorthand accessors for shader
-	Object.defineProperty(pc, 'alpha', {
-		get: function(){ return material.uniforms.tintAlpha.value; },
-		set: function(v){ material.uniforms.tintAlpha.value = v; },
+	Object.defineProperty(this, 'alpha', {
+		get: function(){ return this.material.uniforms.tintAlpha.value; },
+		set: function(v){ this.material.uniforms.tintAlpha.value = v; },
 	});
 	
-	Object.defineProperty(pc, 'tint', {
-		get: function(){ return material.uniforms.tintColor.value; },
-		set: function(v){ material.uniforms.tintColor.value.copy(v); },
+	Object.defineProperty(this, 'tint', {
+		get: function(){ return this.material.uniforms.tintColor.value; },
+		set: function(v){ this.material.uniforms.tintColor.value.copy(v); },
 	});
 
-	Object.defineProperty(pc, 'addColor', {
-		get: function(){ return material.uniforms.addColor.value; },
-		set: function(v){ material.uniforms.addColor.value.copy(v); },
+	Object.defineProperty(this, 'addColor', {
+		get: function(){ return this.material.uniforms.addColor.value; },
+		set: function(v){ this.material.uniforms.addColor.value.copy(v); },
 	});
 
-	Object.defineProperty(pc, 'occlusion', {
-		get: function(){ return material.uniforms.occlusion.value; },
-		set: function(v){ material.uniforms.occlusion.value = v; },
+	Object.defineProperty(this, 'occlusion', {
+		get: function(){ return this.material.uniforms.occlusion.value; },
+		set: function(v){ this.material.uniforms.occlusion.value = v; },
 	});
 
-	Object.defineProperty(pc, 'pointSize', {
-		get: function(){ return material.uniforms.pointSize.value; },
-		set: function(v){ material.uniforms.pointSize.value = v; },
+	Object.defineProperty(this, 'pointSize', {
+		get: function(){ return this.material.uniforms.pointSize.value; },
+		set: function(v){ this.material.uniforms.pointSize.value = v; },
 	});
 	
-	Object.defineProperty(pc, 'stipple', {
-		get: function(){ return material.uniforms.stipple.value; },
-		set: function(v){ material.uniforms.stipple.value = v; },
+	Object.defineProperty(this, 'stipple', {
+		get: function(){ return this.material.uniforms.stipple.value; },
+		set: function(v){ this.material.uniforms.stipple.value = v; },
 	});
 	
-	Object.defineProperty(pc, 'cullBack', {
-		get: function(){ return !!material.uniforms.cullBack.value; },
-		set: function(v){ material.uniforms.cullBack.value = v ? 1 : 0; },
+	Object.defineProperty(this, 'cullBack', {
+		get: function(){ return !!this.material.uniforms.cullBack.value; },
+		set: function(v){ this.material.uniforms.cullBack.value = v ? 1 : 0; },
 	});
 	
-	pc.cullBack = param('cullBack', true);	
+	this.fasterRaycast = true; // raycast just tests for an intersection (returns first match)
 	
-	pc.raycast = THREE.PointCloud.prototype.pixelBoxRaycast;
-	pc.fasterRaycast = true; // raycast just tests for an intersection (returns first match)
-	return pc;
+	// init viewPortScale value if not set
+	if(!THREE.PixelBoxUtil.material.uniforms.viewPortScale.value) THREE.PixelBoxUtil.updateViewPortUniform();
+	
+	return this;
 }
 
-THREE.PixelBox.prototype.material = new THREE.ShaderMaterial( {
-	uniforms:       THREE.UniformsUtils.merge([THREE.UniformsLib['shadowmap'], THREE.UniformsLib['lights'],THREE.PixelBoxShader.uniforms]),
-	attributes:     THREE.PixelBoxShader.attributes,
-	vertexShader:   THREE.PixelBoxShader.vertexShader,
-	fragmentShader: THREE.PixelBoxShader.fragmentShader,
-	transparent: false,
-	lights: true,
-	fog: true
-});
+//THREE.PixelBoxObject.prototype = Object.create(THREE.ImmediateRenderObject.prototype);
+//THREE.PixelBoxObject.prototype.constructor = THREE.PixelBoxObject;
+//_.extend(THREE.PixelBoxObject.prototype, THREE.PointCloud.prototype);
+THREE.PixelBox.prototype = Object.create(THREE.PointCloud.prototype);
+THREE.PixelBox.prototype.constructor = THREE.PixelBox;
 
-THREE.PixelBox.prototype.depthMaterial = new THREE.ShaderMaterial( {
-	uniforms:       THREE.PixelBoxDepthShader.uniforms,
-	vertexShader:   THREE.PixelBoxDepthShader.vertexShader,
-	fragmentShader: THREE.PixelBoxDepthShader.fragmentShader,
-});
-THREE.PixelBox.prototype.depthMaterial._shadowPass = true;
-THREE.PixelBox.prototype.updateViewPortUniform = function(event){ 
-	var cam = (renderer.scene && renderer.scene.camera) ? renderer.scene.camera : null;
-	if(!cam) return;
-	// get cam scale	
-	var camWorldScale = new THREE.Vector3();
-	renderer.scene.scene.updateMatrixWorld(true);
-	camWorldScale.setFromMatrixScale(cam.matrixWorld);
-	// perspective camera
-	if(cam instanceof THREE.PerspectiveCamera){
-		THREE.PixelBox.prototype['material'].uniforms.viewPortScale.value = (renderer.webgl.domElement.height / (2 * Math.tan(0.5 * cam.fov * Math.PI / 180.0))) / camWorldScale.x;
-	// ortho
-	} else {
-		var h = cam.zoom * renderer.webgl.domElement.height / (cam.top * 2);
-		THREE.PixelBox.prototype['material'].uniforms.viewPortScale.value = h / camWorldScale.x;
-	}
-};
-$(window).on('resize.PixelBox', THREE.PixelBox.prototype.updateViewPortUniform);
-
-THREE.PixelBox.prototype.dispose = function(data){
-	if(data && data.frameData){
-		var _gl = renderer.webgl.context;
-		for(var f = 0; f < data.frameData.length; f++){
-			if(!data.frameData[f]['p']) continue; // skip empty
-			for ( var key in data.frameData[f] ) {
-				if ( data.frameData[f][key].buffer !== undefined ) {
-					_gl.deleteBuffer(data.frameData[f][key].buffer);
-					delete data.frameData[f][key];
-				}
-			}
-		}
-		delete data.frameData;
-	}
-};
-
-/*
-	Decodes & processes frames if frames haven't been processed yet
-	Alters data object itself
-*/
-
-THREE.PixelBox.prototype.processPixelBoxFrames = function(data){
-	if(data.frames === null){
-		// special case for PixelBox editor or particle systems
-		data.frameData = [];
-	
-	// parse data for the first time (modifies data object)
-	} else if(data.frames){
-		// decode frames
-		if(!data.frameData){
-			data.frameData = new Array(data.frames.length);
-			for(var f = 0; f < data.frames.length; f++){
-				data.frameData[f] = THREE.PixelBox.decodeFrame(data, f);
-			}
-			THREE.PixelBox.finalizeFrames(data);
-		}
-		
-		// change anims to an object
-		if(_.isArray(data.anims)){
-			var anims = {};
-			for(var i = 0; i < data.anims.length; i++){
-				anims[data.anims[i].name] = data.anims[i];
-			}
-			data.anims = anims;
-		}
-		
-		// clean up
-		delete data.frames;
-	}
-};
-
-/* 	
-	Updates shared light uniforms
-	call when the number of lights, or number of lights casting shadows has changed 
-	
-	Shader uses directionalLightShadowMap & spotLightShadowMap to tell which shadow map belongs to which light
-	to generate better shadows
-*/
-
-THREE.PixelBox.updateLights = function(scene, updateAllMaterials){	
-	
-	var uniforms = THREE.PixelBox.prototype.material.uniforms;
-	uniforms.actualHemiLights.value = 0;
-	uniforms.actualDirLights.value = 0;
-	uniforms.actualPointLights.value = 0;
-	uniforms.actualSpotLights.value = 0;
-	uniforms.directionalLightShadowMap.value.length = 0;
-	uniforms.spotLightShadowMap.value.length = 0;
-
-	var shadowMapIndex = 0;
-	
-	scene.traverse(function(obj){
-		if(obj.visible){
-			if (obj instanceof THREE.SpotLight){
-				uniforms.actualSpotLights.value++;
-				if(obj.castShadow && renderer.webgl.shadowMapEnabled) { 
-					uniforms.spotLightShadowMap.value.push(++shadowMapIndex);
-				} else uniforms.spotLightShadowMap.value.push(0);
-			} else if(obj instanceof THREE.DirectionalLight){
-				uniforms.actualDirLights.value++;
-				if(obj.castShadow && renderer.webgl.shadowMapEnabled) { 
-					uniforms.directionalLightShadowMap.value.push(++shadowMapIndex);
-				} else uniforms.directionalLightShadowMap.value.push(0);
-			} else if(obj instanceof THREE.HemisphereLight){
-				uniforms.actualHemiLights.value++;
-			} else if(obj instanceof THREE.PointLight){
-				uniforms.actualPointLights.value++;
-			}
-		}
-		
-		if(updateAllMaterials && obj.material) obj.material.needsUpdate = true;
-	});
-	
-	if(!uniforms.directionalLightShadowMap.value.length){
-		uniforms.spotLightShadowMap.value.push(0);
-	}
-	if(!uniforms.directionalLightShadowMap.value.length){
-		uniforms.directionalLightShadowMap.value.push(0);
-	}
-};
 
 /* 
 	Tweening functions
 	
+	Examples:
 	
 	potato.tween({ prop:"alpha", from: 1, to: 0, duration: 1.0 })
 	potato.tween({ target: potato.position, from: potato.position, to: vec3, duration: 1.0, done: func() })
@@ -1322,7 +1210,7 @@ function applyTween(tweenObj){
 	}
 }
 
-THREE.PointCloud.prototype.advanceTweenFrame = function(){
+THREE.PixelBox.prototype.advanceTweenFrame = function(){
 	if(this._tweenInterval) clearTimeout(this._tweenInterval);
 	
 	var nextFrameIn = 1.0 / this.tweenFps;
@@ -1369,16 +1257,14 @@ THREE.PointCloud.prototype.advanceTweenFrame = function(){
 	}
 };
 
-THREE.PointCloud.prototype.pixelBox = false;
-
-THREE.PointCloud.prototype.tween = function(obj){
+THREE.PixelBox.prototype.tween = function(obj){
 	if(!_.isArray(obj)) obj = [obj];
 	this._tweens = this._tweens.concat(obj);
 	if(!this._tweenInterval) setTimeout(this.advanceTweenFrame, 1000 / this.tweenFps);
 };
 
 /* stops all tweens */
-THREE.PointCloud.prototype.stopTweens = function(){
+THREE.PixelBox.prototype.stopTweens = function(){
 	this._tweens.length = 0;
 	delete this._tweens;
 	this._tweens = [];
@@ -1387,7 +1273,7 @@ THREE.PointCloud.prototype.stopTweens = function(){
 };
 
 /* stops specific tween */
-THREE.PointCloud.prototype.stopTween = function(obj){
+THREE.PixelBox.prototype.stopTween = function(obj){
 	var index = this._tweens.indexOf(obj);
 	if(index !== -1){
 		this._tweens.splice(index, 1);
@@ -1398,18 +1284,19 @@ THREE.PointCloud.prototype.stopTween = function(obj){
 	}
 };
 
+
 /* 
 	Animation functions 
 
-		.animSpeed = 1
+		affected by .animSpeed, which can be negative
+		
 		playAnim(animname, [ BOOL fromBeginning ])
 		loopAnim(animName, [ INT numLoops | Infinity, [BOOL fromBeginning] ] )
 		gotoAndStop(animname, [ FLOAT PosWithinAnim | INT frameNumber])
 
-
 */
 
-THREE.PointCloud.prototype.advanceAnimationFrame = function(){
+THREE.PixelBox.prototype.advanceAnimationFrame = function(){
 	if(this._animationInterval) clearTimeout(this._animationInterval);
 	
 	var nextFrameIn = 1.0 / (Math.abs(this.animSpeed ? this.animSpeed : 0.001) * this.currentAnimation.fps);
@@ -1443,11 +1330,11 @@ THREE.PointCloud.prototype.advanceAnimationFrame = function(){
 	}
 };
 
-THREE.PointCloud.prototype.playAnim = function(animName, fromCurrentFrame){
+THREE.PixelBox.prototype.playAnim = function(animName, fromCurrentFrame){
 	this.loopAnim(animName, 0, fromCurrentFrame);
 };
 
-THREE.PointCloud.prototype.loopAnim = function(animName, numLoops, fromCurrentFrame){
+THREE.PixelBox.prototype.loopAnim = function(animName, numLoops, fromCurrentFrame){
 	var anim = this.geometry.data.anims[animName];
 	if(!anim){ 
 		console.log("Animation "+animName+" not found in ", this.data); return;
@@ -1490,7 +1377,7 @@ THREE.PointCloud.prototype.loopAnim = function(animName, numLoops, fromCurrentFr
 	this._animationInterval = setTimeout(this.advanceAnimationFrame, nextFrameIn * 1000);
 };
 
-THREE.PointCloud.prototype.gotoAndStop = function(animName, positionWithinAnimation){
+THREE.PixelBox.prototype.gotoAndStop = function(animName, positionWithinAnimation){
 	var anim = this.geometry.data.anims[animName];
 	var diff = (this.currentAnimation != anim);
 	positionWithinAnimation = (positionWithinAnimation === undefined ? 0 : positionWithinAnimation);
@@ -1515,11 +1402,11 @@ THREE.PointCloud.prototype.gotoAndStop = function(animName, positionWithinAnimat
 	}
 };
 
-THREE.PointCloud.prototype.animNamed = function(animName){
+THREE.PixelBox.prototype.animNamed = function(animName){
 	return this.geometry.data.anims[animName];
 };
 
-THREE.PointCloud.prototype.stopAnim = function(){
+THREE.PixelBox.prototype.stopAnim = function(){
 	if(this._animationInterval){
 		clearTimeout(this._animationInterval);
 		this._animationInterval = 0;
@@ -1531,6 +1418,221 @@ THREE.PointCloud.prototype.stopAnim = function(){
 	}
 };
 
+/* 
+	Particle effects
+	
+	callBack(pobj) is called for each point
+	
+	pobj is:
+	{ i: particleIndex, p: position, n: normal, c: color, a: alpha, o: occlusion, b: brightness }
+	
+	set values in pobj to update particle
+	
+	this can be used to generate snow, rain, etc.
+	Example:
+	
+	snow = new THREE.PixelBox({ offset: false, frames: null, width:10, depth:10, height:10, pointSize: 0.3});
+	snow.addFrameAt(0);
+	snow.frame = 0;
+	snow.updateFrameWithCallback(this.updateSnow, {timePassed: timePassed });
+	
+*/
+
+THREE.PixelBox.prototype.updateFrameWithCallback = function(callBack, extraParam){
+	var geometry = this.geometry;
+	var dataObject = geometry.data;
+	var frameBuffers = dataObject.frameData[0];
+	var addr = 0;
+	var pobj = {
+		p: new THREE.Vector3(),	
+		n: new THREE.Vector3(),	
+		c: new THREE.Color(),
+		a: 0.0,
+		b: 1.0, 
+		o: 0.0,
+	};
+	var numParticles = dataObject.width * dataObject.depth * dataObject.height;
+	for(addr = 0; addr < numParticles; addr++){
+		pobj.i = addr;
+		pobj.p.set(frameBuffers.p.array[addr * 3], frameBuffers.p.array[addr * 3 + 1], frameBuffers.p.array[addr * 3 + 2]);
+		pobj.n.set(frameBuffers.n.array[addr * 3], frameBuffers.n.array[addr * 3 + 1], frameBuffers.n.array[addr * 3 + 2]);
+		pobj.b = pobj.n.length() - 1.0;
+		pobj.n.normalize();
+		pobj.o = frameBuffers.o.array[addr];
+		pobj.c.setRGB(frameBuffers.c.array[addr * 4], frameBuffers.c.array[addr * 4 + 1], frameBuffers.c.array[addr * 4 + 2]);
+		pobj.a = frameBuffers.c.array[addr * 4 + 3];
+
+		// call
+		callBack(pobj, extraParam);
+		
+		// copy back
+		frameBuffers.p.array[addr * 3] = pobj.p.x;
+		frameBuffers.p.array[addr * 3 + 1] = pobj.p.y;
+		frameBuffers.p.array[addr * 3 + 2] = pobj.p.z;
+		
+		frameBuffers.o.array[addr] = pobj.o;
+		
+		pobj.n.multiplyScalar(1.0 + pobj.b);
+		frameBuffers.n.array[addr * 3] = pobj.n.x;
+		frameBuffers.n.array[addr * 3 + 1] = pobj.n.y;
+		frameBuffers.n.array[addr * 3 + 2] = pobj.n.z;
+		
+		frameBuffers.c.array[addr * 4] = pobj.c.r;
+		frameBuffers.c.array[addr * 4 + 1] = pobj.c.g;
+		frameBuffers.c.array[addr * 4 + 2] = pobj.c.b;
+		frameBuffers.c.array[addr * 4 + 3] = pobj.c.a;
+	}
+	
+	frameBuffers.c.needsUpdate = true;
+	frameBuffers.n.needsUpdate = true;
+	frameBuffers.o.needsUpdate = true;
+	frameBuffers.p.needsUpdate = true;
+	
+};
+
+/* 
+
+	PixelBoxUtil namespace
+	
+*/
+
+THREE.PixelBoxUtil = {};
+
+THREE.PixelBoxUtil.material = new THREE.ShaderMaterial( {
+	uniforms:       THREE.UniformsUtils.merge([THREE.UniformsLib['shadowmap'], THREE.UniformsLib['lights'],THREE.PixelBoxShader.uniforms]),
+	attributes:     THREE.PixelBoxShader.attributes,
+	vertexShader:   THREE.PixelBoxShader.vertexShader,
+	fragmentShader: THREE.PixelBoxShader.fragmentShader,
+	transparent: false,
+	lights: true,
+	fog: true
+});
+
+THREE.PixelBoxUtil.depthMaterial = new THREE.ShaderMaterial( {
+	uniforms:       THREE.PixelBoxDepthShader.uniforms,
+	vertexShader:   THREE.PixelBoxDepthShader.vertexShader,
+	fragmentShader: THREE.PixelBoxDepthShader.fragmentShader,
+});
+THREE.PixelBoxUtil.depthMaterial._shadowPass = true;
+
+THREE.PixelBoxUtil.updateViewPortUniform = function(event){ 
+	var cam = (renderer.scene && renderer.scene.camera) ? renderer.scene.camera : null;
+	if(!cam) return;
+	// get cam scale	
+	var camWorldScale = new THREE.Vector3();
+	renderer.scene.scene.updateMatrixWorld(true);
+	camWorldScale.setFromMatrixScale(cam.matrixWorld);
+	// perspective camera
+	if(cam instanceof THREE.PerspectiveCamera){
+		THREE.PixelBoxUtil.material.uniforms.viewPortScale.value = (renderer.webgl.domElement.height / (2 * Math.tan(0.5 * cam.fov * Math.PI / 180.0))) / camWorldScale.x;
+	// ortho
+	} else {
+		var h = cam.zoom * renderer.webgl.domElement.height / (cam.top * 2);
+		THREE.PixelBoxUtil.material.uniforms.viewPortScale.value = h / camWorldScale.x;
+	}
+};
+$(window).on('resize.PixelBox', THREE.PixelBoxUtil.updateViewPortUniform);
+
+THREE.PixelBoxUtil.dispose = function(data){
+	if(data && data.frameData){
+		var _gl = renderer.webgl.context;
+		for(var f = 0; f < data.frameData.length; f++){
+			if(!data.frameData[f]['p']) continue; // skip empty
+			for ( var key in data.frameData[f] ) {
+				if ( data.frameData[f][key].buffer !== undefined ) {
+					_gl.deleteBuffer(data.frameData[f][key].buffer);
+					delete data.frameData[f][key];
+				}
+			}
+		}
+		delete data.frameData;
+	}
+};
+
+/*
+	Decodes & processes frames if frames haven't been processed yet
+	Alters data object itself
+*/
+
+THREE.PixelBoxUtil.processPixelBoxFrames = function(data){
+	if(data.frames === null){
+		// special case for PixelBox editor or particle systems
+		data.frameData = [];
+	
+	// parse data for the first time (modifies data object)
+	} else if(data.frames){
+		// decode frames
+		if(!data.frameData){
+			data.frameData = new Array(data.frames.length);
+			for(var f = 0; f < data.frames.length; f++){
+				data.frameData[f] = THREE.PixelBoxUtil.decodeFrame(data, f);
+			}
+			THREE.PixelBoxUtil.finalizeFrames(data);
+		}
+		
+		// change anims to an object
+		if(_.isArray(data.anims)){
+			var anims = {};
+			for(var i = 0; i < data.anims.length; i++){
+				anims[data.anims[i].name] = data.anims[i];
+			}
+			data.anims = anims;
+		}
+		
+		// clean up
+		delete data.frames;
+	}
+};
+
+/* 	
+	Updates shared light uniforms
+	call when the number of lights, or number of lights casting shadows has changed 
+	
+	Shader uses directionalLightShadowMap & spotLightShadowMap to tell which shadow map belongs to which light
+	to generate better shadows
+*/
+
+THREE.PixelBoxUtil.updateLights = function(scene, updateAllMaterials){	
+	
+	var uniforms = THREE.PixelBoxUtil.material.uniforms;
+	uniforms.actualHemiLights.value = 0;
+	uniforms.actualDirLights.value = 0;
+	uniforms.actualPointLights.value = 0;
+	uniforms.actualSpotLights.value = 0;
+	uniforms.directionalLightShadowMap.value.length = 0;
+	uniforms.spotLightShadowMap.value.length = 0;
+
+	var shadowMapIndex = 0;
+	
+	scene.traverse(function(obj){
+		if(obj.visible){
+			if (obj instanceof THREE.SpotLight){
+				uniforms.actualSpotLights.value++;
+				if(obj.castShadow && renderer.webgl.shadowMapEnabled) { 
+					uniforms.spotLightShadowMap.value.push(++shadowMapIndex);
+				} else uniforms.spotLightShadowMap.value.push(0);
+			} else if(obj instanceof THREE.DirectionalLight){
+				uniforms.actualDirLights.value++;
+				if(obj.castShadow && renderer.webgl.shadowMapEnabled) { 
+					uniforms.directionalLightShadowMap.value.push(++shadowMapIndex);
+				} else uniforms.directionalLightShadowMap.value.push(0);
+			} else if(obj instanceof THREE.HemisphereLight){
+				uniforms.actualHemiLights.value++;
+			} else if(obj instanceof THREE.PointLight){
+				uniforms.actualPointLights.value++;
+			}
+		}
+		
+		if(updateAllMaterials && obj.material) obj.material.needsUpdate = true;
+	});
+	
+	if(!uniforms.directionalLightShadowMap.value.length){
+		uniforms.spotLightShadowMap.value.push(0);
+	}
+	if(!uniforms.directionalLightShadowMap.value.length){
+		uniforms.directionalLightShadowMap.value.push(0);
+	}
+};
 
 /* 
 	Decodes a single frame for PixelBox from dataObject
@@ -1564,12 +1666,10 @@ THREE.PointCloud.prototype.stopAnim = function(){
 	
 	during decoding, each frame will be replaced with an array of (width * height * depth) for faster lookups
 	of elements { c: hexcolor, a: floatAlpha, b: floatBrightness }
-	
-	
 		
 */
 
-THREE.PixelBox.decodeFrame = function(dataObject, frameIndex){
+THREE.PixelBoxUtil.decodeFrame = function(dataObject, frameIndex){
 	//var startTime = new Date();
 	var smoothNormals = dataObject.smoothNormals != undefined ? dataObject.smoothNormals : 1.0;
 	var floor = dataObject.floor != undefined ? dataObject.floor : false;
@@ -1831,17 +1931,6 @@ THREE.PixelBox.decodeFrame = function(dataObject, frameIndex){
 		}}}
 
 	}
-	// if(optimize) console.log("Optimized "+(normals.length / 3)+" from "+(normals.length / 3 + optimizeRemoved) +" with smoothNormals = "+smoothNormals);
-	
-	// return buffers
-	//var posAttr = new THREE.BufferAttribute(new Float32Array(positions), 3);
-	//var colorAttr = new THREE.BufferAttribute(new Float32Array(colors), 4);
-	//var normAttr = new THREE.BufferAttribute(new Float32Array(normals), 3);
-	//var occAttr = new THREE.BufferAttribute(new Float32Array(occlusion), 1);
-	
-	//var elapsedMs = (new Date()).getTime() - startTime.getTime();
-	//THREE.PixelBox.lastDecodeMs = elapsedMs;
-	//console.log("decode took "+elapsedMs+"ms");
 	
 	return {p:positions, c:colors, n:normals, o:occlusion};
 }
@@ -1857,7 +1946,8 @@ THREE.PixelBox.decodeFrame = function(dataObject, frameIndex){
 	for the first frame and { s:startOffset, l:length } for consecutive frames (referring to 0 frame)
 
 */
-THREE.PixelBox.finalizeFrames = function(dataObject){
+
+THREE.PixelBoxUtil.finalizeFrames = function(dataObject){
 	var ffd = dataObject.frameData[0];
 	var curOffset = 0;
 	var lastNonEmpty = 0;
@@ -1910,9 +2000,7 @@ THREE.PixelBox.finalizeFrames = function(dataObject){
 	after finishing encoding all frames, delete dataObject.assembledFrames property (used while encoding for delta lookups)
 */
 
-THREE.PixelBox.encodeFrame = function(frameData, dataObject){
-	//var startTime = new Date();
-	
+THREE.PixelBoxUtil.encodeFrame = function(frameData, dataObject){
 	// current frame number
 	var frameIndex = dataObject.frames.length;
 
@@ -1950,11 +2038,6 @@ THREE.PixelBox.encodeFrame = function(frameData, dataObject){
 	}}}
 	
 	dataObject.frames.push(combine.join(''));
-	
-	// finished
-	//var elapsedMs = (new Date()).getTime() - startTime.getTime();
-	//THREE.PixelBox.lastEncodeMs = elapsedMs;
-	// console.log("encode took "+elapsedMs+"ms");
 }
 
 
@@ -1966,7 +2049,7 @@ THREE.PixelBox.encodeFrame = function(frameData, dataObject){
 	
 */
 
-THREE.PointCloud.prototype.pixelBoxRaycast = ( function () {
+THREE.PixelBox.prototype.raycast = ( function () {
 
 	var inverseMatrix = new THREE.Matrix4();
 	var ray = new THREE.Ray();
@@ -2044,7 +2127,7 @@ THREE.PointCloud.prototype.pixelBoxRaycast = ( function () {
 
 }() );
 
-THREE.PointCloud.prototype.encodeRawFrame = function(dataObject, frameNumber){
+THREE.PixelBox.prototype.encodeRawFrame = function(dataObject, frameNumber){
 	var obj = {p:new Array(), n:new Array(), c:new Array(), o:new Array()};
 	var ff = this.geometry.data.frameData[0];
 	var fd = this.geometry.data.frameData[frameNumber];
@@ -2075,7 +2158,7 @@ THREE.PointCloud.prototype.encodeRawFrame = function(dataObject, frameNumber){
 
 
 /* adds a new frame at frameIndex, populated with solid box of particles */
-THREE.PointCloud.prototype.addFrameAt = function(frameIndex){
+THREE.PixelBox.prototype.addFrameAt = function(frameIndex){
 	var geometry = this.geometry;
 	var data = geometry.data;
 	var pos = new Array();
@@ -2106,7 +2189,7 @@ THREE.PointCloud.prototype.addFrameAt = function(frameIndex){
 };
 
 /* swap frames, used by frame range reverse in editor */
-THREE.PointCloud.prototype.swapFrames = function(a, b){
+THREE.PixelBox.prototype.swapFrames = function(a, b){
 	var geometry = this.geometry;
 	var obj = geometry.data.frameData[a];
 	geometry.data.frameData[a] = geometry.data.frameData[b];
@@ -2115,7 +2198,7 @@ THREE.PointCloud.prototype.swapFrames = function(a, b){
 };
 
 /* removes and destroys frame */
-THREE.PointCloud.prototype.removeFrameAt = function(frameIndex){
+THREE.PixelBox.prototype.removeFrameAt = function(frameIndex){
 	var geometry = this.geometry;
 	var _gl = renderer.webgl.context;
 	var data = geometry.data;
@@ -2133,7 +2216,7 @@ THREE.PointCloud.prototype.removeFrameAt = function(frameIndex){
 };
 
 /* moves frame to new loc */
-THREE.PointCloud.prototype.moveFrame = function(loc, newLoc){
+THREE.PixelBox.prototype.moveFrame = function(loc, newLoc){
 	var geometry = this.geometry;
 	var data = geometry.data;
 	var fdo = data.frameData[loc];
@@ -2143,76 +2226,12 @@ THREE.PointCloud.prototype.moveFrame = function(loc, newLoc){
 };
 
 /* 
-	particle effects
-	
-	callBack(pobj) is called for each point
-	
-	pobj is:
-	{ i: #, p: position, n: normal, c: color, a: alpha, o: occlusion, b: brightness }
-	
-	set values in pobj to update particle
-
-
-*/
-THREE.PointCloud.prototype.updateFrameWithCallback = function(callBack, extraParam){
-	var geometry = this.geometry;
-	var dataObject = geometry.data;
-	var frameBuffers = dataObject.frameData[0];
-	var addr = 0;
-	var pobj = {
-		p: new THREE.Vector3(),	
-		n: new THREE.Vector3(),	
-		c: new THREE.Color(),
-		a: 0.0,
-		b: 1.0, 
-		o: 0.0,
-	};
-	var numParticles = dataObject.width * dataObject.depth * dataObject.height;
-	for(addr = 0; addr < numParticles; addr++){
-		pobj.i = addr;
-		pobj.p.set(frameBuffers.p.array[addr * 3], frameBuffers.p.array[addr * 3 + 1], frameBuffers.p.array[addr * 3 + 2]);
-		pobj.n.set(frameBuffers.n.array[addr * 3], frameBuffers.n.array[addr * 3 + 1], frameBuffers.n.array[addr * 3 + 2]);
-		pobj.b = pobj.n.length() - 1.0;
-		pobj.n.normalize();
-		pobj.o = frameBuffers.o.array[addr];
-		pobj.c.setRGB(frameBuffers.c.array[addr * 4], frameBuffers.c.array[addr * 4 + 1], frameBuffers.c.array[addr * 4 + 2]);
-		pobj.a = frameBuffers.c.array[addr * 4 + 3];
-
-		// call
-		callBack(pobj, extraParam);
-		
-		// copy back
-		frameBuffers.p.array[addr * 3] = pobj.p.x;
-		frameBuffers.p.array[addr * 3 + 1] = pobj.p.y;
-		frameBuffers.p.array[addr * 3 + 2] = pobj.p.z;
-		
-		frameBuffers.o.array[addr] = pobj.o;
-		
-		pobj.n.multiplyScalar(1.0 + pobj.b);
-		frameBuffers.n.array[addr * 3] = pobj.n.x;
-		frameBuffers.n.array[addr * 3 + 1] = pobj.n.y;
-		frameBuffers.n.array[addr * 3 + 2] = pobj.n.z;
-		
-		frameBuffers.c.array[addr * 4] = pobj.c.r;
-		frameBuffers.c.array[addr * 4 + 1] = pobj.c.g;
-		frameBuffers.c.array[addr * 4 + 2] = pobj.c.b;
-		frameBuffers.c.array[addr * 4 + 3] = pobj.c.a;
-	}
-	
-	frameBuffers.c.needsUpdate = true;
-	frameBuffers.n.needsUpdate = true;
-	frameBuffers.o.needsUpdate = true;
-	frameBuffers.p.needsUpdate = true;
-	
-};
-
-/* 
 	updates a frame using supplied data
 	frameData is an array of width * height * depth containing {c: color, a: alpha, b: brightness } or null
 	returns time took to update in milliseconds
 */
 
-THREE.PointCloud.prototype.replaceFrame = function(frameData, frameIndex){
+THREE.PixelBox.prototype.replaceFrame = function(frameData, frameIndex){
 	var startTime = new Date();
 	var geometry = this.geometry;
 	var dataObject = geometry.data;
@@ -2415,7 +2434,8 @@ THREE.PointCloud.prototype.replaceFrame = function(frameData, frameIndex){
 	merges strokeSet into frame, replacing pixels
 	used during a brush stroke in editor  
 */
-THREE.PointCloud.prototype.replaceFramePartial = function(strokeSet, frameIndex){
+
+THREE.PixelBox.prototype.replaceFramePartial = function(strokeSet, frameIndex){
 	var geometry = this.geometry;
 	var startTime = new Date();
 	

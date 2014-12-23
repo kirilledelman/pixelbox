@@ -3,43 +3,37 @@
 
 	Properties:
 
-
-	Object type - instance of template	
-		dynamic updates when template is edited
-	* Global instance refreshing can occur on selection change, if any objects selected are or descendents of instances
-		
 	When renaming objects, if instance, don't allow duplicate names globally
 	
 	custom properties def.props
-		
-	
-		
-		
+		Number
+		String
+		JSON - valid json
 		
 		
 	NEXT:
 	
-	
-	Meta field for all objects
-	"custom" objects (Container)
-	
 	mouse move tool (with Shift?)
 	
-	make transform(max scale) affect pointSize
+	When deleting a template, delete all instances with it
 	
 	? camera FOV / updateViewPortUniform code is incorrect
 	
 	? Camera default + template
 			
+	Geometry - other types besides Plane
+	
 
 	LATER:
+
+	Drag asset into Scene graph onto a parent to add to
 
 	[Swap Asset]
 
 	add under View:
 		[x] Show labels
 
-	add textures to planes
+	add textures to planes? - via custom props
 	texture as a resource
 
 */
@@ -60,6 +54,7 @@ function EditSceneScene(){
 	this.disableCanvasInteractionsOnRelease = false;
 	
 	this.version = '1.0';
+	
 }
 
 EditSceneScene.prototype = {
@@ -75,7 +70,7 @@ EditSceneScene.prototype = {
 			else if(obj.shadowMap) obj.shadowMap.dispose();
 		}
 		for(var a in assets.cache.files){
-			THREE.PixelBox.prototype.dispose(assets.cache.files[a]);
+			THREE.PixelBoxUtil.dispose(assets.cache.files[a]);
 		}
 		// clear assets
 		assets.cache.clear();
@@ -86,10 +81,10 @@ EditSceneScene.prototype = {
 				var val = arg[p];
 				if(typeof(val)!='object') continue;
 				if(val && val instanceof THREE.Object3D){
-					if(val instanceof THREE.PointCloud) val.dispose();
+					if(val.pixelBox) val.dispose();
 					checkArgs(p.children);
 				} else if(val && val.frameData && val.width){
-					THREE.PixelBox.prototype.dispose(val);
+					THREE.PixelBoxUtil.dispose(val);
 				}
 			}
 		}		
@@ -237,6 +232,7 @@ EditSceneScene.prototype = {
 			this._undoing = false;
 			this.undoChanged();
 			this.refreshProps();
+			this.rebuildInstances();
 		}
 	},
 	performRedo:function(){
@@ -257,6 +253,7 @@ EditSceneScene.prototype = {
 			this._undoing = false;
 			this.undoChanged();
 			this.refreshProps();
+			this.rebuildInstances();
 		}
 	},
 
@@ -513,6 +510,7 @@ EditSceneScene.prototype = {
 	deleteObjects:function(objs){
 		for(var i = 0; i < objs.length; i++){
 			var obj = objs[i];
+			this.touchTemplate(obj);
 			if(obj.selected) this.selectObject(obj, false);
 			this.objectDeletedRecusive(obj);
 			obj.parent.remove(objs[i]);
@@ -529,6 +527,7 @@ EditSceneScene.prototype = {
 			var p = objParArr[i][1];
 			p.add(obj);
 			this.objectAddedRecusive(obj);
+			this.touchTemplate(obj);
 		}
 		this.updateTextLabels(this.container, 0);
 		this.refreshScene();
@@ -576,7 +575,7 @@ EditSceneScene.prototype = {
 		if(!toCopy.length) return;
 		// copy assets
 		function addAssetsRecursive(obj){
-			if(obj instanceof THREE.PointCloud){
+			if(obj.pixelBox){
 				if(!copiedAssets[obj.asset.name]){
 					copiedAssets[obj.asset.name] = obj.asset.importedAsset;
 				}
@@ -626,7 +625,7 @@ EditSceneScene.prototype = {
 			}
 		}
 		
-		var addedObjects = this.populateObject(pasteTarget, this.sceneCopyItem.objects, { helpers: true, keepSceneCamera:true, noNameReferences:true });
+		var addedObjects = this.populateObject(pasteTarget, this.sceneCopyItem.objects, { helpers: true, keepSceneCamera:true, noNameReferences:true, wrapTemplates: true, templates: this.doc.serializedTemplates });
 		this.updateLights = true;
 		var doAdd = [];
 		var undoAdd = [];
@@ -656,8 +655,8 @@ EditSceneScene.prototype = {
 			}
 		}
 		this.selectionChanged();
-		this.controls.center.copy(pasteTarget.parent.localToWorld(pasteTarget.position.clone()));
-		this.camera.lookAt(this.controls.center);
+		//this.controls.center.copy(pasteTarget.parent.localToWorld(pasteTarget.position.clone()));
+		//this.camera.lookAt(this.controls.center);
 		this.refreshAssets();
 		//this.controls.focus(pasteTarget, true);
 	},
@@ -669,6 +668,7 @@ EditSceneScene.prototype = {
 			var obj = objArr[i][0];
 			var np = objArr[i][1];
 			np.add(obj);
+			this.touchTemplate(obj);
 		}
 		this.refreshScene();
 	},
@@ -727,7 +727,7 @@ EditSceneScene.prototype = {
 	
 	/* updates text labels on all elements in container, recursive */
 	updateTextLabels: function(cont, depth){
-		if(!cont) return;
+		if(!cont || !this.labelsVisible || cont.omit || cont.isInstance) return;
 		var p = new THREE.Vector3();
 		var windowInnerWidth = window.innerWidth;
 		var windowInnerHeight = window.innerHeight;
@@ -740,38 +740,53 @@ EditSceneScene.prototype = {
 			if(!obj.htmlLabel){
 				obj.htmlLabel = $('<label id="'+obj.uuid+'" class="object-label" style="color:'+this.automaticColorForIndex(obj.id, 1, false)+'"/>').text(obj.name);
 				if(obj.isAnchor) obj.htmlLabel.css({'background-color':'transparent', 'font-size':'8px','font-weight':'normal'});
-				var type = (obj instanceof THREE.PointCloud) ? 'PixelBox' : (obj.def ? obj.def.asset : 0);
+				var type = (obj.pixelBox) ? 'PixelBox' : (obj.def ? obj.def.asset : 0);
 				if(type) obj.htmlLabel.addClass(type);
 				if(obj.isTemplate) obj.htmlLabel.addClass('template');
 				if(!obj.visible) obj.htmlLabel.css({visibility: 'hidden'});
 				obj.htmlLabel.click(this.objectLabelClicked);
 				$(document.body).append(obj.htmlLabel);
 			}
-			p.set(0,0,0);
-			obj.localToWorld(p);
-			p.project(this.camera);
-			var offs = depth * (obj.isAnchor ? -5 : 8);
-			var lw, lh;
-			if(obj.htmlLabel.labelWidth){
-				lw = obj.htmlLabel.labelWidth;
-				lh = obj.htmlLabel.labelHeight;
-			} else {
-				obj.htmlLabel.labelWidth = lw = obj.htmlLabel.width();
-				obj.htmlLabel.labelHeight = lh = obj.htmlLabel.height();
+			var vis = true;
+			if(this.labelsVisible == 1){
+				vis = obj.selected;
 			}
-			var x = Math.max(0, Math.min(windowInnerWidth - lw - 20, 
-								Math.floor(windowInnerWidth * 0.5 * p.x + windowInnerWidth * 0.5 - lw * 0.5)));
-			var y = Math.max(0, Math.min(windowInnerHeight - lh - 10, 
-					Math.floor(windowInnerHeight * 0.5 - windowInnerHeight * 0.5 * p.y - lh * 0.5) + offs));
-			if(p.z < 0 || p.z > 1.0) {
-				y = 0;
-			}
-			if(obj.htmlLabel.labelX != x || obj.htmlLabel.labelY != y){
-				obj.htmlLabel.offset({top:(obj.htmlLabel.labelY = y), left:(obj.htmlLabel.labelX = x)});
-				obj.htmlLabel.css({zIndex: parseInt(1 + (1 - p.z) * 10000)});
+			obj.htmlLabel.css({ display: vis ? 'block' : 'none'});
+			if(vis){
+				p.set(0,0,0);
+				obj.localToWorld(p);
+				p.project(this.camera);
+				var offs = depth * (obj.isAnchor ? -5 : 8);
+				var lw, lh;
+				if(obj.htmlLabel.labelWidth){
+					lw = obj.htmlLabel.labelWidth;
+					lh = obj.htmlLabel.labelHeight;
+				} else {
+					obj.htmlLabel.labelWidth = lw = obj.htmlLabel.width();
+					obj.htmlLabel.labelHeight = lh = obj.htmlLabel.height();
+				}
+				var x = Math.max(0, Math.min(windowInnerWidth - lw - 20, 
+									Math.floor(windowInnerWidth * 0.5 * p.x + windowInnerWidth * 0.5 - lw * 0.5)));
+				var y = Math.max(0, Math.min(windowInnerHeight - lh - 10, 
+						Math.floor(windowInnerHeight * 0.5 - windowInnerHeight * 0.5 * p.y - lh * 0.5) + offs));
+				if(p.z < 0 || p.z > 1.0) {
+					y = 0;
+				}
+				if(obj.htmlLabel.labelX != x || obj.htmlLabel.labelY != y){
+					obj.htmlLabel.offset({top:(obj.htmlLabel.labelY = y), left:(obj.htmlLabel.labelX = x)});
+					obj.htmlLabel.css({zIndex: parseInt(1 + (1 - p.z) * 10000)});
+				}
 			}
 			this.updateTextLabels(obj, depth + 1);
 		}
+	},
+	
+	setLabelsVisible:function(mode){
+		this.labelsVisible = mode;
+		if(mode == 0){
+			$('.object-label').css({ display: 'none' });
+		}
+		this.updateTextLabels(this.container, 0);
 	},
 
 /* ------------------- ------------------- ------------------- ------------------- ------------------- Util */
@@ -1002,7 +1017,8 @@ EditSceneScene.prototype = {
 				ambient: new THREE.Color(0),
 				fogColor: new THREE.Color(0),
 				fogNear: 1000,
-				fogFar: 10000
+				fogFar: 10000,
+				templates:{}
 			};
 			this.clearColor = this.doc.clearColor.getHex();
 			this.deselectAll();
@@ -1079,17 +1095,20 @@ EditSceneScene.prototype = {
 			if(!assets.cache.get(asset.name)){
 				asset.importedAsset = _.deepClone(asset, 100);
 				assets.cache.add(asset.name, asset);
-				THREE.PixelBox.prototype.processPixelBoxFrames(asset);
+				THREE.PixelBoxUtil.processPixelBoxFrames(asset);
 			}
 		}
 		
 		// populate
-		var opts = { helpers: true, keepSceneCamera:true, noNameReferences: true, templates: dataObject.templates };
+		var opts = { helpers: true, keepSceneCamera:true, noNameReferences: true, wrapTemplates: true, templates: dataObject.templates };
 		var addedObjects = this.populateObject(this.container, dataObject.layers, opts);
 		if(dataObject.containsTemplates){
 			for(var ti = 0; ti < dataObject.containsTemplates.length; ti++){
 				var td = dataObject.templates[dataObject.containsTemplates[ti]];
-				if(td) this.populateObject(this.container, [ dataObject.templates[dataObject.containsTemplates[ti]] ], opts);
+				if(td) { 
+					var addedTemplates = this.populateObject(this.container, [ td ], opts);
+					this.linkObjects(addedTemplates, addedTemplates[0]);
+				}
 			}
 		}
 		this.linkObjects(addedObjects, this.container);
@@ -1100,6 +1119,7 @@ EditSceneScene.prototype = {
 		this.resetZoom();
 		
 		// refresh
+		this.refreshTemplates();
 		this.refreshScene();
 		this.refreshAssets();
 		this.refreshProps();
@@ -1236,7 +1256,7 @@ EditSceneScene.prototype = {
 		if(!newAsset.importedAsset){
 			// just imported
 			newAsset.importedAsset = _.deepClone(newAsset, 100);
-			THREE.PixelBox.prototype.processPixelBoxFrames(newAsset);
+			THREE.PixelBoxUtil.processPixelBoxFrames(newAsset);
      	}
 	
 		var replaced = [];
@@ -1267,7 +1287,7 @@ EditSceneScene.prototype = {
 					}
 					
 				// Replace existing asset
-				} else if(obj3d instanceof THREE.PointCloud && obj3d.geometry.data != newAsset && obj3d.geometry.data.name == newAsset.name){
+				} else if(obj3d.pixelBox && obj3d.geometry.data != newAsset && obj3d.geometry.data.name == newAsset.name){
 					newObj = new THREE.PixelBox(newAsset);
 					// transplant children
 					for(var i = obj3d.children.length - 1; i >= 0; i--){
@@ -1368,7 +1388,7 @@ EditSceneScene.prototype = {
 						newObj.stipple = 0;
 					}
 					if(layer.animSpeed != undefined) newObj.animSpeed = layer.animSpeed;
-					if(newObj instanceof THREE.PointCloud && layer.animOption != undefined){
+					if(newObj.pixelBox && layer.animOption != undefined){
 						editScene.pixelboxApplyAnimationParams(newObj);
 					}					
 					
@@ -1396,7 +1416,7 @@ EditSceneScene.prototype = {
 		
 		// dispose of old asset
 		/* var oldAsset = assets.cache.get(newAsset.name);
-		if(oldAsset){ THREE.PixelBox.prototype.dispose(oldAsset); } */
+		if(oldAsset){ THREE.PixelBoxUtil.dispose(oldAsset); } */
 		
 		// add new asset to cache
 		assets.cache.add(newAsset.name, newAsset);
@@ -1477,6 +1497,7 @@ EditSceneScene.prototype = {
 		var usedTemplateNames = {};
 		this.container.traverse(function(obj3d){
 			var usedNames = {};
+			if(obj3d.isInstance || obj3d.parentInstance()) return;
 			for(var i = 0; i < obj3d.children.length; i++){
 				var child = obj3d.children[i];
 				if(child.isTemplate){
@@ -1581,7 +1602,7 @@ EditSceneScene.prototype = {
 				}
 				
 				// encode
-				THREE.PixelBox.encodeFrame(convertedFrame, obj);
+				THREE.PixelBoxUtil.encodeFrame(convertedFrame, obj);
 			}
 			delete obj.assembledFrames;
 		}		
@@ -1635,14 +1656,17 @@ EditSceneScene.prototype = {
 		// traverse
 		editScene.container.children.sort(editScene.sceneSortFunc);
 		editScene.container.traverse(function(obj3d){
+			obj3d.omit = (obj3d.parent.isInstance === true) | (obj3d.parent.omit === true);
+		
 			// don't show helpers
-			if(obj3d.isHelper || obj3d == editScene.container || obj3d.parent.isHelper) return;
+			if(obj3d.isHelper || obj3d == editScene.container || obj3d.parent.isHelper || obj3d.omit) return;
 			
 			// sort children
 			obj3d.children.sort(editScene.sceneSortFunc);
 			
 			// create a new row			
-			var type = (obj3d.isAnchor ? 'Anchor' : (obj3d instanceof THREE.PointCloud ? obj3d.geometry.data.name : obj3d.def.asset));
+			var type = (obj3d.isAnchor ? 'Anchor' : (obj3d.pixelBox ? obj3d.geometry.data.name : obj3d.def.asset));
+			if(obj3d.isInstance) type = '['+obj3d.def.template+']';
 			if(!obj3d.htmlRow) {
 				var color = editScene.automaticColorForIndex(obj3d.id, 1.0);
 				obj3d.htmlRow = $('<div class="row" id="row-'+obj3d.uuid+'">\<div class="selection"/><div class="droptarget"/>\
@@ -1650,7 +1674,7 @@ EditSceneScene.prototype = {
 				<span class="type"/></div>');
 				
 				// type
-				obj3d.htmlRow.addClass(obj3d instanceof THREE.PointCloud ? 'PixelBox' : type);
+				obj3d.htmlRow.addClass(type);
 				
 				// placeholder
 				if(obj3d.isPlaceholder) obj3d.htmlRow.addClass('missing');
@@ -1694,7 +1718,7 @@ EditSceneScene.prototype = {
 			} else {
 				obj3d.htmlRow.removeClass('template');
 			}			
-			if(obj3d.children.length){
+			if(obj3d.children.length && !obj3d.isInstance){
 				obj3d.htmlRow.children('a.toggle').css({visibility:'visible'});
 			} else {
 				obj3d.htmlRow.children('a.toggle').css({visibility:'hidden'});
@@ -1763,10 +1787,22 @@ EditSceneScene.prototype = {
 			var obj = ((uuid == 'e') ? editScene.container : editScene.container.getObjectByUUID(uuid, true));
 			var invalid = false;
 			for(var i = 0; i < draggedObjects.length; i++){
-				if(obj == draggedObjects[i] || obj.isDescendentOf(draggedObjects[i])){
+				// no parenting to dragged objects themselves, or instances
+				if(obj == draggedObjects[i] || obj.isDescendentOf(draggedObjects[i]) || obj.isInstance || obj.omit){
 					invalid = true;
 					break;
 				}
+				// no parenting if dragged object is an instance and this object is a template that contains it
+				/*if(draggedObjects[i].isInstance){
+					var inst = obj;
+					while(inst){
+						if(inst.isTemplate && inst.name == draggedObj[i].def.template){
+							invalid = true;
+							break;
+						}
+						inst = inst.parentInstance();
+					}
+				}*/
 			}
 			if(!invalid){
 				var dd = $(el).children('div.droptarget');
@@ -1910,6 +1946,15 @@ EditSceneScene.prototype = {
 	
 	objectClicked:function(object){
 		if(object){
+			// find topmost non-omit object
+			if(object.omit){
+				while(object != this.container){
+					if(object.omit) object = object.parent;
+					else break;
+				}
+				if(object == this.container) return;
+			}
+		
 			if(this.shift) this.selectObject(object, true);
 			else if(this.ctrl) this.selectObject(object, !object.selected);
 			else if(this.alt) this.selectObject(object, false);
@@ -1968,7 +2013,7 @@ EditSceneScene.prototype = {
 		var assetName = $(e.target).attr('name');
 		if(!(editScene.shift || editScene.alt)) editScene.deselectAll();
 		editScene.container.traverse(function(obj){
-			if(obj instanceof THREE.PointCloud && obj.geometry.data.name == assetName){
+			if(obj.pixelBox && obj.geometry.data.name == assetName){
 				editScene.selectObject(obj, !editScene.alt);
 			}
 		});
@@ -1978,8 +2023,16 @@ EditSceneScene.prototype = {
 	
 	selectionChanged:function(){
 		// scroll last selected obj into view in scene panel
+		var containsTemplatedObjects = false;
 		if(this.selectedObjects.length){
-			var lastObj = this.selectedObjects[this.selectedObjects.length - 1];
+			var lastObj;
+			for(var i = 0; i < this.selectedObjects.length; i++){
+				lastObj = this.selectedObjects[i];
+				if(lastObj.nearestTemplate()){
+					containsTemplatedObjects = true;
+					break;
+				}
+			}			
 			var list = $('#scene-list');
 			var listHeight = list.height();
 			var topOffs = list.offset();
@@ -1996,6 +2049,10 @@ EditSceneScene.prototype = {
 				list.animate({ scrollTop:p }, 250);
 			}
 		}
+		
+		this.refreshTemplates();
+		
+		if(containsTemplatedObjects || !this.selectedObjects.length) this.rebuildInstances();
 		
 		// refresh props panel
 		this.refreshProps();
@@ -2051,7 +2108,7 @@ EditSceneScene.prototype = {
 			if(obj3d.isPlaceholder){	
 				if(!allAssets[obj3d.def.asset]) allAssets[obj3d.def.asset] = { used: 1, name:obj3d.def.asset, missing:true };
 				else allAssets[obj3d.def.asset].used++;
-			} else if(obj3d instanceof THREE.PointCloud){
+			} else if(obj3d.pixelBox){
 				assets.cache.files[obj3d.geometry.data.name].used++;
 			}
 		});
@@ -2225,7 +2282,7 @@ EditSceneScene.prototype = {
 		var objsAdd = [];
 		var objs = [];
 		function trav(obj){
-			if(obj instanceof THREE.PointCloud && obj.geometry.data.name == assetName){
+			if(obj.pixelBox && obj.geometry.data.name == assetName){
 				objsAdd.push([obj, obj.parent]);
 				objs.push(obj);
 			} else {
@@ -2289,8 +2346,11 @@ EditSceneScene.prototype = {
 /* ------------------- ------------------- ------------------- ------------------- ------------------- Name */
 
 	renameObjects:function(objNameArr){
+		var renameInstances = {};
+		var hasTemplates = false;
 		for(var i = 0; i < objNameArr.length; i++){
 			var obj = objNameArr[i][0];
+			var oldName = obj.name;
 			obj.name = objNameArr[i][1];
 			if(obj.htmlLabel){
 				obj.htmlLabel.text(obj.name);
@@ -2299,7 +2359,12 @@ EditSceneScene.prototype = {
 			if(obj.htmlRow){
 				obj.htmlRow.children('label').first().text(obj.name);
 			}
+			if(obj.isTemplate){
+				renameInstances[oldName] = obj.name;
+				hasTemplates = true;
+			}
 		}
+		this.refreshTemplates(hasTemplates ? renameInstances : null);
 		this.refreshScene();
 	},
 
@@ -2339,6 +2404,7 @@ EditSceneScene.prototype = {
 			var obj = objArr[i][0];
 			var val = objArr[i][1];
 			obj.visible = val;
+			this.touchTemplate(obj);
 		}
 		this.refreshScene(); // refreshes labels visibility
 	},
@@ -2355,7 +2421,9 @@ EditSceneScene.prototype = {
 				obj.htmlLabel.removeClass('template');
 				obj.htmlRow.removeClass('template');
 			}
+			this.touchTemplate(obj);
 		}
+		this.refreshTemplates();
 	},
 
 	moveObjects:function(objPosArr){
@@ -2366,6 +2434,7 @@ EditSceneScene.prototype = {
 				obj.updateMatrixWorld(true);
 				obj.helper.update();
 			}
+			editScene.touchTemplate(obj);
 		}
 	},
 
@@ -2427,6 +2496,7 @@ EditSceneScene.prototype = {
 				obj.updateMatrixWorld(true);
 				obj.helper.update();
 			}
+			editScene.touchTemplate(obj);
 		}
 	},
 
@@ -2474,6 +2544,7 @@ EditSceneScene.prototype = {
 	scaleObjects:function(objScaleArr){
 		for(var i = 0; i < objScaleArr.length; i++){
 			objScaleArr[i][0].scale.copy(objScaleArr[i][1]);
+			editScene.touchTemplate(objScaleArr[i][0]);
 		}
 	},
 
@@ -2934,6 +3005,74 @@ EditSceneScene.prototype = {
 		}
 	},
 
+
+/* ------------------- ------------------- ------------------- ------------------- ------------------- Templates */
+
+	refreshTemplates:function(renameInstances){
+		// refresh doc's templates
+		this.doc.templates = {};
+		this.doc.serializedTemplates = {};
+		this.container.traverse(function(obj){
+			if(obj.isTemplate){
+				editScene.doc.templates[obj.name] = obj;
+				editScene.doc.serializedTemplates[obj.name] = obj.serialize(editScene.doc.templates);
+			} else if(obj.isInstance && renameInstances){
+				if(renameInstances[obj.def.template]){
+					obj.def.template = renameInstances[obj.def.template];
+				}
+			}
+			
+		});
+	},
+
+	rebuildInstances:function(){
+		var replacements = {};
+		var numRebuilt = 0;
+		// check if any templates are dirty first
+		for(var t in this.doc.templates){
+			if(this.doc.templates[t].dirty) {
+				numRebuilt++;
+				this.doc.serializedTemplates[t] = this.doc.templates[t].serialize(this.doc.templates);
+			}
+		}
+		if(!numRebuilt) return;
+		numRebuilt = 0;
+		this.container.traverse(function(obj){
+			if(obj.isInstance && editScene.doc.templates[obj.def.template].dirty){
+				replacements[obj.uuid] = obj;
+				numRebuilt++;			
+			}
+		});
+		if(numRebuilt){
+			var opts = { helpers: false, keepSceneCamera:true, noNameReferences:true, wrapTemplates: false, templates: this.doc.serializedTemplates };
+			for(var uuid in replacements){
+				var obj = replacements[uuid];
+				var def = obj.serialize(null);
+				obj.recursiveRemoveChildren();
+				this.populateObject(obj, [ def ], opts);
+				var newObj = obj.children[0];
+				newObj.position.set(0,0,0);
+				newObj.rotation.set(0,0,0);
+				newObj.scale.set(1,1,1);
+				newObj.visible = true;
+				//console.log('rebuilt '+obj.def.template+' from ',this.doc.serializedTemplates[obj.def.template]);
+			}
+			this.refreshScene();
+		}
+		
+		// clear flag		
+		for(var t in this.doc.templates){
+			this.doc.templates[t].dirty = false;
+		}
+	},
+	
+	touchTemplate:function(obj){
+		var template = obj.nearestTemplate();
+		while(template){
+			template.dirty = true;
+			template = template.parent ? template.parent.nearestTemplate() : null;
+		}
+	},
 	
 /* ------------------- ------------------- ------------------- ------------------- ------------------- Camera panel */
 
@@ -2951,6 +3090,7 @@ EditSceneScene.prototype = {
 				obj.updateProjectionMatrix();				
 			}
 			if(obj.helper) obj.helper.update();
+			editScene.touchTemplate(obj);
 		}
 	},
 	
@@ -3273,12 +3413,13 @@ EditSceneScene.prototype = {
 				obj.def[prop] = val;
 			}
 			this.pixelboxApplyAnimationParams(obj);
+			this.touchTemplate(obj);			
 		}		
 	},
 	
 	restartAllAnims:function(){
 		editScene.container.traverseVisible(function(obj){
-			if(obj instanceof THREE.PointCloud){
+			if(obj.pixelBox){
 				obj.stopAnim();
 				obj.frame = 0;
 				editScene.pixelboxApplyAnimationParams(obj);
@@ -3490,6 +3631,7 @@ EditSceneScene.prototype = {
 			} else {
 				obj.material[prop] = val;
 			}
+			editScene.touchTemplate(obj);
 		}		
 	},
 
@@ -3638,7 +3780,8 @@ EditSceneScene.prototype = {
 				case 'OrthographicCamera':
 					return 'Camera';
 				default:
-					return (o instanceof THREE.PointCloud) ? 'PixelBox' : o.def.asset;
+					if(o.isInstance) return '['+o.def.template+']';						
+					return (o.pixelBox) ? 'PixelBox' : o.def.asset;
 				}
 			} else if(o.isAnchor){
 				return 'Anchor';
@@ -3659,7 +3802,7 @@ EditSceneScene.prototype = {
 			// excludes
 			containsAnchors = containsAnchors || (!!obj.isAnchor);
 			containsContainers = containsContainers | (obj.isContainer);
-			containsPointClouds = containsPointClouds | (obj instanceof THREE.PointCloud);
+			containsPointClouds = containsPointClouds | (obj.pixelBox);
 			containsInstances = containsInstances | (obj.isInstance);
 			containsCameras = containsCameras | (obj instanceof THREE.Camera);
 			containsGeometry = containsGeometry | (obj instanceof THREE.Mesh);
@@ -3677,7 +3820,10 @@ EditSceneScene.prototype = {
 				mults['type'] = true;
 				commonType = null;
 			} else if(!mults['type']){
-				$('#prop-object-type').text(this.selectedObjects.length > 1 ? type : (obj.isAnchor ? 'Anchor' : ((obj instanceof THREE.PointCloud) ? 'PixelBox' : obj.def.asset)));
+				$('#prop-object-type').text(this.selectedObjects.length > 1 ? type : 
+												(obj.isAnchor ? 'Anchor' : 
+													((obj.pixelBox) ? 'PixelBox' : 
+														(obj.isInstance ? obj.def.template : obj.def.asset))));
 				commonType = type;
 			} 
 			
@@ -4066,6 +4212,12 @@ EditSceneScene.prototype = {
 			$('#panel-move input[type=text]').removeAttr('disabled').spinner('enable');
 			$('#panel-move input[type=checkbox]').removeAttr('disabled');
 			$('#look-at,#prop-name,#obj-from-cam').removeAttr('disabled');			
+		}
+		
+		if(containsInstances){
+			$('#prop-template,#prop-template~label:first').hide();
+		} else {
+			$('#prop-template,#prop-template~label:first').show();
 		}
 		
 		// only hemi lights have ground color
@@ -4794,6 +4946,10 @@ EditSceneScene.prototype = {
 		$(window).on('dragleave', this.onDragFilesOver);
 		$(window).on('drop', this.onDropFiles);
 		
+		// default label mode
+		this.labelsVisible = localStorage_getItem('labelsVisible');
+		if(this.labelsVisible === null) this.labelsVisible = 2; // 0 = none, 1 = selected, 2 = all
+		
 		this.enableCanvasInteractions(true);
 	},
 	
@@ -4807,13 +4963,20 @@ EditSceneScene.prototype = {
 		var objDef = null;
 		var addTarget;
 		var addPos = new THREE.Vector3();
+		var firstSelectedNonInstance = null;
+		for(var i = 0; i < this.selectedObjects.length; i++){
+			if(!this.selectedObjects[i].isInstance){
+				firstSelectedNonInstance = this.selectedObjects[i];
+				break;
+			}
+		}
 		// add into
 		if(e.shiftKey) {
-			addTarget = this.selectedObjects.length ? this.selectedObjects[0] : this.container;
+			addTarget = firstSelectedNonInstance ? firstSelectedNonInstance : this.container;
 		// add next to
 		} else {
-			addTarget = this.selectedObjects.length ? this.selectedObjects[0].parent : this.container;
-			if(this.selectedObjects.length) addPos.copy(this.selectedObjects[0].position);
+			addTarget = firstSelectedNonInstance ? firstSelectedNonInstance.parent : this.container;
+			if(this.selectedObjects.length) addPos.copy(addTarget.position);
 		}
 		var addWorldPos = addTarget.parent.localToWorld(addPos.clone());
 		
@@ -4848,20 +5011,19 @@ EditSceneScene.prototype = {
 			$('#scene-add-submenu').remove();
 			var submenu = $('<ul id="scene-add-submenu" class="editor submenu absolute-pos">');
 			var numRows = 0;
-			editScene.container.traverse(function(obj){
-				if(obj.isTemplate){
-					var row = $('<li/>');
-					row.text(obj.name);
-					var func = (function(templateName){ 
-						return function(e){
-							editScene.addObjectMenuItemClicked(e, null, templateName);
-						};
-					})(aname);
-					row.click(func);
-					submenu.append(row);
-					numRows++;
-				}
-			});
+			for(var i in editScene.doc.templates){
+				var obj = editScene.doc.templates[i];
+				var row = $('<li/>');
+				row.text(obj.name);
+				var func = (function(templateName){ 
+					return function(e){
+						editScene.addObjectMenuItemClicked(e, null, templateName);
+					};
+				})(obj.name);
+				row.click(func);
+				submenu.append(row);
+				numRows++;
+			}
 			if(!numRows) submenu.append('<span class="info">- No Templates in Scene -</span>');			
 			submenu.menu().position({
 	            at: "right top",
@@ -4915,16 +5077,22 @@ EditSceneScene.prototype = {
 			
 			if(instance){
 				// find instance
-				var instanceObject = null;
-				editScene.container.traverse(function(obj){
-					if(!instanceObject && obj.isTemplate && obj.name == instance){
-						instanceObject = obj;
-					}
-				});
+				var instanceObject = editScene.doc.templates[instance];
 				if(!instanceObject) return;
 				
-				// NEXT check nesting
-				// walk up parent line, if encountering instance of "instance", fail
+				// check nesting
+				var p = instanceObject;
+				while(p.parent != editScene.container){
+					p = p.parent;
+					if(p.isTemplate && p.name == instance){
+						// nested circular template
+						editScene.showMessage('<span class="error">Template nesting loop</span>');
+						return;
+					}
+				}
+				
+				// ready
+				objDef = { asset: 'Instance', name:instance+'_instance', template: instance };				
 			}
 			break;
 		
@@ -4934,10 +5102,18 @@ EditSceneScene.prototype = {
 			objDef.position = [addPos.x, addPos.y, addPos.z];
 			this.deselectAll();
 			
-			var addedObject = (this.populateObject(addTarget, [ objDef ], { helpers: true, keepSceneCamera:true, noNameReferences:true }))[0];
+			var addedObject;
+			var addedObjects = this.populateObject(addTarget, [ objDef ], 
+								{ helpers: true, keepSceneCamera:true, noNameReferences:true, wrapTemplates: true, templates: this.doc.serializedTemplates });
+			addedObject = addTarget.children[addTarget.children.length - 1];
+			
 			var doAdd = [ [addedObject, addTarget] ];
 			var undoAdd = [ addedObject ];
 			this.addUndo({name:"addObject", redo:[this.addObjects, doAdd], undo:[this.deleteObjects, undoAdd] });
+			
+			if(addedObject.isInstance){
+				this.linkObjects(addedObjects, addedObject);
+			}
 			
 			this.refreshScene();
 			this.updateLights = true;
@@ -5318,7 +5494,7 @@ EditSceneScene.prototype = {
 		
 		this.updateTextLabels(this.container, 0);
 		if(this.updateLights){
-			THREE.PixelBox.updateLights(this.scene, true);
+			THREE.PixelBoxUtil.updateLights(this.scene, true);
 			this.updateLights = false;
 		}
 		
@@ -5352,12 +5528,6 @@ EditSceneScene.prototype = {
 editScene = new EditSceneScene();
 
 /* scene serializing */
-THREE.Object3D.prototype.getNearestTemplate = function(){
-	if(this.isTemplate) return this;
-	if(!this.parent) return null;
-	return this.parent.getNearestTemplate();
-};
-
 THREE.Object3D.prototype.getReferenceName = function(){
 	var nameString = (this.isAnchor ? '$' : '') + this.name;
 	if(this.parent && this.parent.name && this.parent.name.length && !this.parent.isTemplate){
@@ -5388,7 +5558,11 @@ THREE.Object3D.prototype.serialize = function(templates){
 	if(this.isTemplate) def.isTemplate = true;
 	
 	// types
-	if(this instanceof THREE.Camera){
+	if(this.isInstance){
+		def.asset = 'Instance';
+		def.template = this.def.template;
+		
+	} else if(this instanceof THREE.Camera){
 		if(this instanceof THREE.PerspectiveCamera){
 			def.asset =  'Camera';
 			def.fov = this.fov;
@@ -5407,8 +5581,8 @@ THREE.Object3D.prototype.serialize = function(templates){
 		def.color = this.color.getHexString();
 		def.intensity = this.intensity;
 		def.shadowMapWidth = Math.max(this.shadowMapWidth, this.shadowMapHeight);
-		var myTemplate = this.getNearestTemplate();
-		var targetTemplate = this.target.getNearestTemplate();
+		var myTemplate = this.nearestTemplate();
+		var targetTemplate = this.target.nearestTemplate();
 		if(myTemplate != targetTemplate || !this.target.parent || !this.target.name){
 			this.target.updateMatrixWorld(true);
 			var p = new THREE.Vector3();
@@ -5427,8 +5601,8 @@ THREE.Object3D.prototype.serialize = function(templates){
 		def.exponent = this.exponent;
 		def.angle = this.angle * radToDeg;
 		// target is under the same parent/anchor
-		var myTemplate = this.getNearestTemplate();
-		var targetTemplate = this.target.getNearestTemplate();
+		var myTemplate = this.nearestTemplate();
+		var targetTemplate = this.target.nearestTemplate();
 		if(myTemplate != targetTemplate || !this.target.parent || !this.target.name){
 			this.target.updateMatrixWorld(true);
 			var p = new THREE.Vector3();
@@ -5463,7 +5637,7 @@ THREE.Object3D.prototype.serialize = function(templates){
 	} else if(this.isContainer){
 		def.asset = 'Object3D';
 	
-	} else if(this instanceof THREE.PointCloud || this.isPlaceholder){
+	} else if(this.pixelBox || this.isPlaceholder){
 		if(this.isPlaceholder){
 			def.asset = this.def.asset;
 			if(this.def.pointSize != undefined) def.pointSize = this.def.pointSize;
@@ -5532,18 +5706,20 @@ THREE.Object3D.prototype.serialize = function(templates){
 	}
 	
 	// process children
-	for(var i = 0; i < this.children.length; i++){
-		// skip anchors
-		var child = this.children[i];
-		if(child.isAnchor || (child.anchored && this.isAnchor)) continue;
-		var cdef = child.serialize(templates);
-		if(child.isTemplate && templates) {
-			// delete cdef.name;
-			templates[child.name] = cdef;
-			if(!def.containsTemplates){ def.containsTemplates = [ child.name ]; }
-			else def.containsTemplates.push(child.name);
-		} else {
-			def.layers.push(cdef);
+	if(!this.isInstance){
+		for(var i = 0; i < this.children.length; i++){
+			// skip anchors
+			var child = this.children[i];
+			if(child.isAnchor || (child.anchored && this.isAnchor)) continue;
+			var cdef = child.serialize(templates);
+			if(child.isTemplate && templates) {
+				// delete cdef.name;
+				templates[child.name] = cdef;
+				if(!def.containsTemplates){ def.containsTemplates = [ child.name ]; }
+				else def.containsTemplates.push(child.name);
+			} else {
+				def.layers.push(cdef);
+			}
 		}
 	}
 	
@@ -5714,29 +5890,5 @@ function readCookie(name) {
 function eraseCookie(name) {
     createCookie(name, "", -1);
 }
-
-/* deep clone */
-_.deepClone = function(obj, depth) {
-	if (typeof obj !== 'object') return obj;
-	if (obj === null) return null;
-	if (_.isString(obj)) return obj.splice();
-	if (_.isDate(obj)) return new Date(obj.getTime());
-	if (_.isFunction(obj.clone)) return obj.clone();
-	var clone = _.isArray(obj) ? obj.slice() : _.extend({}, obj);
-	// clone array's extended props
-	if(_.isArray(obj)){
-	  for(var p in obj){
-		  if(obj.hasOwnProperty(p) && _.isUndefined(clone[p]) && isNaN(p)){
-			  clone[p] = obj[p];
-		  }
-	  }
-	}
-	if (!_.isUndefined(depth) && (depth > 0)) {
-	  for (var key in clone) {
-	    clone[key] = _.deepClone(clone[key], depth-1);
-	  }
-	}
-	return clone;
-};
 
 $(document).ready(documentReady);

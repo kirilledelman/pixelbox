@@ -1,19 +1,21 @@
 /*
 
-Notes
-
 add "transplant" method
-var position = new THREE.Vector3();
-var quaternion = new THREE.Quaternion();
-var scale = new THREE.Vector3();
-mesh.updateMatrixWorld( true );
-mesh.matrixWorld.decompose( position, quaternion, scale );
+	var position = new THREE.Vector3();
+	var quaternion = new THREE.Quaternion();
+	var scale = new THREE.Vector3();
+	mesh.updateMatrixWorld( true );
+	mesh.matrixWorld.decompose( position, quaternion, scale );
 
+make this.composer optional
 
+rename pool functions to recyle / upcycle
 
+add template instantiation function
 * Make sure to call linkObjects when instantiating templates
 
-clean up
+add callback to options in populateObject
+	callback can return a new object to replace one created (one created will be returned to pool)
 
 */
 
@@ -78,7 +80,7 @@ Scene.prototype = {
 	/* 	populate with scene definition
 		modifies definition itself with references to now-cached assets
 	*/
-	populateWith:function(sceneDef){
+	populateWith:function(sceneDef, options){
 		function value(obj, name, defaultVal){ if(!obj || obj[name] === undefined) return defaultVal; return obj[name]; }
 	
 		// config
@@ -108,8 +110,11 @@ Scene.prototype = {
 			}
 		}
 		
+		options = options ? options : {};
+		options.templates = sceneDef.templates;
+
 		// populate scene
-		var addedObjects = this.populateObject(this.scene, sceneDef.layers);
+		var addedObjects = this.populateObject(this.scene, sceneDef.layers, options);
 
 		// prepare maxShadows placeholders
 		var numShadows = 0;
@@ -134,7 +139,7 @@ Scene.prototype = {
 		this.linkObjects(addedObjects, this.scene);
 		
 		// update camera viewport
-		THREE.PixelBox.prototype.updateViewPortUniform(null);
+		THREE.PixelBoxUtil.updateViewPortUniform(null);
 	},
 	
 	/* links "#targetName.$anchorname.targetName" style references to objects in the hierarchy
@@ -180,19 +185,28 @@ Scene.prototype = {
 			// do .target prop first (for lights)
 			var propVal;
 			var found;
+			var nearestTemplate = undefined;
 			if(obj instanceof THREE.SpotLight || obj instanceof THREE.DirectionalLight){
 				propVal = obj.def.target;
 				if(typeof(propVal) == 'string' && propVal.substr(0,1) == '#'){
-					found = dereferenceObject(propVal.substr(1), top);
-					if(found) obj.target = found;
+					nearestTemplate = obj.nearestTemplate();
+					found = dereferenceObject(propVal.substr(1), nearestTemplate ? nearestTemplate : top);
+					if(found) { 
+						obj.target = found;
+						obj.def.target = true;
+					}
 				}
 			}
 			if(obj.def.props){
 				for(var propName in obj.def.props){
 					propVal = obj.def.props[propName];
 					if(typeof(propVal) == 'string' && propVal.substr(0,1) == '#'){
-						found = dereferenceObject(propVal.substr(1), top);
-						if(found) obj[propName] = found;
+						if(nearestTemplate === undefined) nearestTemplate = obj.nearestTemplate();
+						found = dereferenceObject(propVal.substr(1), nearestTemplate ? nearestTemplate : top);
+						if(found) { 
+							obj[propName] = found;
+							obj.def.props[propName] = true;
+						}
 					}
 				}
 			}
@@ -208,7 +222,7 @@ Scene.prototype = {
 		this.placeHolderLights.length = 0;
 		this.placeHolderLights = null;
 		
-		THREE.PixelBox.updateLights(this.scene, true);
+		THREE.PixelBoxUtil.updateLights(this.scene, true);
 	},
 	
 	/* recursively populates object by adding layers */
@@ -226,25 +240,59 @@ Scene.prototype = {
 			var helper = null;
 			
 			// check if already added
-			if(layer.name && !options.noNameReferences){
+			// this causes problems when populating instances
+			/* if(layer.name && !options.noNameReferences && layer.asset != 'Instance'){
 				if(object[layer.name]){
 					obj3d = object[layer.name];
 				}
-			}
+			}*/
 			
 			// try to get an object of the same type from pool
 			var objType = (typeof(layer.asset) == 'string') ? layer.asset : (this.assets[layer.asset].name);
-			if(!obj3d) obj3d = this.getObjectFromPool(objType);
+			if(!obj3d && objType != 'Instance') obj3d = this.getObjectFromPool(objType);
 			prevObj3d = obj3d;
 			
 			// Layer types
 			switch(layer.asset){
 			
 			case 'Instance':
-				//* Make sure to call linkObjects when instantiating templates
+				if(!obj3d){
+					// no helpers in instances
+					options = _.clone(options);
+					options.helpers = false;
 
-				// TODO
+					if(options.templates && options.templates[layer.template]){
+						var objs;
+						var templateDef = options.templates[layer.template];
+						if(options.wrapTemplates){
+							obj3d = new THREE.Object3D();
+							objs = this.populateObject(obj3d, [ templateDef ], options);
+							var topmost = objs[0];
+							this.linkObjects(objs, topmost);
+							topmost.omit = true;
+							topmost.position.set(0,0,0);
+							topmost.rotation.set(0,0,0);
+							topmost.scale.set(1,1,1);
+							topmost.visible = true;							
+							objectsCreated = objectsCreated.concat(objs);
+						} else {
+							objs = this.populateObject(object, [ templateDef ], options);
+							obj3d = objs[0];
+							objs.splice(0, 1);
+							this.linkObjects(objs, obj3d);
+							objectsCreated = objectsCreated.concat(objs);
+						}
+						// copy some props from template
+						obj3d.castShadow = (templateDef.castShadow != undefined ? templateDef.castShadow : true);
+						obj3d.receiveShadow = (templateDef.receiveShadow != undefined ? templateDef.receiveShadow : true);
+					} else {
+						console.log('Template '+layer.template+' not found');
+						if(!obj3d) obj3d = new THREE.Object3D();
+					}
+				}
 				
+				obj3d.isInstance = true;
+				obj3d.isTemplate = false;
 				break;
 				
 			case 'Camera':
@@ -313,7 +361,7 @@ Scene.prototype = {
 				if(layer.intensity != undefined) obj3d.intensity = layer.intensity;
 				if(layer.shadowMapWidth != undefined) obj3d.shadowMapWidth = obj3d.shadowMapHeight = layer.shadowMapWidth;
 				if(layer.shadowMapHeight != undefined) obj3d.shadowMapHeight = layer.shadowMapHeight;
-				if(layer.target != undefined && layer.target.length == 3){// array of world pos
+				if(layer.target != undefined && _.isArray(layer.target) && layer.target.length == 3){// array of world pos
 					obj3d.target = new THREE.Object3D();
 					obj3d.target.position.set(layer.target[0],layer.target[1],layer.target[2]);
 				}
@@ -348,7 +396,7 @@ Scene.prototype = {
 				}
 				if(layer.shadowMapWidth != undefined) obj3d.shadowMapWidth = obj3d.shadowMapHeight = layer.shadowMapWidth;
 				if(layer.shadowMapHeight != undefined) obj3d.shadowMapHeight = layer.shadowMapHeight;
-				if(layer.target != undefined && layer.target.length == 3){// array of world pos
+				if(layer.target != undefined && _.isArray(layer.target) && layer.target.length == 3){// array of world pos
 					obj3d.target = new THREE.Object3D();
 					obj3d.target.position.set(layer.target[0],layer.target[1],layer.target[2]);
 				}
@@ -415,7 +463,7 @@ Scene.prototype = {
 			}					
 			
 			// store definition
-			obj3d.def = layer;
+			obj3d.def = _.deepClone(layer, 100);
 			
 			// set name
 			if(layer.name){
@@ -451,13 +499,9 @@ Scene.prototype = {
 				if(_.isArray(layer.scale)) obj3d.scale.set(layer.scale[0],layer.scale[1],layer.scale[2]); 
 				else {
 					obj3d.scale.set(layer.scale,layer.scale,layer.scale); 
-					if(obj3d.pointSize != undefined){
-						obj3d.pointSize = (obj3d.geometry.data.pointSize || 1.0) * layer.scale;
-					}
 				}
 			} else {
 				obj3d.scale.set(1,1,1);
-				if(obj3d instanceof THREE.PointCloud) obj3d.pointSize = obj3d.geometry.data.pointSize;
 			}
 			if(layer.jostle){
 				if(layer.jostle.rx) obj3d.rotation.x += (Math.random() * 2 - 1.0) * layer.jostle.rx * degToRad;
@@ -491,12 +535,9 @@ Scene.prototype = {
 			} else obj3d.visible = true;
 			
 			// PixelBox specific
-			if(obj3d instanceof THREE.PointCloud){
+			if(!obj3d.isInstance && obj3d instanceof THREE.PixelBox){
 				if(layer.pointSize != undefined) { 
 					obj3d.pointSize = layer.pointSize;
-				} else {
-					var maxScale = Math.max(obj3d.scale.x, obj3d.scale.y, obj3d.scale.z);
-					obj3d.pointSize = maxScale + 0.1;
 				}
 				if(layer.alpha != undefined) { 
 					obj3d.alpha = layer.alpha;
@@ -549,7 +590,7 @@ Scene.prototype = {
 				}				
 			}
 			// add as a name reference
-			if(layer.name){
+			if(layer.name && !options.noNameReferences){
 				if(!object[layer.name]) {
 					object[layer.name] = obj3d;
 				// if already have one with that name
@@ -559,17 +600,30 @@ Scene.prototype = {
 				}
 			}
 			
-			objectsCreated.push(obj3d);
+			objectsCreated.splice(0, 0, obj3d);
 			
-			if(layer.isTemplate) obj3d.isTemplate = layer.isTemplate;
-			
-			// add templates for editor
-			if(layer.containsTemplates && options.templates){
-				for(var ti = 0; ti < layer.containsTemplates.length; ti++){
-					var td = options.templates[layer.containsTemplates[ti]];
-					if(td) objectsCreated = objectsCreated.concat(this.populateObject(obj3d, [ options.templates[layer.containsTemplates[ti]] ], options));
+			if(!obj3d.isInstance && !obj3d.parentInstance()){
+						
+				if(layer.isTemplate) obj3d.isTemplate = layer.isTemplate;
+				
+				// add templates for editor
+				if(layer.containsTemplates && options.templates){
+					for(var ti = 0; ti < layer.containsTemplates.length; ti++){
+						var td = options.templates[layer.containsTemplates[ti]];
+						var addedTemplates = [];
+						if(td) { 
+							var nc = obj3d.children.length;
+							addedTemplates = addedTemplates.concat(this.populateObject(obj3d, [ options.templates[layer.containsTemplates[ti]] ], options));
+							this.linkObjects(addedTemplates, obj3d.children[nc]);
+							objectsCreated = objectsCreated.concat(addedTemplates);
+						}
+					}
 				}
+				
 			}
+			
+			// console.log("Populated ",obj3d," with ",layer);
+			
 			// recursively process children
 			if(layer.layers){
 				objectsCreated = objectsCreated.concat(this.populateObject(obj3d, layer.layers, options));
@@ -597,7 +651,7 @@ Scene.prototype = {
 		for(var i in objs){
 			var obj3d = objs[i];
 			var typeName = null;
-			if(obj3d instanceof THREE.PointCloud){
+			if(obj3d instanceof THREE.PixelBox){
 				typeName = obj3d.geometry.data.name;
 			} else if(obj3d instanceof THREE.DirectionalLight){
 				typeName = 'DirectionalLight';
@@ -736,6 +790,18 @@ THREE.Object3D.prototype.isDescendentOf = function(another){
 	return this.parent.isDescendentOf(another);
 }
 
+THREE.Object3D.prototype.parentInstance = function(){
+	if(this.isInstance) return this;
+	if(!this.parent) return null;
+	return this.parent.parentInstance();
+};
+
+THREE.Object3D.prototype.nearestTemplate = function(){
+	if(this.isTemplate) return this;
+	if(!this.parent) return null;
+	return this.parent.nearestTemplate();
+};
+
 THREE.Object3D.prototype.recursiveRemoveChildren = function(omit){
 	var removedChildren = [];
 	for(var i = 0; i < this.children.length; i++){
@@ -776,4 +842,28 @@ THREE.Object3D.prototype.getObjectByUUID = function ( uuid, recursive ) {
 		}
 	}
 	return undefined;
+};
+
+/* deep clone */
+_.deepClone = function(obj, depth) {
+	if (typeof obj !== 'object') return obj;
+	if (obj === null) return null;
+	if (_.isString(obj)) return obj.splice();
+	if (_.isDate(obj)) return new Date(obj.getTime());
+	if (_.isFunction(obj.clone)) return obj.clone();
+	var clone = _.isArray(obj) ? obj.slice() : _.extend({}, obj);
+	// clone array's extended props
+	if(_.isArray(obj)){
+	  for(var p in obj){
+		  if(obj.hasOwnProperty(p) && _.isUndefined(clone[p]) && isNaN(p)){
+			  clone[p] = obj[p];
+		  }
+	  }
+	}
+	if (!_.isUndefined(depth) && (depth > 0)) {
+	  for (var key in clone) {
+	    clone[key] = _.deepClone(clone[key], depth-1);
+	  }
+	}
+	return clone;
 };

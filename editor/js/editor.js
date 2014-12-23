@@ -317,7 +317,7 @@ EditScene.prototype = {
 		}
 		editScene.model.material.needsUpdate = true;
 		editScene.shadowPreviewPlane.material.needsUpdate = true;
-		THREE.PixelBox.updateLights(editScene.scene);
+		THREE.PixelBoxUtil.updateLights(editScene.scene);
 	},
 
 /* ------------------- ------------------- ------------------- ------------------- ------------------- Painting */
@@ -1913,7 +1913,7 @@ EditScene.prototype = {
 				this.model.replaceFrame(this.doc.frames[f],f);
 				this.model.encodeRawFrame(obj, f);
 			} else {
-				THREE.PixelBox.encodeFrame(this.doc.frames[f], obj);
+				THREE.PixelBoxUtil.encodeFrame(this.doc.frames[f], obj);
 			}
 			// process anchors
 			var anchors = this.doc.frames[f].anchors;
@@ -2109,12 +2109,12 @@ EditScene.prototype = {
 			editScene.spot.castShadow = (localStorage_getItem('spot-shadow') !== 'false');
 			editScene.sun.castShadow = (localStorage_getItem('direct-shadow') !== 'false');		
 			editScene.model.material.needsUpdate = true;
-			THREE.PixelBox.updateLights(editScene.scene);
+			THREE.PixelBoxUtil.updateLights(editScene.scene);
 		}, 500);
 	},
 	
 	resetZoom:function(){
-		THREE.PixelBox.prototype.updateViewPortUniform(null);
+		THREE.PixelBoxUtil.updateViewPortUniform(null);
 		this.camera.position.set(512, 512, 512);
 		this.camera.lookAt(new THREE.Vector3(0,0,0));
 		this.controls.focus(this.maskBox, true);
@@ -2203,7 +2203,7 @@ EditScene.prototype = {
 			so.wasVisible = so.visible;
 			so.visible = false;
 		}
-		THREE.PixelBox.updateLights(this.scene);
+		THREE.PixelBoxUtil.updateLights(this.scene);
 		
 		var thumbTop = (this.doc.anims.length ? 22 : 2) + (this.thumbfbo.width - aw) * 0.5;
 		for(var f = 0; f < this.thumbnails.length; f++){
@@ -2249,7 +2249,7 @@ EditScene.prototype = {
 		
 		// render to fbo
 		this.model.frame = f;
-		THREE.PixelBox.updateLights(this.scene);
+		THREE.PixelBoxUtil.updateLights(this.scene);
 			
 		//renderer.webgl.setClearColor( 0x0, 0 );
 		renderer.webgl.render(this.scene, this.thumbnailCamera, this.thumbfbo, true );
@@ -4647,7 +4647,7 @@ EditScene.prototype = {
 			.draggable({ snap: ".editor", containment: "body", cancel: '.ui-widget,input,a,button', start: bringToFront, stop: savePosOnDrop });
 	
 	// replace shortcut text
-		$('.editor .ctrl').append(navigator.appVersion.indexOf("Mac")!=-1 ? '⌘ ':'Ctrl + ');
+		$('.editor .ctrl').append(navigator.appVersion.indexOf("Mac")!=-1 ? '&#8984; ':'Ctrl + ');//⌘
 	
 	// undo/redo
 		$('#undo').button().click(this.performUndo.bind(this));
@@ -5250,3 +5250,4 @@ _.deepClone = function(obj, depth) {
 };
 
 $(document).ready(documentReady);
+
