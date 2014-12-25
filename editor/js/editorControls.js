@@ -28,6 +28,7 @@ THREE.EditorControls = function ( object, domElement ) {
 	var normalMatrix = new THREE.Matrix3();
 	var pointer = new THREE.Vector2();
 	var pointerOld = new THREE.Vector2();
+	var pointerCancel = new THREE.Vector2();
 
 	// events
 
@@ -111,6 +112,27 @@ THREE.EditorControls = function ( object, domElement ) {
 
 	};
 
+	this.cancel = function(){
+		domElement.removeEventListener( 'mousemove', onMouseMove, false );
+		domElement.removeEventListener( 'mouseup', onMouseUp, false );
+		domElement.removeEventListener( 'dblclick', onMouseUp, false );
+
+		var movementX = pointerCancel.x - pointerOld.x;
+		var movementY = pointerCancel.y - pointerOld.y;
+
+		scope.rotate( new THREE.Vector3( - movementX * 0.005, - movementY * 0.005, 0 ) );
+
+		state = STATE.NONE;
+		
+/*
+		if(window.editorHidden){
+			window.editorHidden = false;
+			$('.editor.ui-widget-header').show();
+		}
+*/
+	};
+
+
 	// mouse
 
 	function onMouseDown( event ) {
@@ -135,6 +157,7 @@ THREE.EditorControls = function ( object, domElement ) {
 		event.preventDefault();
 		
 		pointerOld.set( event.clientX, event.clientY );
+		pointerCancel.set( event.clientX, event.clientY );
 
 		domElement.addEventListener( 'mousemove', onMouseMove, false );
 		domElement.addEventListener( 'mouseup', onMouseUp, false );

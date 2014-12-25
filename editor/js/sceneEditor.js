@@ -3,30 +3,36 @@
 
 	Properties:
 
-	When renaming objects, if instance, don't allow duplicate names globally
+	
+	NEXT:
+	
+	Add "Double-click to edit asset"
+	
+	Geometry - other types besides Plane
+	
+	investigate ImmediateRenderObject
 	
 	custom properties def.props
 		Number
 		String
 		JSON - valid json
-		
-		
-	NEXT:
-	
-	mouse move tool (with Shift?)
-	
+
 	When deleting a template, delete all instances with it
+	
+	View - setLabelsVisible
 	
 	? camera FOV / updateViewPortUniform code is incorrect
 	
 	? Camera default + template
 			
-	Geometry - other types besides Plane
-	
 
 	LATER:
 
+	Curve objects - define nice camera and object paths
+
 	Drag asset into Scene graph onto a parent to add to
+
+	When renaming objects, if instance, don't allow duplicate names globally
 
 	[Swap Asset]
 
@@ -35,6 +41,13 @@
 
 	add textures to planes? - via custom props
 	texture as a resource
+
+
+	PUBLIC RELEASE:
+	
+	add showMessage's where appropriate, indicating what's happening
+	
+	showHelp - add all keyboard shortcuts and link to github for help
 
 */
 
@@ -48,7 +61,7 @@ function EditSceneScene(){
 	
 	this.selectedObjects = [];
 	
-	this.mouseCoord = {x: 0, y: 0};
+	this.mouseCoord = new THREE.Vector2();
 		
 	this.canvasInteractionsEnabled = true;
 	this.disableCanvasInteractionsOnRelease = false;
@@ -132,6 +145,7 @@ EditSceneScene.prototype = {
 			case 'scaleTo':
 			case 'cameraFOV':
 			case 'cameraZoom':
+			case 'shadowBias':			
 				// compare operands
 				if(undo1.redo[1].length != undo2.redo[1].length) return;
 				for(var i = 0; i < undo1.redo[1].length; i++){
@@ -260,39 +274,42 @@ EditSceneScene.prototype = {
 /* ------------------- ------------------- ------------------- ------------------- ------------------- Mouse handling */
 	
 	mouseDown:function(e){
-		this.lazyMouse = new THREE.Vector2(e.pageX, e.pageY);
-		this.mouseMoved = false;
-		
 		this.ctrl = e.ctrlKey;
 		this.shift = e.shiftKey;
 		this.alt = e.altKey;
 		
 		// ignore right button
-		if(e.button === 2 || !this.canvasInteractionsEnabled || $(e.target).hasClass('object-label')) return;
+		if(e.button === 2 || !this.canvasInteractionsEnabled) return;
 		
-		// blur input boxes
-		if(e.target.nodeName.toLowerCase()=='canvas') editScene.blur();
+		this.lazyMouse = new THREE.Vector2(e.pageX, e.pageY);
+		this.mouseMoved = false;
+		this.isMouseDown = true;
+		
+		this.mouseDownOnObject = null;
 
-		/*if(this._pasteMode && this.intersectingPaste && !this.ctrl){
-			this.startPasteMove();
-		} else if(this.canStroke) { 
-			this.startStroke();
-		} else if(this.movingMaskEnabled && this.intersectingMask){
-			this.startMaskMove();
-		}*/
+		var label = $(e.target).hasClass('object-label') ? e.target : null
+		if((e.target.nodeName.toLowerCase() == 'canvas' || label) && e.button === 0 && !this.shift) {
+	
+			this.isMouseDown = true;
+		
+			this.blur();
+			
+			if(label && $(label).hasClass('selected')){
+				var uuid = label.id;
+				this.mouseDownOnObject = editScene.container.getObjectByUUID(uuid);
+			} else {
+				var p = new THREE.Vector3(2 * (e.clientX / window.innerWidth) - 1, 1 - 2 * ( e.clientY / window.innerHeight ), 0);
+				p.unproject(this.camera);
+				this.raycaster.set(this.camera.position, p.sub(this.camera.position).normalize());
+				var intersects = this.raycaster.intersectObject(this.container, true);
+				if(intersects.length){
+					this.mouseDownOnObject = intersects[0].object;
+				}
+			}
+		}
 	},
 
 	mouseUp:function(e){
-		/*
-		if(this.stroking){
-			this.finishStroke();
-		} else if(this.movingMask){
-			this.finishMaskMove();
-		} else if(this.movingPaste){
-			this.finishPasteMove();
-		} 
-		*/
-
 		if(this.disableCanvasInteractionsOnRelease){
 			this.disableCanvasInteractions();
 			this.disableCanvasInteractionsOnRelease = false;
@@ -301,89 +318,237 @@ EditSceneScene.prototype = {
 		// hide opened menus
 		$('.submenu').hide();
 		
+		if(!this.canvasInteractionsEnabled) return;
+		
+		// show UI
 		if(window.editorHidden){
 			window.editorHidden = false;
 			$('.editor.ui-widget-header').show();
 		}
 		
-		if(!this.mouseMoved && e.target.nodeName == 'CANVAS' && e.button === 0){
-			var p = new THREE.Vector3(2 * (e.clientX / window.innerWidth) - 1, 1 - 2 * ( e.clientY / window.innerHeight ), 0);
-			p.unproject(this.camera);
-			this.raycaster.set(this.camera.position, p.sub(this.camera.position).normalize());
-			var intersects = this.raycaster.intersectObject(this.container, true);
+		// select object if mouse hasn't moved
+		if(this.transformingObjectsMode){
+			this.finishTransformObjects(e);
+		} else if(!this.mouseMoved && (e.target.nodeName == 'CANVAS' || $(e.target).hasClass('object-label')) && e.button === 0){
 			// clicked on object
-			if(intersects.length){
-				//console.log(intersects);
-				this.objectClicked(intersects[0].object);
+			if(this.mouseDownOnObject){
+				this.objectClicked(this.mouseDownOnObject);
 			// clicked in empty space
 			} else if(!(this.shift || this.ctrl || this.alt)){
 				this.objectClicked(null);
 			}
 		}
+		
+		this.isMouseDown = false;
+		this.mouseMoved = false;
 	},
 
 	mouseMove:function(e){
-		this.mouseCoord = { x: e.pageX, y: e.pageY };
+		if(!this.canvasInteractionsEnabled) return;
+		
+		this.mouseCoord.set(e.pageX, e.pageY);
 		
 		if(this.lazyMouse){
 			var lazyMouse = new THREE.Vector2(e.pageX, e.pageY);
 			var dist = this.lazyMouse.distanceToSquared(lazyMouse);
-			if(dist > 5){
+			if(dist > 2){
 				this.mouseMoved = true;
 				this.lazyMouse = null;
 			}
 		}
 		
-		/*
-		// trace ray
-		var screenPoint = new THREE.Vector3((this.mouseCoord.x / window.innerWidth ) * 2 - 1, -(this.mouseCoord.y / window.innerHeight ) * 2 + 1, 1.0);
-		screenPoint.unproject(this.camera);
-		this.raycaster.set(this.camera.position, screenPoint.sub(this.camera.position).normalize());
-
-		// mask intersection
-		if(this._pasteMode){
-			this.intersectingPaste = this.raycaster.intersectObject(this.paste, false);
-			this.intersectingPaste = this.intersectingPaste.length ? this.intersectingPaste[0] : null;
-			this.intersectingMask = null;
-		} else {
-			this.intersectingMask = this.raycaster.intersectObject(this.maskBox, false);
-			this.intersectingMask = this.intersectingMask.length ? this.intersectingMask[0] : null;
-			this.intersectingPaste = null;
+		if(this.isMouseDown && this.mouseMoved){
+			if(this.transformingObjectsMode){
+				this.continueTransformObjects(e);
+			} else if(this.mouseDownOnObject && this.mouseDownOnObject.selected){
+				this.beginTransformObjects(e);
+			}
 		}
-		
-		this.canStroke = !this.ctrl && !this.playing && !this.movingMaskEnabled && !this.movingMask && (this.intersectingMask);
-		
-		if(this.stroking){
-			var lazyMouse = new THREE.Vector2(e.pageX, e.pageY);
-			var dist = this.lazyMouse.distanceToSquared(lazyMouse);
-			if(dist > 5){
-				this.lazyMouse = lazyMouse;
-				this.continueStroke();
-			}
-			
-			if(!window.editorHidden){
-				window.editorHidden = true;
-				$('.editor.ui-widget-header').hide();
-			}
-		} else if(this.movingMask){
-			this.continueMaskMove();
-			if(!window.editorHidden){
-				window.editorHidden = true;
-				$('.editor.ui-widget-header').hide();
-			}
-		} else if(this.movingPaste){
-			this.continuePasteMove();
-			if(!window.editorHidden){
-				window.editorHidden = true;
-				$('.editor.ui-widget-header').hide();
-			}
-		} else if(!(this.controls.busy())) { 
-			this.controls.panEnabled = this.controls.zoomEnabled = !(this.movingMask || this.movingMaskEnabled);
-			this.controls.rotateEnabled = (!this.intersectingPaste || this.ctrl) && !this.canStroke && this.controls.zoomEnabled;
-		}*/
 	},
 
-	/* move selection in camera-aligned coord sys */
+/* ------------------- ------------------- ------------------- ------------------- ------------------- Mouse transform */
+
+	beginTransformObjects:function(e){
+		if(this.controls.busy()){
+			this.controls.cancel();
+			this.controls.rotateEnabled = this.controls.zoomEnabled = this.controls.panEnabled = false;
+		}
+		
+		this.transformingObjectsMode = this.alt ? 2 : (this.ctrl ? 3 : 1);
+		
+		var normalMatrix = new THREE.Matrix3().getNormalMatrix( this.camera.matrixWorld );
+		var worldUp = this.worldUp = (new THREE.Vector3(0,1,0)).applyMatrix3( normalMatrix ).normalize();
+		var worldRight = this.worldRight = (new THREE.Vector3(1,0,0)).applyMatrix3( normalMatrix ).normalize();
+		var upright = this.getWorldAlignedUpRightVectors();
+		var worldAlignedUp = this.worldAlignedUp = upright.up;
+		var worldAlignedRight = this.worldAlignedRight = upright.right;		
+		
+		this.transformMinDistance = 1000;
+		
+		// eliminate nesting and store original props
+		this.transformingObjects = [];
+		var temp = new THREE.Vector3();
+		
+		for(var i = 0, l = this.selectedObjects.length; i < l; i++){
+			var obj = this.selectedObjects[i];
+			if(obj.isAnchor || obj.isDescendentOf(this.selectedObjects)) continue;
+			
+			obj.origPosition = obj.position.clone();
+			obj.origQuaternion = obj.quaternion.clone();
+			obj.origRotation = obj.rotation.clone();
+			obj.origScale = obj.scale.clone();
+			
+			//
+			var objParentWorldPos = new THREE.Vector3();
+			objParentWorldPos.setFromMatrixPosition(obj.parent.matrixWorld);
+			
+			// store transform axis
+			obj.transformUp = worldUp.clone();
+			obj.transformRight = worldRight.clone();
+			obj.transformAlignedUp = worldAlignedUp.clone();
+			obj.transformAlignedRight = worldAlignedRight.clone();
+			
+			obj.transformUp.add(objParentWorldPos);
+			obj.parent.worldToLocal(obj.transformUp);
+			obj.transformRight.add(objParentWorldPos);
+			obj.parent.worldToLocal(obj.transformRight);
+			obj.transformAlignedUp.add(objParentWorldPos);
+			obj.parent.worldToLocal(obj.transformAlignedUp);
+			obj.transformAlignedRight.add(objParentWorldPos);
+			obj.parent.worldToLocal(obj.transformAlignedRight);
+			
+			// get distance for transform speed multiplier
+			temp.copy(obj.position);
+			obj.parent.localToWorld(temp);
+			this.transformMinDistance = Math.min(this.transformMinDistance, this.camera.position.distanceTo(temp));
+			
+			this.transformingObjects.push(obj);
+		}
+		
+		if(!this.transformingObjects.length) { 
+			this.showMessage("No transformable objects");
+			$('body').css('cursor', 'not-allowed');
+		} else {
+			$('body').css('cursor', 'move');
+		}
+		
+		this.startTransformMousePos = new THREE.Vector2(e.pageX, e.pageY);
+		
+		window.editorHidden = true;
+		$('.editor.ui-widget-header').hide();
+	},
+
+	continueTransformObjects:function(e){
+		//this.transformingObjects
+		var offset = this.mouseCoord.clone();
+		offset.sub(this.startTransformMousePos);
+		
+		if(this.transformingObjectsMode != 2){
+			offset.multiplyScalar(this.transformMinDistance * 0.001);
+		}
+		
+		var temp = new THREE.Vector3();
+		
+		if(this.shift){
+			if(Math.abs(offset.x) > Math.abs(offset.y)) offset.y = 0;
+			else offset.x = 0;
+		}
+		
+		var rq = new THREE.Quaternion();
+		
+		for(var i = 0, l = this.transformingObjects.length; i < l; i++){
+			var obj = this.transformingObjects[i];
+			// move
+			if(this.transformingObjectsMode == 1){
+				obj.position.copy(obj.origPosition);
+				if(this.shift){
+					temp.copy(obj.transformAlignedRight).multiplyScalar(offset.x);
+					obj.position.add(temp);
+					temp.copy(obj.transformAlignedUp).multiplyScalar(-offset.y);
+					obj.position.add(temp);
+				} else {
+					temp.copy(obj.transformRight).multiplyScalar(offset.x);
+					obj.position.add(temp);
+					temp.copy(obj.transformUp).multiplyScalar(-offset.y);
+					obj.position.add(temp);
+				}
+			// rotate
+			} else if(this.transformingObjectsMode == 2){
+				obj.quaternion.copy(obj.origQuaternion);
+				rq.setFromAxisAngle(this.shift ? obj.transformAlignedUp : obj.transformUp, offset.x * 0.01);
+				rq.multiply(obj.quaternion);
+				obj.quaternion.copy(rq);
+				rq.setFromAxisAngle(this.shift ? obj.transformAlignedRight : obj.transformRight, offset.y * 0.01);
+				rq.multiply(obj.quaternion);
+				obj.quaternion.copy(rq);
+				obj.updateMatrix();
+				obj.rotation.setFromQuaternion(obj.quaternion);
+			// scale
+			} else {
+				var sc = (Math.abs(offset.x) > Math.abs(offset.y) ? offset.x : offset.y);
+				obj.scale.copy(obj.origScale);
+				obj.scale.x += sc; obj.scale.z += sc; obj.scale.y += sc;
+			}
+			if(obj.helper) {
+				obj.updateMatrixWorld(true);
+				obj.helper.update();
+			}
+		}
+	},
+
+	finishTransformObjects:function(e){
+		this.controls.rotateEnabled = this.controls.zoomEnabled = this.controls.panEnabled = true;
+		
+		// apply transform
+		var doArr = [];
+		var undoArr = [];
+		var undoAction = null;
+		
+		$('body').css('cursor', 'default');
+
+		// move
+		if(this.transformingObjectsMode == 1){
+			for(var i = 0, l = this.transformingObjects.length; i < l; i++){
+				var obj = this.transformingObjects[i];
+				doArr.push([obj, obj.position.clone() ]);
+				undoArr.push([obj, obj.origPosition.clone() ]);
+				this.touchTemplate(obj);
+			}
+			if(doArr.length) undoAction = {name:"moveTo", mergeable:true, redo:[this.moveObjects, doArr], undo:[this.moveObjects, undoArr] };
+		// rotate
+		} else if(this.transformingObjectsMode == 2){
+			for(var i = 0, l = this.transformingObjects.length; i < l; i++){
+				var obj = this.transformingObjects[i];
+				doArr.push([obj, obj.rotation.clone() ]);
+				undoArr.push([obj, obj.origRotation.clone() ]);
+				this.touchTemplate(obj);
+			}
+			if(doArr.length) undoAction = {name:"rotateTo", mergeable:true, redo:[this.rotateObjects, doArr], undo:[this.rotateObjects, undoArr] };
+		// scale
+		} else {
+			for(var i = 0, l = this.transformingObjects.length; i < l; i++){
+				var obj = this.transformingObjects[i];
+				doArr.push([obj, obj.scale.clone() ]);
+				undoArr.push([obj, obj.origScale.clone() ]);
+				this.touchTemplate(obj);
+			}
+			if(doArr.length) undoAction = {name:"scaleTo", mergeable:true, redo:[this.scaleObjects, doArr], undo:[this.scaleObjects, undoArr] };
+		}
+		
+		if(undoAction) this.addUndo(undoAction);
+		
+		this.transformingObjects.length = 0;
+		this.transformingObjectsMode = false;
+
+		window.editorHidden = false;
+		$('.editor.ui-widget-header').show();
+		
+		this.refreshProps();
+	},	
+
+/* ------------------- ------------------- ------------------- ------------------- ------------------- Keyboard transform */
+
+/* move selection in camera-aligned coord sys (using keyboard arrow keys)*/
 	moveTool:function(dx, dy){
 		// scale
 		if(this.alt && this.ctrl){
@@ -401,68 +566,8 @@ EditSceneScene.prototype = {
 			this.rotateSelectionBy(r);
 		// move
 		} else {
-			// find which plane the camera is aligned with
-			var camVector = new THREE.Vector3(0,0, -1);
-			var camUp = new THREE.Vector3(0,1,0);
-			camVector.applyQuaternion(this.camera.quaternion);
-			camUp.applyQuaternion(this.camera.quaternion);
-	
-			var planes = [
-				new THREE.Vector3(1,0,0),
-				new THREE.Vector3(-1,0,0),
-				new THREE.Vector3(0,1,0),
-				new THREE.Vector3(0,-1,0),
-				new THREE.Vector3(0,0,1),
-				new THREE.Vector3(0,0,-1) ];
-	
-			var minDot = 1, minDotIndex = -1, dot;
-			for(var i = 0; i < 6; i++){
-				dot = camVector.dot(planes[i]);
-				if(dot < minDot){ minDot = dot; minDotIndex = i; }
-			}
-			
-			// additional dots for up/down positions
-			var xdot = planes[0].dot(camUp);
-			var zdot = planes[4].dot(camUp);
-			
-			var xdir = new THREE.Vector3(), ydir = new THREE.Vector3();
-			switch(minDotIndex){
-			case 0: xdir.set(0,0,-1); ydir.set(0,1,0); break;
-			case 1: xdir.set(0,0,1); ydir.set(0,1,0); break;
-			case 4: xdir.set(1,0,0); ydir.set(0,1,0); break;
-			case 5: xdir.set(-1,0,0); ydir.set(0,1,0); break;
-			case 2:
-				if(Math.abs(zdot) > Math.abs(xdot)){
-					if(zdot < 0){
-						xdir.set(1,0,0); ydir.set(0,0,-1);
-					} else {
-						xdir.set(-1,0,0); ydir.set(0,0,1);
-					}
-				} else {
-					if(xdot < 0){
-						xdir.set(0,0,-1); ydir.set(-1,0,0);
-					} else {
-						xdir.set(0,0,1); ydir.set(1,0,0);
-					}
-				}
-				break;
-			case 3:
-				if(Math.abs(zdot) > Math.abs(xdot)){
-					if(zdot < 0){
-						xdir.set(-1,0,0); ydir.set(0,0,-1);
-					} else {
-						xdir.set(1,0,0); ydir.set(0,0,1);
-					}
-				} else {
-					if(xdot < 0){
-						xdir.set(0,0,1); ydir.set(-1,0,0);
-					} else {
-						xdir.set(0,0,-1); ydir.set(1,0,0);
-					}
-				}
-				break;
-			}
-			
+			var upright = this.getWorldAlignedUpRightVectors();
+			var xdir = upright.right, ydir = upright.up;
 			xdir.multiplyScalar(dx);
 			ydir.multiplyScalar(dy);
 			var posInc = xdir.clone().add(ydir);
@@ -472,7 +577,73 @@ EditSceneScene.prototype = {
 		this.refreshProps();
 	},
 
+	/* 	returns { up: v3, right: v3 }
+		used for arrow-key move and shift+mouse move */
+	getWorldAlignedUpRightVectors:function(){
+		// find which plane the camera is aligned with
+		var camVector = new THREE.Vector3(0,0, -1);
+		var camUp = new THREE.Vector3(0,1,0);
+		camVector.applyQuaternion(this.camera.quaternion);
+		camUp.applyQuaternion(this.camera.quaternion);
 
+		var planes = [
+			new THREE.Vector3(1,0,0),
+			new THREE.Vector3(-1,0,0),
+			new THREE.Vector3(0,1,0),
+			new THREE.Vector3(0,-1,0),
+			new THREE.Vector3(0,0,1),
+			new THREE.Vector3(0,0,-1) ];
+
+		var minDot = 1, minDotIndex = -1, dot;
+		for(var i = 0; i < 6; i++){
+			dot = camVector.dot(planes[i]);
+			if(dot < minDot){ minDot = dot; minDotIndex = i; }
+		}
+		
+		// additional dots for up/down positions
+		var xdot = planes[0].dot(camUp);
+		var zdot = planes[4].dot(camUp);
+		
+		var xdir = new THREE.Vector3(), ydir = new THREE.Vector3();
+		switch(minDotIndex){
+		case 0: xdir.set(0,0,-1); ydir.set(0,1,0); break;
+		case 1: xdir.set(0,0,1); ydir.set(0,1,0); break;
+		case 4: xdir.set(1,0,0); ydir.set(0,1,0); break;
+		case 5: xdir.set(-1,0,0); ydir.set(0,1,0); break;
+		case 2:
+			if(Math.abs(zdot) > Math.abs(xdot)){
+				if(zdot < 0){
+					xdir.set(1,0,0); ydir.set(0,0,-1);
+				} else {
+					xdir.set(-1,0,0); ydir.set(0,0,1);
+				}
+			} else {
+				if(xdot < 0){
+					xdir.set(0,0,-1); ydir.set(-1,0,0);
+				} else {
+					xdir.set(0,0,1); ydir.set(1,0,0);
+				}
+			}
+			break;
+		case 3:
+			if(Math.abs(zdot) > Math.abs(xdot)){
+				if(zdot < 0){
+					xdir.set(-1,0,0); ydir.set(0,0,-1);
+				} else {
+					xdir.set(1,0,0); ydir.set(0,0,1);
+				}
+			} else {
+				if(xdot < 0){
+					xdir.set(0,0,1); ydir.set(-1,0,0);
+				} else {
+					xdir.set(0,0,-1); ydir.set(1,0,0);
+				}
+			}
+			break;
+		}
+		return { up: ydir, right: xdir };
+	},
+	
 /* ------------------- ------------------- ------------------- ------------------- ------------------- Add, copy, paste, delete */
 
 	objectAddedRecusive:function(obj){
@@ -528,6 +699,7 @@ EditSceneScene.prototype = {
 			p.add(obj);
 			this.objectAddedRecusive(obj);
 			this.touchTemplate(obj);
+			if(obj instanceof THREE.PixelBox) this.pixelboxApplyAnimationParams(obj);
 		}
 		this.updateTextLabels(this.container, 0);
 		this.refreshScene();
@@ -663,28 +835,49 @@ EditSceneScene.prototype = {
 	
 /* ------------------- ------------------- ------------------- ------------------- ------------------- Reparent */
 	
-	parentObjects:function(objArr){
+	parentObjects:function(objArr, shiftOpt){
 		for(var i = 0; i < objArr.length; i++){
 			var obj = objArr[i][0];
 			var np = objArr[i][1];
+			if(shiftOpt){
+				// convert transform to world
+				obj.updateMatrixWorld(true);
+				obj.matrix.copy(obj.matrixWorld);
+				obj.matrix.decompose( obj.position, obj.quaternion, obj.scale );
+				obj.rotation.setFromQuaternion(obj.quaternion);
+				// parent to new parent
+				np.updateMatrixWorld(true);
+				var inv = new THREE.Matrix4();
+				inv.getInverse(np.matrixWorld);
+				inv.multiply(obj.matrix);
+				obj.matrix.copy(inv);
+				// refresh pos/rot/sc
+				obj.matrix.decompose( obj.position, obj.quaternion, obj.scale );
+				obj.rotation.setFromQuaternion(obj.quaternion);
+			}
 			np.add(obj);
+			if(obj instanceof THREE.PixelBox) this.pixelboxApplyAnimationParams(obj);
 			this.touchTemplate(obj);
 		}
 		this.refreshScene();
 	},
 	
 	reparentDraggedRowsTo:function(newParent){
-		//console.log("Reparent ",this.reparentObjects," to ",newParent);
+		if(!this.reparentObjects || !this.reparentObjects.length) return; // already parented
 		
 		var doArr = [];
 		var undoArr = [];
+		var shiftOpt = editScene.shift;
 		for(var i = 0; i < this.reparentObjects.length; i++){
 			var obj = this.reparentObjects[i];
 			undoArr.push([obj, obj.parent ]);
-			doArr.push([obj, newParent]);
+			doArr.push([obj, newParent ]);
 		}
-		this.addUndo({name:"reparent", redo:[this.parentObjects, doArr], undo:[this.parentObjects, undoArr] });
-		this.parentObjects(doArr);
+		this.addUndo({name:"reparent", redo:[this.parentObjects, doArr, shiftOpt], undo:[this.parentObjects, undoArr, shiftOpt] });
+		this.parentObjects(doArr, shiftOpt);
+		
+		// prevent parenting to many objects		
+		editScene.dragRowStopped();
 	},
 	
 /* ------------------- ------------------- ------------------- ------------------- ------------------- Container & display functions */
@@ -739,8 +932,7 @@ EditSceneScene.prototype = {
 			}
 			if(!obj.htmlLabel){
 				obj.htmlLabel = $('<label id="'+obj.uuid+'" class="object-label" style="color:'+this.automaticColorForIndex(obj.id, 1, false)+'"/>').text(obj.name);
-				if(obj.isAnchor) obj.htmlLabel.css({'background-color':'transparent', 'font-size':'8px','font-weight':'normal'});
-				var type = (obj.pixelBox) ? 'PixelBox' : (obj.def ? obj.def.asset : 0);
+				var type = obj.pixelBox ? 'PixelBox' : (obj.isAnchor ? 'Anchor' : (obj.def ? obj.def.asset : null));
 				if(type) obj.htmlLabel.addClass(type);
 				if(obj.isTemplate) obj.htmlLabel.addClass('template');
 				if(!obj.visible) obj.htmlLabel.css({visibility: 'hidden'});
@@ -787,6 +979,12 @@ EditSceneScene.prototype = {
 			$('.object-label').css({ display: 'none' });
 		}
 		this.updateTextLabels(this.container, 0);
+	},
+	
+	labelsVisibleChanged:function(e){
+		var val = (e.target.value == 'all' ? 2 : (e.target.value == 'selected' ? 1 : 0));
+		localStorage_setItem('labelsVisible', val);
+		editScene.setLabelsVisible(val);
 	},
 
 /* ------------------- ------------------- ------------------- ------------------- ------------------- Util */
@@ -1125,6 +1323,8 @@ EditSceneScene.prototype = {
 		this.refreshProps();
 		
 		this.showMessage(this.doc.name);
+		
+		this.setLabelsVisible(this.labelsVisible);
 	},
 	
 	createDataObject:function(options){
@@ -1687,8 +1887,8 @@ EditSceneScene.prototype = {
 					var h = $('<div class="row helper" alt="'+obj3d.uuid+'"></div>');
 					obj3d.htmlRow.children('label:first').addClass('draggable').draggable({
 						//axis:'y',
-						appendTo:list,
-						containment:list,
+						appendTo:document.body,
+						/*containment:list,*/
 						scroll:false,
 						delay:300,
 						cursorAt: { left: 5, top: 5 },
@@ -1758,7 +1958,7 @@ EditSceneScene.prototype = {
 
 	dragRowStarted:function(event, ui){
 		var draggedObj = editScene.container.getObjectByUUID(ui.helper.attr('alt'),true);
-		this.autoScrollTimer = setInterval(editScene.autoScrollScenePanel.bind(ui.helper), 300);
+		this.autoScrollTimer = setInterval(editScene.autoScrollScenePanel.bind(ui.helper), 100);
 		
 		// populate helper
 		var draggedObjects = [];
@@ -1792,41 +1992,92 @@ EditSceneScene.prototype = {
 					invalid = true;
 					break;
 				}
-				// no parenting if dragged object is an instance and this object is a template that contains it
-				/*if(draggedObjects[i].isInstance){
-					var inst = obj;
-					while(inst){
-						if(inst.isTemplate && inst.name == draggedObj[i].def.template){
-							invalid = true;
-							break;
-						}
-						inst = inst.parentInstance();
-					}
-				}*/
 			}
 			if(!invalid){
 				var dd = $(el).children('div.droptarget');
 				dd.addClass('droppable');
+				if(obj.htmlLabel){
+					obj.htmlLabel.addClass('droppable');
+				}
 			}
 		});
 		
 		$('#scene-list div.row > div.droptarget.droppable').droppable({
 			accept: ".draggable",
+			tolerance:"pointer",
 			greedy: true,
 			//activeClass: "ui-state-hover",
 			hoverClass: "active",
-			drop: function( event, ui ) {
+			over: function(event, ui){
+				var row = $(event.target).closest('.row');
+				if(row.hasClass('collapsed')){
+					var expandTimeout = row.data('expandTimeout');
+					if(!expandTimeout) {
+						expandTimeout = setTimeout(function(){ row.data('expandTimeout', null).children('a.toggle:first').trigger('click'); }, 1000);
+						row.data('expandTimeout', expandTimeout);
+					}
+				}
+			},
+			out: function (event, ui){
+				var row = $(event.target).closest('.row');
+				var expandTimeout = row.data('expandTimeout');
+				if(expandTimeout){
+					row.data('expandTimeout', null);
+					clearTimeout(expandTimeout);
+				}
+			},
+			drop: function(event, ui) {
 				//console.log(event, ui);
 				var targId = $(event.target).closest('.row').attr('id').substr(4);
 				var obj = ((targId == 'e') ? editScene.container : editScene.container.getObjectByUUID(targId, true));
 				editScene.reparentDraggedRowsTo(obj);
 			}
 		});
+		$('body > label.object-label.droppable').droppable({
+			accept: ".draggable",
+			tolerance:"pointer",
+			greedy: true,
+			//activeClass: "ui-state-hover",
+			hoverClass: "active",
+			over: function(event, ui){
+				var label = $(event.target);
+				label.data('z-index', label.css('z-index'));
+				label.data('color', label.css('color'));
+				label.css('z-index', 20000010);
+				label.css('color', '');
+				var others = $('body > label.droppable.active').not(label);
+				others.each(function(i, el){
+					editScene.dragLabelOut({target: el});
+				});				
+			},
+			out: editScene.dragLabelOut,
+			drop: function(event, ui) {
+				var targId = $(event.target).attr('id');
+				var obj = editScene.container.getObjectByUUID(targId, true);
+				editScene.reparentDraggedRowsTo(obj);
+			}
+		});
+	},
+	
+	dragLabelOut:function(event, ui){
+		var label = $(event.target);
+		label.css('z-index', label.data('z-index'));
+		label.css('color', label.data('color'));
+		label.data('z-index', null);
+		label.data('color', null);
+		label.removeClass('active');
 	},
 	
 	dragRowStopped:function(event, ui){
 		editScene.rowDropTarget = null;
 		$('#scene-list div.row > div.droptarget.droppable').removeClass('droppable').droppable('destroy');
+		$('body > label.object-label.droppable').removeClass('droppable').droppable('destroy').each(function(i, el){
+			var label = $(el);
+			var bgc = label.data('color');
+			if(bgc) label.css('color', bgc).data('color',null);
+			bgc = label.css('z-index');
+			if(bgc)label.data('z-index', bgc).data('z-index',null);
+		});
 		editScene.reparentObjects = null;
 		
 		if(this.autoScrollTimer) clearInterval(this.autoScrollTimer);
@@ -1837,15 +2088,17 @@ EditSceneScene.prototype = {
 		var list = $('#scene-list');
 		var listHeight = list.height();
 		var topOffs = list.offset();
+		var lw = list.width();
 		var rowOffs = this.offset();
 		var top = rowOffs.top - topOffs.top;
 		var p;
+		if(topOffs.x < rowOffs.x || topOffs.x > topOffs.x + lw) return;//oob
 		if(top < 40){
 			p = list.scrollTop() + (top - 40);
 		} else if(top > listHeight - 40){
 			p = list.scrollTop() + (top - (listHeight - 40));	
 		}
-		list.animate({ scrollTop:p }, 250);
+		list.animate({ scrollTop:p }, 90);
 	},
 	
 	objectRowDoubleClicked:function(e){
@@ -2123,7 +2376,23 @@ EditSceneScene.prototype = {
 			newRow.find('label').text(asset.name);
 			newRow.prop('asset', asset.name);
 			newRow.find('a').attr('name', asset.name).click(editScene.selectObjectsByAsset);
-			if(asset.missing) newRow.addClass('missing');
+			if(asset.missing) { 
+				newRow.addClass('missing');
+			} else {
+				var h = $('<div class="row helper"/>');
+				h.attr('alt', asset.name);
+				var hfunc = function(helper){ return function(){ return helper; }; }(h[0]);
+				newRow.children('label:first').addClass('draggable').draggable({
+					appendTo:document.body,
+					scroll:false,
+					delay:300,
+					cursorAt: { left: 5, top: 5 },
+					revert:'invalid',
+					helper:hfunc,
+					start:editScene.dragAssetStarted,
+					stop:editScene.dragAssetStopped
+				});
+			}
 			if(newRow.attr('id') == prevSelected) newRow.addClass('selected');
 			newRow.click(this.assetSelect.bind(this));
 			newRow.dblclick(this.assetEdit.bind(this));
@@ -2136,11 +2405,104 @@ EditSceneScene.prototype = {
 			return 0;
 		});	
 		
-		if(rows.length) rows.push($('<hr/><div style="height:4em;"/>'));
+		if(rows.length) rows.push($('<hr/><div style="height:4em;"><span class="info">double click assets to edit</span></div>'));
 		
 		$('#asset-list').append(rows);
 		
 		if(prevSelected) $('#'+prevSelected).trigger('click');
+	},
+
+	dragAssetStarted:function(event, ui){
+		ui.helper.empty();
+		var h = $('<li><label/></li>');
+		h.children('label').text($(ui.helper).attr('alt'));
+		ui.helper.append(h);
+		
+		// add droppable class to droppable rows
+		$('#scene-list #scene,#scene-list #scene div.row').each(function(i, el){
+			var uuid = el.id.substr(4);
+			var obj = ((uuid == 'e') ? editScene.container : editScene.container.getObjectByUUID(uuid, true));
+			var invalid = obj.isInstance;
+			if(!invalid){
+				var dd = $(el).children('div.droptarget');
+				dd.addClass('droppable');
+				if(obj.htmlLabel){
+					obj.htmlLabel.addClass('droppable');
+				}
+			}
+		});
+		
+		$('#scene-list div.row > div.droptarget.droppable').droppable({
+			accept: ".draggable",
+			tolerance:"pointer",
+			greedy: true,
+			//activeClass: "ui-state-hover",
+			hoverClass: "active",
+			over: function(event, ui){
+				var row = $(event.target).closest('.row');
+				if(row.hasClass('collapsed')){
+					var expandTimeout = row.data('expandTimeout');
+					if(!expandTimeout) {
+						expandTimeout = setTimeout(function(){ row.data('expandTimeout', null).children('a.toggle:first').trigger('click'); }, 1000);
+						row.data('expandTimeout', expandTimeout);
+					}
+				}
+			},
+			out: function (event, ui){
+				var row = $(event.target).closest('.row');
+				var expandTimeout = row.data('expandTimeout');
+				if(expandTimeout){
+					row.data('expandTimeout', null);
+					clearTimeout(expandTimeout);
+				}
+			},
+			drop: function(event, ui) {
+				//console.log(event, ui);
+				var targId = $(event.target).closest('.row').attr('id').substr(4);
+				var obj = ((targId == 'e') ? editScene.container : editScene.container.getObjectByUUID(targId, true));
+				editScene.addAssetToObject($(ui.helper).attr('alt'), obj);
+			}
+		});
+		$('body > label.object-label.droppable').droppable({
+			accept: ".draggable",
+			tolerance:"pointer",
+			greedy: true,
+			//activeClass: "ui-state-hover",
+			hoverClass: "active",
+			over: function(event, ui){
+				var label = $(event.target);
+				label.data('z-index', label.css('z-index'));
+				label.data('color', label.css('color'));
+				label.css('z-index', 20000010);
+				label.css('color', '');
+				var others = $('body > label.droppable.active').not(label);
+				others.each(function(i, el){
+					editScene.dragLabelOut({target: el});
+				});				
+			},
+			out: editScene.dragLabelOut,
+			drop: function(event, ui) {
+				var targId = $(event.target).attr('id');
+				var obj = editScene.container.getObjectByUUID(targId, true);
+				editScene.addAssetToObject($(ui.helper).attr('alt'), obj);
+			}
+		});
+	},
+	
+	dragAssetStopped:function(event, ui){
+		editScene.rowDropTarget = null;
+		$('#scene-list div.row > div.droptarget.droppable').removeClass('droppable').droppable('destroy');
+		$('body > label.object-label.droppable').removeClass('droppable').droppable('destroy').each(function(i, el){
+			var label = $(el);
+			var bgc = label.data('color');
+			if(bgc) label.css('color', bgc).data('color',null);
+			bgc = label.css('z-index');
+			if(bgc)label.data('z-index', bgc).data('z-index',null);
+		});
+	},
+
+	addAssetToObject:function(assetName, obj){
+		editScene.addObjectMenuItemClicked({ target: obj}, assetName);
 	},
 
 	assetSelect:function(e){
@@ -4264,6 +4626,9 @@ EditSceneScene.prototype = {
 			<li id="edit-delete">Delete selection <em>Delete</em></li>\
 		</ul>\
 		<ul class="editor absolute-pos submenu" id="view-submenu">\
+			<li><input type="radio" name="show-labels" value="all" id="show-labels-all"/><label for="show-labels-all" class="pad5">Show all labels</label></li>\
+			<li><input type="radio" name="show-labels" value="selected" id="show-labels-selected"/><label for="show-labels-selected" class="pad5">Selected objects only</label></li>\
+			<li><input type="radio" name="show-labels" value="none" id="show-labels-none"/><label for="show-labels-none" class="pad5">No labels</label></li><hr/>\
 			<li id="reset-zoom">Reset zoom</li>\
 		</ul>\
 		<div class="editor absolute-pos upper-right pad5" id="undo-buttons">\
@@ -4286,6 +4651,13 @@ EditSceneScene.prototype = {
 		$('#file-fetch').click(editScene.fetchDoc);
 		$('#file-submenu').menu().hide();
 
+		// default label mode
+		this.labelsVisible = localStorage_getItem('labelsVisible');
+		if(this.labelsVisible === null) this.labelsVisible = 2; // 0 = none, 1 = selected, 2 = all
+		else this.labelsVisible = parseInt(this.labelsVisible);
+		$('#show-labels-'+['none','selected','all'][this.labelsVisible]).attr('checked', 'checked');
+		$('#view-submenu input[name=show-labels]').change(this.labelsVisibleChanged);
+		
 // edit menu
 		$('#edit').click(function(){
 			$('.submenu').hide();
@@ -4835,7 +5207,7 @@ EditSceneScene.prototype = {
 		<h1>Scene</h1>\
 		<hr/>\
 		<button id="scene-add">Add Object</button>\
-		<div class="float-right"><button id="test-scene">Preview</button></div>\
+		<div class="float-right"><button id="test-scene">Test Scene</button></div>\
 		<hr/>\
 		<div id="scene-list"></div>\
 		<hr/>\
@@ -4946,11 +5318,10 @@ EditSceneScene.prototype = {
 		$(window).on('dragleave', this.onDragFilesOver);
 		$(window).on('drop', this.onDropFiles);
 		
-		// default label mode
-		this.labelsVisible = localStorage_getItem('labelsVisible');
-		if(this.labelsVisible === null) this.labelsVisible = 2; // 0 = none, 1 = selected, 2 = all
-		
 		this.enableCanvasInteractions(true);
+		
+		$('.editor').mouseenter(function(e){ e.stopPropagation(); editScene.disableCanvasInteractions(false); })
+					.mouseleave(function(e){ e.stopPropagation(); editScene.enableCanvasInteractions(false); });
 	},
 	
 	/* dispose of main UI */
@@ -4971,7 +5342,9 @@ EditSceneScene.prototype = {
 			}
 		}
 		// add into
-		if(e.shiftKey) {
+		if(e.target instanceof THREE.Object3D){
+			addTarget = e.target;
+		} else if(e.shiftKey) {
 			addTarget = firstSelectedNonInstance ? firstSelectedNonInstance : this.container;
 		// add next to
 		} else {
@@ -5121,8 +5494,8 @@ EditSceneScene.prototype = {
 			this.updateTextLabels(this.container, 0);
 			this.selectObject(addedObject, true);
 			
-			this.camera.lookAt(addWorldPos);
-			this.controls.center.copy(addWorldPos);
+			//this.camera.lookAt(addWorldPos);
+			//this.controls.center.copy(addWorldPos);
 			
 			this.selectionChanged();
 			this.refreshProps();
@@ -5239,6 +5612,7 @@ EditSceneScene.prototype = {
 			break;
 		case 16:
 			editScene.shift = false;
+			if(this.transformingObjectsMode) this.continueTransformObjects(null);
 			break;
 		case 17:
 			editScene.ctrl = false;
@@ -5296,10 +5670,10 @@ EditSceneScene.prototype = {
 		switch(e.which){
 		case 16:
 			editScene.shift = true;
+			if(this.transformingObjectsMode) this.continueTransformObjects(null);
 			break;
 		case 17:
 			editScene.ctrl = true;
-			editScene.controls.rotateEnabled = !editScene.shift;
 			break;
 		case 18:
 			editScene.alt = true;
@@ -5348,6 +5722,9 @@ EditSceneScene.prototype = {
 		case 27: // esc
 			if(editScene.objectPickMode){
 				editScene.objectPickMode(null);
+			} else if(editScene.canvasInteractionsEnabled){
+				editScene.deselectAll();
+				editScene.selectionChanged();
 			}
 			break;
 			

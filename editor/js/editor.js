@@ -5053,7 +5053,7 @@ EditScene.prototype = {
 		this.geomCube.computeBoundingBox();
 		
 		// shadow preview plane
-		this.shadowPreviewPlane = new THREE.Mesh(new THREE.PlaneBufferGeometry(1, 1, 10, 10), new THREE.MeshPixelBoxMaterial({color: 0x333333}));
+		this.shadowPreviewPlane = new THREE.Mesh(new THREE.PlaneBufferGeometry(1, 1, 10, 10), new THREE.MeshPixelBoxMaterial({tint: 0x333333}));
 		this.shadowPreviewPlane.rotation.x = -Math.PI * 0.5;
 		this.shadowPreviewPlane.receiveShadow = true;
 		this.shadowPreviewPlane.visible = (localStorage_getItem('floorHidden') !== 'true');

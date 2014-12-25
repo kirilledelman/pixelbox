@@ -1,7 +1,7 @@
 /*
 	
-	TODO -
-	loadAssets({ textures:[], models:[] ... })
+	
+	loadAssets({ textures:[...], models:[...], scenes:[...] }, onDoneCallback )
 
 */
 
@@ -57,15 +57,20 @@ function Assets(){
 	this.assetLoaded = function(){ 
 		assets.totalLoaded++;
 		assets.loadQueue.pop();
-		assets.onloaded((assets.totalLoaded == assets.totalAssets), Math.round(100 * assets.totalLoaded / assets.totalAssets));
-		setTimeout(assets.loadQueue[assets.loadQueue.length - 1], 10);		
+		if(assets.totalLoaded == assets.totalAssets){
+			if(assets.onloaded) assets.onloaded();
+		} else {
+			if(assets.onprogress) assets.onprogress(100 * assets.totalLoaded / assets.totalAssets);
+			setTimeout(assets.loadQueue[assets.loadQueue.length - 1], 10);
+		}
 	};
 	
-	this.loadAssets = function(toLoad, onDone){
-		this.textures = toLoad.textures ? toLoad.textures : [];
-		this.scenedata = toLoad.scenes ? toLoad.scenes : [];
-		this.models = toLoad.assets ? toLoad.assets : [];
-		this.onloaded = onDone;
+	this.loadAssets = function(params, onLoaded){
+		this.textures = params.textures ? params.textures : [];
+		this.scenedata = params.scenes ? params.scenes : [];
+		this.models = params.assets ? params.assets : [];
+		this.onprogress = params.progress;
+		this.onloaded = params.done;
 		
 		this.totalLoaded = 0;
 		this.totalAssets = this.textures.length + this.scenedata.length + this.models.length;
@@ -162,7 +167,9 @@ function Assets(){
 			}).bind(assets); }(url));
 		}
 		
-		this.loadQueue[this.totalAssets - 1]();	
+		// start
+		if(this.totalAssets) this.loadQueue[this.totalAssets - 1]();	
+		else if(this.onloaded) this.onloaded();
 	};
 	
 	this.unload = function(){

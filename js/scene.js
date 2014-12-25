@@ -778,6 +778,15 @@ THREE.Object3D.prototype.transplant = function ( parent ) {
 
 }*/
 
+
+THREE.Object3D.prototype.nearestParentWithProperty = function(prop, val){
+	if(this.parent){ 
+		if(this.parent[prop] && (val === undefined || this.parent[prop] === val)) return this.parent;
+		return this.parent.nearestParentWithProperty(prop, val);
+	}
+	return null;
+}
+
 THREE.Object3D.prototype.isVisibleRecursive = function(){
 	if(!this.visible) return false;
 	if(this.parent) return this.parent.isVisibleRecursive();
@@ -786,8 +795,18 @@ THREE.Object3D.prototype.isVisibleRecursive = function(){
 
 THREE.Object3D.prototype.isDescendentOf = function(another){
 	if(!this.parent) return false;
-	if(this.parent == another) return true;
-	return this.parent.isDescendentOf(another);
+	if(_.isArray(another)){
+		for(var i = 0, l = another.length; i < l; i++){
+			var ai = another[i];
+			if(this.parent == ai) return true;
+			var p = this.parent.isDescendentOf(ai);
+			if(p) return true;
+		}
+		return false;
+	} else {
+		if(this.parent == another) return true;
+		return this.parent.isDescendentOf(another);
+	}
 }
 
 THREE.Object3D.prototype.parentInstance = function(){
@@ -798,8 +817,7 @@ THREE.Object3D.prototype.parentInstance = function(){
 
 THREE.Object3D.prototype.nearestTemplate = function(){
 	if(this.isTemplate) return this;
-	if(!this.parent) return null;
-	return this.parent.nearestTemplate();
+	return this.nearestParentWithProperty('isTemplate', true);
 };
 
 THREE.Object3D.prototype.recursiveRemoveChildren = function(omit){
