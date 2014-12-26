@@ -144,7 +144,7 @@ Scene.prototype = {
 	
 	/* links "#targetName.$anchorname.targetName" style references to objects in the hierarchy
 		Used by Spot and Direct lights */
-	linkObjects:function(objs, top){
+	linkObjects:function(objs, top, skipProps){
 		
 		function dereferenceObject(nameFragments, currentLevel){
 			// start
@@ -197,7 +197,7 @@ Scene.prototype = {
 					}
 				}
 			}
-			if(obj.def.props){
+			if(obj.def.props && !skipProps){
 				for(var propName in obj.def.props){
 					propVal = obj.def.props[propName];
 					if(typeof(propVal) == 'string' && propVal.substr(0,1) == '#'){
@@ -205,7 +205,7 @@ Scene.prototype = {
 						found = dereferenceObject(propVal.substr(1), nearestTemplate ? nearestTemplate : top);
 						if(found) { 
 							obj[propName] = found;
-							obj.def.props[propName] = true;
+							//obj.def.props[propName] = true;
 						}
 					}
 				}
@@ -268,7 +268,7 @@ Scene.prototype = {
 							obj3d = new THREE.Object3D();
 							objs = this.populateObject(obj3d, [ templateDef ], options);
 							var topmost = objs[0];
-							this.linkObjects(objs, topmost);
+							this.linkObjects(objs, topmost, !!options.skipProps);
 							topmost.omit = true;
 							topmost.position.set(0,0,0);
 							topmost.rotation.set(0,0,0);
@@ -279,7 +279,7 @@ Scene.prototype = {
 							objs = this.populateObject(object, [ templateDef ], options);
 							obj3d = objs[0];
 							objs.splice(0, 1);
-							this.linkObjects(objs, obj3d);
+							this.linkObjects(objs, obj3d, !!options.skipProps);
 							objectsCreated = objectsCreated.concat(objs);
 						}
 						// copy some props from template
@@ -427,19 +427,37 @@ Scene.prototype = {
 				obj3d.isContainer = true;
 				break;					
 			case 'Geometry':
-				// TODO - add diff. types of geometry. Dispose of previous .geometry before continuing, if reusing an object
-				if(!obj3d) {
-					var geom = new THREE.PlaneBufferGeometry(1,1,2,2);
-					var mat = new THREE.MeshPixelBoxMaterial();
+				var geom = this.makeGeometryObject(layer);
+				var mat;
+				if(obj3d) {
+					obj3d.geometry.dispose();
+					obj3d.geometry = geom;
+					mat = obj3d.material;
+					
+					var _gl = renderer.webgl.context;
+					for (var name in geom.attributes) {
+						var bufferType = ( name === 'index' ) ? _gl.ELEMENT_ARRAY_BUFFER : _gl.ARRAY_BUFFER;
+						var attribute = geom.attributes[ name ];
+						if(!attribute.buffer){
+							attribute.buffer = _gl.createBuffer();
+							var res = _gl.bindBuffer( bufferType, attribute.buffer );
+							_gl.bufferData( bufferType, attribute.array, _gl.STATIC_DRAW );
+						}
+					}
+					
+				} else {
+					mat = new THREE.MeshPixelBoxMaterial();
 					obj3d = new THREE.Mesh(geom, mat);
 				}
 				
+				obj3d.geometryType = layer.mesh;
+				
 				//material
-				obj3d.material.tint.set(layer.tint != undefined ? parseInt(layer.tint, 16) : 0xffffff);
-				obj3d.material.addColor.set(layer.addColor != undefined ? parseInt(layer.addColor, 16) : 0x0);
-				obj3d.material.alpha = (layer.alpha != undefined ? layer.alpha : 1.0);
-				obj3d.material.brightness = (layer.brightness != undefined ? layer.brightness : 0.0);
-				obj3d.material.stipple = (layer.stipple != undefined ? layer.stipple : 0.0);
+				mat.tint.set(layer.tint != undefined ? parseInt(layer.tint, 16) : 0xffffff);
+				mat.addColor.set(layer.addColor != undefined ? parseInt(layer.addColor, 16) : 0x0);
+				mat.alpha = (layer.alpha != undefined ? layer.alpha : 1.0);
+				mat.brightness = (layer.brightness != undefined ? layer.brightness : 0.0);
+				mat.stipple = (layer.stipple != undefined ? layer.stipple : 0.0);
 				break;
 			
 			// lookup asset by name
@@ -614,15 +632,13 @@ Scene.prototype = {
 						if(td) { 
 							var nc = obj3d.children.length;
 							addedTemplates = addedTemplates.concat(this.populateObject(obj3d, [ options.templates[layer.containsTemplates[ti]] ], options));
-							this.linkObjects(addedTemplates, obj3d.children[nc]);
+							this.linkObjects(addedTemplates, obj3d.children[nc], !!options.skipProps);
 							objectsCreated = objectsCreated.concat(addedTemplates);
 						}
 					}
 				}
 				
 			}
-			
-			// console.log("Populated ",obj3d," with ",layer);
 			
 			// recursively process children
 			if(layer.layers){
@@ -632,6 +648,55 @@ Scene.prototype = {
 		}
 		
 		return objectsCreated;
+	},
+	
+	/* generates geometry for 'Geometry' object during populateObject */
+	makeGeometryObject:function(layer){
+		var geom;
+		function param(p, def, min, max){ 
+			var val;
+			if(layer[p] !== undefined) val = layer[p]; 
+			else val = def; 
+			if(min !== undefined) val = Math.max(min, val);
+			if(max !== undefined) val = Math.min(max, val);
+			return val;
+		}
+		var degToRad = Math.PI / 180;
+		switch(layer.mesh){
+		case 'Sphere':
+			layer.radius = param('radius',5);
+			layer.widthSegments = param('widthSegments',8,3);
+			layer.heightSegments = param('heightSegments',6,2);
+			layer.phiStart = param('phiStart',0);
+			layer.phiLength = param('phiLength',360);
+			layer.thetaStart = param('thetaStart',0);
+			layer.thetaLength = param('thetaLength',180);
+			geom = new THREE.SphereGeometry(layer.radius, 
+							layer.widthSegments, layer.heightSegments,
+							layer.phiStart * degToRad, layer.phiLength * degToRad,
+							layer.thetaStart * degToRad, layer.thetaLength * degToRad);
+			break;
+			
+		case 'Box':
+			layer.widthSegments = param('widthSegments',1,1);
+			layer.heightSegments = param('heightSegments',1,1);
+			layer.depthSegments = param('depthSegments',1,1);
+			layer.width = param('width',10);
+			layer.height = param('height',10);
+			layer.depth = param('depth',10);
+			geom = new THREE.BoxGeometry(layer.width, layer.height, layer.depth, layer.widthSegments, layer.heightSegments, layer.depthSegments);
+			break;
+
+		case 'Plane':
+		default:
+			layer.widthSegments = param('widthSegments',1,1);
+			layer.heightSegments = param('heightSegments',1,1);
+			layer.width = param('width',10);
+			layer.height = param('height',10);
+			geom = new THREE.PlaneBufferGeometry(layer.width, layer.height,layer.widthSegments, layer.heightSegments);
+			break;
+		}
+		return geom;
 	},
 	
 	/* get object from pool */

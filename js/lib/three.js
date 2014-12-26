@@ -20416,7 +20416,22 @@ THREE.WebGLRenderer = function ( parameters ) {
 
 			}
 
-		} else if ( object instanceof THREE.PointCloud ) {
+		} else /* begin PixelBox */ if ( object instanceof THREE.PixelBox ) {
+
+			if ( updateBuffers ) {
+
+				setupVertexAttributes( material, program, geometry, 0 );
+
+			}
+
+			var position = geometry.attributes.position;
+
+			_gl.drawArrays( _gl.POINTS, object.vertexBufferStart, object.vertexBufferLength);
+			_this.info.render.points += object.vertexBufferLength;
+			
+			_this.info.render.calls ++;			
+
+		} /* end PixelBox */ else if ( object instanceof THREE.PointCloud ) {
 
 			// render particles
 
@@ -20428,26 +20443,9 @@ THREE.WebGLRenderer = function ( parameters ) {
 
 			var position = geometry.attributes.position;
 
-			// render particles
-			/* 	Kirill Edelman:
-				To support PixelBox multi-frame rendering
-				replaced 
-					_gl.drawArrays( _gl.POINTS, 0, position.array.length / 3 );
-					_this.info.render.calls ++;
-					_this.info.render.points += position.array.length / 3;
-				with the following:
-			*/
-			
-			if(object.pixelBox){
-				_gl.drawArrays( _gl.POINTS, object.vertexBufferStart, object.vertexBufferLength);
-				_this.info.render.points += object.vertexBufferLength;
-			} else {
-				_gl.drawArrays( _gl.POINTS, 0, position.array.length / 3 );
-				_this.info.render.points += position.array.length / 3;
-			}
+			_gl.drawArrays( _gl.POINTS, 0, position.array.length / 3 );
 			_this.info.render.calls ++;
-			
-			/* end replace */
+			_this.info.render.points += position.array.length / 3;
 
 		} else if ( object instanceof THREE.Line ) {
 

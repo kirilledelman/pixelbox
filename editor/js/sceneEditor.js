@@ -1,51 +1,36 @@
 /*
 
 
-	Properties:
 
 	
 	NEXT:
-	
-	Add "Double-click to edit asset"
-	
-	Geometry - other types besides Plane
-	
-	investigate ImmediateRenderObject
 	
 	custom properties def.props
 		Number
 		String
 		JSON - valid json
-
-	When deleting a template, delete all instances with it
-	
-	View - setLabelsVisible
-	
-	? camera FOV / updateViewPortUniform code is incorrect
-	
-	? Camera default + template
 			
-
+	for moveTool - convert chosen axis to object parent space (same as mouse move), so the move is in the same space as camera
+		
 	LATER:
+
+	Windows / ANGLE compilation
 
 	Curve objects - define nice camera and object paths
 
-	Drag asset into Scene graph onto a parent to add to
-
-	When renaming objects, if instance, don't allow duplicate names globally
-
-	[Swap Asset]
-
-	add under View:
-		[x] Show labels
+	[Swap Asset / Instance]
 
 	add textures to planes? - via custom props
-	texture as a resource
+	texture as a resource?
 
 
 	PUBLIC RELEASE:
 	
 	add showMessage's where appropriate, indicating what's happening
+	
+	add examples
+	
+	gogoat.com/pixelbox should have links to github, a demo and link to editor
 	
 	showHelp - add all keyboard shortcuts and link to github for help
 
@@ -131,21 +116,23 @@ EditSceneScene.prototype = {
 	},
 	
 	/* if previous-1 undo action can be merged with last one, merge them */
-	mergeUndo:function(){
+	mergeUndo:function(forceGlue){
 		var undo1 = this._undo[this._undo.length - 1];
 		var undo2 = this._undo[this._undo.length - 2];
-		if(undo1.mergeable && undo2.mergeable && undo1.name == undo2.name){
-			// merge to undo2
-			switch(undo1.name){
-			case 'moveBy':
-			case 'moveTo':
-			case 'rotateBy':
-			case 'rotateTo':
-			case 'scaleBy':
-			case 'scaleTo':
-			case 'cameraFOV':
-			case 'cameraZoom':
-			case 'shadowBias':			
+		
+		// combine into an array
+		if(forceGlue){
+			if(!_.isArray(undo2)){
+				undo2 = [ undo2 ];
+			}
+			if(_.isArray(undo1)) undo2 = undo2.concat(undo1);
+			else undo2.push(undo1);
+			// save it
+			this._undo[this._undo.length - 2] = undo2;
+			this._undo.pop();
+		// merge as one item (for discardable multiple items of the same type)
+		} else {
+			if(undo1.mergeable && undo2.mergeable && undo1.name == undo2.name){
 				// compare operands
 				if(undo1.redo[1].length != undo2.redo[1].length) return;
 				for(var i = 0; i < undo1.redo[1].length; i++){
@@ -153,46 +140,11 @@ EditSceneScene.prototype = {
 						return;
 					}
 				}
-				break;
-			default:
-				console.log("merged undo type without checing args: "+undo1.name);
-				break;
-			// case 'sceneMaxShadows':
+				
+				// merge to undo2 and remove undo1
+				undo2.redo = undo1.redo;
+				this._undo.pop(); 
 			}
-			
-			// merge and remove undo1
-			undo2.redo = undo1.redo;
-			this._undo.pop(); 
-		}
-	},
-	
-	/* replaces references to object with another object,
-		used after updating an asset in scene.
-	*/		
-	replaceReferencesInUndo:function(rep){
-		var updateRecurse = function(arg){
-			if(typeof(arg)!='object') return;
-			for(var p in arg){
-				var val = arg[p];
-				if(typeof(val)!='object') continue;
-				if(val && val instanceof THREE.Object3D){
-					if(rep[val.uuid]){
-						// found, replace
-						arg[p] = rep[val.uuid];
-					}
-					continue;
-				}
-				updateRecurse(val);
-			}
-		}
-		// process undo and redo
-		for(var i = 0; i < this._undo.length; i++){
-			updateRecurse(this._undo[i].undo);	
-			updateRecurse(this._undo[i].redo);	
-		}
-		for(var i = 0; i < this._redo.length; i++){
-			updateRecurse(this._redo[i].undo);	
-			updateRecurse(this._redo[i].redo);	
 		}
 	},
 	
@@ -315,6 +267,8 @@ EditSceneScene.prototype = {
 			this.disableCanvasInteractionsOnRelease = false;
 		}
 		
+		//var isLabel = $(e.target).hasClass('object-label');
+		
 		// hide opened menus
 		$('.submenu').hide();
 		
@@ -329,7 +283,7 @@ EditSceneScene.prototype = {
 		// select object if mouse hasn't moved
 		if(this.transformingObjectsMode){
 			this.finishTransformObjects(e);
-		} else if(!this.mouseMoved && (e.target.nodeName == 'CANVAS' || $(e.target).hasClass('object-label')) && e.button === 0){
+		} else if(!this.mouseMoved && e.target.nodeName == 'CANVAS' && e.button === 0){
 			// clicked on object
 			if(this.mouseDownOnObject){
 				this.objectClicked(this.mouseDownOnObject);
@@ -354,6 +308,10 @@ EditSceneScene.prototype = {
 			if(dist > 2){
 				this.mouseMoved = true;
 				this.lazyMouse = null;
+				
+				if(editScene.objectPickMode){
+					editScene.objectPickMode(null);
+				}
 			}
 		}
 		
@@ -710,8 +668,22 @@ EditSceneScene.prototype = {
 	deleteSelection:function(){
 		var doArr = [];
 		var undoArr = [];
-		for(var i = 0; i < this.selectedObjects.length; i++){
-			var obj = this.selectedObjects[i];
+		var toDelete = this.selectedObjects.concat([]);
+		var templates = [];
+		
+		// find templates that will be deleted
+		editScene.container.traverse(function(obj){
+			if(obj.isTemplate && (obj.selected || obj.isDescendentOf(toDelete))){
+				templates.push(obj.name);
+			}
+		});
+		// add instances of these to the list
+		editScene.container.traverse(function(obj){
+			if(obj.isInstance && templates.indexOf(obj.def.template) >= 0) toDelete.push(obj);
+		});
+		
+		for(var i = 0; i < toDelete.length; i++){
+			var obj = toDelete[i];
 			if(obj.isAnchor) continue;
 			undoArr.push([obj, obj.parent]);
 			doArr.push(obj);
@@ -767,7 +739,7 @@ EditSceneScene.prototype = {
 
 		// store
 		localStorage_setItem("sceneCopy", JSON.stringify(this.sceneCopyItem));
-		console.log(this.sceneCopyItem);
+		//console.log(this.sceneCopyItem);
 		
 	},
 	
@@ -797,17 +769,17 @@ EditSceneScene.prototype = {
 			}
 		}
 		
-		var addedObjects = this.populateObject(pasteTarget, this.sceneCopyItem.objects, { helpers: true, keepSceneCamera:true, noNameReferences:true, wrapTemplates: true, templates: this.doc.serializedTemplates });
+		var addedObjects = this.populateObject(pasteTarget, this.sceneCopyItem.objects, { helpers: true, keepSceneCamera:true, noNameReferences:true, wrapTemplates: true, templates: this.doc.serializedTemplates, skipProps: true });
 		this.updateLights = true;
 		var doAdd = [];
 		var undoAdd = [];
 		for(var i = 0; i < addedObjects.length; i++){
 			var obj = addedObjects[i];
 			if(obj instanceof THREE.Camera && obj.isDefault) obj.isDefault = false;
-			var isTopLevel = (this.sceneCopyItem.objects.indexOf(obj.def) != -1);
-			if(isTopLevel){
+			if(obj.parent == pasteTarget){ // top level obj
 				doAdd.push([obj, pasteTarget]);
 				undoAdd.push(obj);
+				
 			}
 		}
 		
@@ -818,19 +790,20 @@ EditSceneScene.prototype = {
 			this.addUndo({name:"paste", redo:[this.addObjects, doAdd], undo:[this.deleteObjects, undoAdd] });
 		}
 		
+		if(this.validateAllObjectNames()){
+			this.mergeUndo(true);
+		}
+		
 		this.refreshScene();
 		
 		this.updateTextLabels(this.container, 0);
 		for(var i = 0; i < addedObjects.length; i++) {
-			if(this.sceneCopyItem.objects.indexOf(addedObjects[i].def) != -1){
+			if(obj.parent == pasteTarget){
 				this.selectObject(addedObjects[i], true);
 			}
 		}
 		this.selectionChanged();
-		//this.controls.center.copy(pasteTarget.parent.localToWorld(pasteTarget.position.clone()));
-		//this.camera.lookAt(this.controls.center);
 		this.refreshAssets();
-		//this.controls.focus(pasteTarget, true);
 	},
 	
 /* ------------------- ------------------- ------------------- ------------------- ------------------- Reparent */
@@ -989,9 +962,10 @@ EditSceneScene.prototype = {
 
 /* ------------------- ------------------- ------------------- ------------------- ------------------- Util */
 
-
 	/* used during loading */
 	populateObject: Scene.prototype.populateObject,
+
+	makeGeometryObject: Scene.prototype.makeGeometryObject,
 
 	linkObjects: Scene.prototype.linkObjects,
 	
@@ -1298,18 +1272,18 @@ EditSceneScene.prototype = {
 		}
 		
 		// populate
-		var opts = { helpers: true, keepSceneCamera:true, noNameReferences: true, wrapTemplates: true, templates: dataObject.templates };
+		var opts = { helpers: true, keepSceneCamera:true, noNameReferences: true, wrapTemplates: true, templates: dataObject.templates, skipProps: true };
 		var addedObjects = this.populateObject(this.container, dataObject.layers, opts);
 		if(dataObject.containsTemplates){
 			for(var ti = 0; ti < dataObject.containsTemplates.length; ti++){
 				var td = dataObject.templates[dataObject.containsTemplates[ti]];
 				if(td) { 
 					var addedTemplates = this.populateObject(this.container, [ td ], opts);
-					this.linkObjects(addedTemplates, addedTemplates[0]);
+					this.linkObjects(addedTemplates, addedTemplates[0], true);
 				}
 			}
 		}
-		this.linkObjects(addedObjects, this.container);
+		this.linkObjects(addedObjects, this.container, true);
 		this.updateLights = true;
 		
 		// clear undo queue
@@ -1322,7 +1296,7 @@ EditSceneScene.prototype = {
 		this.refreshAssets();
 		this.refreshProps();
 		
-		this.showMessage(this.doc.name);
+		this.showMessage(this.doc.name+' loaded');
 		
 		this.setLabelsVisible(this.labelsVisible);
 	},
@@ -1614,15 +1588,8 @@ EditSceneScene.prototype = {
 					
 		} while(replaced.length);
 		
-		// dispose of old asset
-		/* var oldAsset = assets.cache.get(newAsset.name);
-		if(oldAsset){ THREE.PixelBoxUtil.dispose(oldAsset); } */
-		
 		// add new asset to cache
 		assets.cache.add(newAsset.name, newAsset);
-		
-		// update undo references
-		/* editScene.replaceReferencesInUndo(replaceUndoObjects); */
 		
 		// refresh
 		editScene.refreshAssets();
@@ -1691,42 +1658,7 @@ EditSceneScene.prototype = {
 			templates:{}
 		}
 		
-		// validate scene names
-		var doArr = [];
-		var undoArr = [];
-		var usedTemplateNames = {};
-		this.container.traverse(function(obj3d){
-			var usedNames = {};
-			if(obj3d.isInstance || obj3d.parentInstance()) return;
-			for(var i = 0; i < obj3d.children.length; i++){
-				var child = obj3d.children[i];
-				if(child.isTemplate){
-					var childName = child.name;
-					if(!childName.length){
-						doArr.push([child, '_']);
-						undoArr.push([child, '']);
-						childName = '_';
-					}
-					if(usedTemplateNames[childName]){
-						doArr.push([child, childName + (usedTemplateNames[childName]++).toString()]);
-						undoArr.push([child, childName]);
-					} else {
-						usedTemplateNames[childName] = 1;
-					}
-				} else if(child.name.length){
-					if(usedNames[child.name]){
-						doArr.push([child, child.name + (usedNames[child.name]++).toString()]);
-						undoArr.push([child, child.name]);
-					} else {
-						usedNames[child.name] = 1;	
-					}
-				}
-			}
-		});
-		if(doArr.length){
-			this.addUndo({name:"rename", redo:[this.renameObjects, doArr], undo:[this.renameObjects, undoArr] });
-			this.renameObjects(doArr);
-		}
+		this.validateAllObjectNames();
 				
 		var cont = this.container.serialize(obj.templates);
 		obj.layers = cont.layers;
@@ -2707,7 +2639,7 @@ EditSceneScene.prototype = {
 
 /* ------------------- ------------------- ------------------- ------------------- ------------------- Name */
 
-	renameObjects:function(objNameArr){
+	renameObjects:function(objNameArr, dontRefreshScene){
 		var renameInstances = {};
 		var hasTemplates = false;
 		for(var i = 0; i < objNameArr.length; i++){
@@ -2727,7 +2659,7 @@ EditSceneScene.prototype = {
 			}
 		}
 		this.refreshTemplates(hasTemplates ? renameInstances : null);
-		this.refreshScene();
+		if(!dontRefreshScene) this.refreshScene();
 	},
 
 	renameScene:function(newName){
@@ -2739,24 +2671,119 @@ EditSceneScene.prototype = {
 		var doArr = [];
 		var undoArr = [];
 		var newName = $('#prop-name').val().replace(/\W+/g,'_'); // replace non-word chars with _
-		if(newName.match(/^\d+/)){ // prepend _ if starts with a digit
+		if(newName.match(/^\d+/) || !newName.length){ // prepend _ if starts with a digit
 			newName = '_'+newName;
 		}
 		for(var i = 0; i < this.selectedObjects.length; i++){
 			var obj = this.selectedObjects[i];
 			undoArr.push([obj, obj.name ]);
 			doArr.push([obj, newName]);
+			// move obj to the top of children array of its parent
+			// so validateObjectName keeps this object's name
+			var p = obj.parent;
+			var ci = p.children.indexOf(obj);
+			if(ci != 0){
+				p.children.splice(ci, 1);
+				p.children.splice(0, 0, obj);
+			}
 		}
 		
 		if(undoArr.length){ 
 			this.addUndo({name:"rename", redo:[this.renameObjects,doArr], undo:[this.renameObjects, undoArr] });
-			this.renameObjects(doArr);
+			this.renameObjects(doArr, true);
+			// validate
+			if(this.validateAllObjectNames()){
+				this.mergeUndo(true);
+			}			
+			this.refreshScene();
 		} else {
 			this.addUndo({name:"renameScene", redo:[this.renameScene,newName], undo:[this.renameScene, this.doc.name] });
 			this.renameScene(newName);
 		}
 		
 		this.refreshProps();
+	},
+	
+	validateRenameObjectNames:function(objects, doArr, undoArr){
+		// { "name":[ [name, name0], undefined, ... , [name5,name5], [name6] ... ], ... }
+		var usedNames = {};
+		
+		
+		// first pass
+		for(var i = 0, l = objects.length; i < l; i++){
+			var obj = objects[i];
+			
+			var digits = obj.name.match(/\d+$/);
+			if(digits && digits.length == 1) digits = digits[0];
+			else digits = '';			
+			
+			var name = obj.name.substr(0, obj.name.length - digits.length);
+			
+			if(!usedNames[name]){
+				usedNames[name] = new Array();
+			}
+			var nth = digits.length ? parseInt(digits) : 0;
+			if(usedNames[name][nth] === undefined) usedNames[name][nth] = [ obj ];
+			else usedNames[name][nth].push(obj);
+		}
+		// second pass
+		for(var name in usedNames){
+			var nameDigit = usedNames[name];
+			for(var digit = 0; digit < nameDigit.length; digit++){
+				// array of objects with the same name+digit
+				var objects = nameDigit[digit];
+				if(objects === undefined) continue;
+				for(var i = objects.length - 1; i > 0 ; i--){
+					// find first available index
+					avail = 0;
+					while(nameDigit[avail] !== undefined) avail++;
+					// rename object
+					var obj = objects[i];
+					var newName = name + (avail == 0 ? '' : avail);
+					undoArr.push([obj, obj.name ]);
+					doArr.push([obj, newName]);
+					// move info
+					objects.splice(i, 1);
+					nameDigit[avail] = [ obj ];
+				}
+			}
+		}
+	},
+	
+	/* returns true if changes were made */
+	validateAllObjectNames:function(){
+		var doArr = [];
+		var undoArr = [];
+		var allTemplates = [];
+		
+		// scene-wide validate/rename
+		this.container.traverse(function(obj3d){
+			// instances' children are left alone
+			if(obj3d.isInstance || obj3d.parentInstance()) return;
+			
+			if(obj3d.isTemplate) allTemplates.push(obj3d);
+			
+			// get all children except for templates
+			var childrenSansTemplates = [];
+			for(var i = 0; i < obj3d.children.length; i++){
+				var child = obj3d.children[i];
+				// templates
+				if(!child.isTemplate) childrenSansTemplates.push(child);
+			}
+			
+			// validate/rename
+			editScene.validateRenameObjectNames(childrenSansTemplates, doArr, undoArr);
+		});
+		
+		// validate/rename template names
+		this.validateRenameObjectNames(allTemplates, doArr, undoArr);
+		
+		if(doArr.length){
+			this.addUndo({name:"rename", redo:[this.renameObjects, doArr], undo:[this.renameObjects, undoArr] });
+			this.renameObjects(doArr);
+			return true;
+		}
+		return false;
 	},
 
 /* ------------------- ------------------- ------------------- ------------------- ------------------- Move, scale, rotate, visible, template */
@@ -2985,18 +3012,21 @@ EditSceneScene.prototype = {
 	
 	lookAtClicked:function(e){
 		if($(e.target).attr('disabled')) return;
+		
+		e.target.blur();
+		
 		if(editScene.objectPickMode){
 			editScene.objectPickMode(null);
 			return;
 		}
 		
-		$('#look-at').addClass('active');
+		$('#look-at,#light-target').addClass('active');
 		$('canvas,.object-label,#scene-list div.row:not(.selected),#scene-list div.row:not(.selected) > label').css('cursor','cell');
 		editScene.objectPickMode = function(obj){
 			if(obj){
 				editScene.lookAtSelection(obj);
 			}
-			$('#look-at').removeClass('active');
+			$('#look-at,#light-target').removeClass('active');
 			editScene.objectPickMode = null;
 			$('canvas,.object-label,#scene-list div.row:not(.selected),#scene-list div.row:not(.selected) > label').css('cursor','');
 		};
@@ -3245,13 +3275,17 @@ EditSceneScene.prototype = {
 			var obj = editScene.selectedObjects[i];
 			if(obj.isAnchor) continue;
 			doArr.push([obj, newVal]);
-			undoArr.push([obj, obj.visible]);
+			undoArr.push([obj, obj.isTemplate]);
 		}
 		
 		if(!doArr.length) return;
 		
 		editScene.setObjectsTemplate(doArr);
 		editScene.addUndo({name:'setTemplate',undo:[editScene.setObjectsTemplate, undoArr], redo:[editScene.setObjectsTemplate, doArr]} );
+		if(editScene.validateAllObjectNames()){
+			editScene.mergeUndo(true);
+		}
+		
 		editScene.refreshProps();
 	},
 	
@@ -3406,7 +3440,7 @@ EditSceneScene.prototype = {
 			}
 		});
 		if(numRebuilt){
-			var opts = { helpers: false, keepSceneCamera:true, noNameReferences:true, wrapTemplates: false, templates: this.doc.serializedTemplates };
+			var opts = { helpers: false, keepSceneCamera:true, noNameReferences:true, wrapTemplates: false, templates: this.doc.serializedTemplates, skipProps: true };
 			for(var uuid in replacements){
 				var obj = replacements[uuid];
 				var def = obj.serialize(null);
@@ -3996,6 +4030,26 @@ EditSceneScene.prototype = {
 			editScene.touchTemplate(obj);
 		}		
 	},
+	
+	setGeometryType:function(arr){
+		for(var i = 0; i < arr.length; i++){
+			var obj = arr[i][0];
+			var val = arr[i][1];
+			
+			var p = obj.parent;
+			p.remove(obj);
+
+			obj.def.mesh = val;
+			var geom = this.makeGeometryObject(obj.def);
+			obj.geometry.dispose();
+			obj.geometry = geom;
+			obj.geometryType = val;
+
+			p.add(obj);
+
+			this.touchTemplate(obj);
+		}		
+	},
 
 	geometryStippleChanged:function(val){
 		var doArr = [];
@@ -4073,6 +4127,60 @@ EditSceneScene.prototype = {
 		editScene.setMaterialProperty(doArr, prop);
 		editScene.refreshProps();
 	},
+	
+	geometryTypeChanged:function(e){
+		var val = $('#geometry-type').val();
+		if(val === '0') return;
+		
+		var doArr = [];
+		var undoArr = [];
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj.geometryType]);
+		}
+		editScene.addUndo({name:"geometryType", undo:[editScene.setGeometryType, undoArr],
+											redo:[editScene.setGeometryType, doArr]});
+		editScene.setGeometryType(doArr);
+		editScene.refreshProps();		
+	},
+	
+	setGeometryProperty:function(arr, prop){
+		for(var i = 0; i < arr.length; i++){
+			var obj = arr[i][0];
+			var val = arr[i][1];
+			
+			obj.def[prop] = val;
+			
+			var p = obj.parent;
+			p.remove(obj);
+
+			var geom = this.makeGeometryObject(obj.def);
+			obj.geometry.dispose();
+			obj.geometry = geom;
+
+			p.add(obj);
+			
+			this.touchTemplate(obj);			
+		}		
+	},
+	
+	geometryPropChanged:function(val, e){
+		var targ = $(e.target);
+		var prop = targ.attr('alt');
+		
+		var doArr = [];
+		var undoArr = [];
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj.def[prop]]);
+		}
+		editScene.addUndo({name:prop, mergeable:true, undo:[editScene.setGeometryProperty, undoArr, prop],
+											redo:[editScene.setGeometryProperty, doArr, prop]});
+		editScene.setGeometryProperty(doArr, prop);
+		editScene.refreshProps();		
+	},
 
 /* ------------------- ------------------- ------------------- ------------------- ------------------- Properties panel */
 
@@ -4115,10 +4223,13 @@ EditSceneScene.prototype = {
 		$('#prop-name').attr('placeholder','Object name');
 		$('#prop-object-type').text('');
 		$('#panel-move').show();
+		
 
 		$('#editor-props input[type=checkbox].multiple,#panel-pixelbox input[name=pixelbox-animOption].multiple').removeClass('multiple').removeAttr('checked');
 		
 		$('#pixelbox-animName').empty().append('<option value=""/>');
+		
+		$('#geometry-type option[value="0"]').remove();
 		
 		var prevObj = null;
 		var mults = {};
@@ -4438,6 +4549,44 @@ EditSceneScene.prototype = {
 				} else if(!mults['geometry-addColor']){
 					$('#geometry-addColor').css({backgroundColor:'#'+obj.material.addColor.getHexString()});
 				}
+				// type
+				if(prevObj && prevObj.geometryType != obj.geometryType){
+					if(!mults['geometry-type']){
+						$('#geometry-type').prepend('<option value="0" selected>- multiple -</option>');
+					}
+					$('#geometry-type').val('0');
+					mults['geometry-type'] = true;
+					$('#panel-geometry .subpanel').hide();
+				} else if(!mults['geometry-type']){
+					var newVal = obj.geometryType;
+					$('#geometry-type').val(newVal);
+					$('#panel-geometry .subpanel').hide();
+					$('#panel-geometry #geometry-'+newVal).show();
+				
+					var panel = $('#panel-geometry');
+					// props
+					var props = ['width','height','depth','widthSegments','heightSegments','depthSegments'];
+					for(var pi in props){
+						var p = props[pi];
+						if(prevObj && prevObj.def[p] != obj.def[p]){
+							$('.geometry-'+p,panel).attr('placeholder','M').val('').data('prevVal',''); mults['geometry-'+p] = true;
+						} else if(!mults['geometry-'+p]){
+							var newVal = obj.def[p];
+							$('.geometry-'+p,panel).attr('placeholder','').val(newVal).data('prevVal', newVal);
+						}
+					}
+					props = ['radius','phiStart','phiLength','thetaStart','thetaLength'];
+					for(var pi in props){
+						var p = props[pi];
+						if(prevObj && prevObj.def[p] != obj.def[p]){
+							$('#geometry-'+p,panel).attr('placeholder','M').val('').data('prevVal',''); mults['geometry-'+p] = true;
+						} else if(!mults['geometry-'+p]){
+							var newVal = obj.def[p];
+							$('#geometry-'+p,panel).attr('placeholder','').val(newVal).data('prevVal', newVal);
+						}
+					}
+					
+				}				
 			} else 
 			if(commonType == 'PixelBox'){
 				if(prevObj && prevObj.pointSize != obj.pointSize){
@@ -4764,7 +4913,7 @@ EditSceneScene.prototype = {
 				if(targ.val().toString() === prevVal) return;
 				var newVal = parseFloat(targ.spinner('value'));
 				if(isNaN(newVal)) newVal = 0;
-				setValueFunc.call(editScene, newVal);
+				setValueFunc.call(editScene, newVal, e);
 				targ.data('prevVal', targ.val());
 			}	
 		};
@@ -4863,6 +5012,8 @@ EditSceneScene.prototype = {
 			<br/>\
 			<label for="light-shadow-bias" class="w32 pad5 right-align">Shadow Bias</label><input tabindex="0" type="text" class="center" id="light-shadow-bias" size="4"/>\
 			</div>');
+			
+		$('#light-target').click(this.lookAtClicked);
 		$('#light-color').colpick({
 			colorScheme:'dark',
 			onShow:function(dom){ 
@@ -5076,8 +5227,55 @@ EditSceneScene.prototype = {
 			}
 		});	
 
-// Plane/mesh panel
+// Geometry panel
 		$('#editor-props .panels').append('<div id="panel-geometry" class="panel"><h4>Geometry</h4>\
+			<label class="pad5">Type</label> <select id="geometry-type">\
+			<option value="Plane">Plane</option>\
+			<option value="Box">Box</option>\
+			<option value="Sphere">Sphere</option>\
+			</select>\
+			<hr/>\
+			<div id="geometry-Plane" class="subpanel">\
+			<label for="geometry-plane-width" class="w31 pad5 right-align">Width</label>\
+			<input alt="width" tabindex="0" type="text" class="center geometry-width" id="geometry-plane-width" size="1"/>\
+			<label for="geometry-plane-widths" class="w32 pad5 right-align">Width Seg</label>\
+			<input alt="widthSegments" tabindex="2" type="text" class="center geometry-widthSegments" id="geometry-plane-widths" size="1"/><br/>\
+			<label for="geometry-plane-height" class="w31 pad5 right-align">Height</label>\
+			<input alt="height" tabindex="1" type="text" class="center geometry-height" id="geometry-plane-height" size="1"/>\
+			<label for="geometry-plane-heights" class="w32 pad5 right-align">Height Seg</label>\
+			<input alt="heightSegments" tabindex="3" type="text" class="center geometry-heightSegments" id="geometry-plane-heights" size="1"/>\
+			</div>\
+			<div id="geometry-Box" class="subpanel">\
+			<label for="geometry-box-width" class="w31 pad5 right-align">Width</label>\
+			<input alt="width" tabindex="0" type="text" class="center geometry-width" id="geometry-box-width" size="1"/>\
+			<label for="geometry-box-widths" class="w32 pad5 right-align">Width Seg</label>\
+			<input alt="widthSegments" tabindex="3" type="text" class="center geometry-widthSegments" id="geometry-box-widths" size="1"/><br/>\
+			<label for="geometry-box-height" class="w31 pad5 right-align">Height</label>\
+			<input alt="height" tabindex="1" type="text" class="center geometry-height" id="geometry-box-height" size="1"/>\
+			<label for="geometry-box-heights" class="w32 pad5 right-align">Height Seg</label>\
+			<input alt="heightSegments" tabindex="4" type="text" class="center geometry-heightSegments" id="geometry-box-heights" size="1"/><br/>\
+			<label for="geometry-box-depth" class="w31 pad5 right-align">Depth</label>\
+			<input alt="depth" tabindex="2" type="text" class="center geometry-depth" id="geometry-box-depth" size="1"/>\
+			<label for="geometry-box-depths" class="w32 pad5 right-align">Depth Seg</label>\
+			<input alt="depthSegments" tabindex="5" type="text" class="center geometry-depthSegments" id="geometry-box-depths" size="1"/>\
+			</div>\
+			<div id="geometry-Sphere" class="subpanel">\
+			<label for="geometry-radius" class="w31 pad5 right-align">Radius</label>\
+			<input alt="radius" tabindex="0" type="text" class="center" id="geometry-radius" size="1"/><br/>\
+			<label for="geometry-sphere-widths" class="w31 pad5 right-align">Width Seg</label>\
+			<input alt="widthSegments" tabindex="1" type="text" class="center geometry-widthSegments" id="geometry-sphere-widths" size="1"/>\
+			<label for="geometry-sphere-heights" class="w32 pad5 right-align">Height Seg</label>\
+			<input alt="heightSegments" tabindex="2" type="text" class="center geometry-heightSegments" id="geometry-sphere-heights" size="1"/><br/>\
+			<label for="geometry-phiStart" class="w31 pad5 right-align">Phi Start</label>\
+			<input alt="phiStart" tabindex="3" type="text" class="center" id="geometry-phiStart" size="1"/>\
+			<label for="geometry-phiLength" class="w32 pad5 right-align">Phi Length</label>\
+			<input alt="phiLength" tabindex="4" type="text" class="center" id="geometry-phiLength" size="1"/><br/>\
+			<label for="geometry-thetaStart" class="w31 pad5 right-align">Theta Start</label>\
+			<input alt="thetaStart" tabindex="5" type="text" class="center" id="geometry-thetaStart" size="1"/>\
+			<label for="geometry-thetaLength" class="w32 pad5 right-align">Theta Length</label>\
+			<input alt="thetaLength" tabindex="6" type="text" class="center" id="geometry-thetaLength" size="1"/>\
+			</div>\
+			<hr/>\
 			<label class="w32 right-align pad5">Color tint</label><div id="geometry-tint" class="color-swatch"/>\
 			<label class="w31 right-align pad5">Add</label><div id="geometry-addColor" class="color-swatch"/><hr/>\
 			<label for="geometry-alpha" class="w32 pad5 right-align">Alpha</label><input tabindex="0" type="text" class="center" id="geometry-alpha" size="1"/>\
@@ -5090,6 +5288,18 @@ EditSceneScene.prototype = {
 		$('#geometry-alpha').spinner({step:0.1, min:0, max:1, change:vc, stop:vc});
 		vc = valueChanged(this.geometryBrightnessChanged);
 		$('#geometry-brightness').spinner({step:0.1, change:vc, stop:vc});
+
+		$('#geometry-type').change(this.geometryTypeChanged);
+		
+		var panel = $('#panel-geometry');
+		vc = valueChanged(this.geometryPropChanged);
+		$('.geometry-width,.geometry-height,.geometry-depth', panel).spinner({step:1, min:1, change:vc, stop:vc});
+		$('.geometry-widthSegments,.geometry-heightSegments,.geometry-depthSegments', panel).spinner({step:1, min:1, max:30, change:vc, stop:vc});
+		$('#geometry-radius', panel).spinner({step:1, min:0, change:vc, stop:vc});		
+		$('#geometry-phiStart', panel).spinner({step:5, min:0, max:360, change:vc, stop:vc});
+		$('#geometry-thetaStart', panel).spinner({step:5, min:0, max:180, change:vc, stop:vc});
+		$('#geometry-phiLength', panel).spinner({step:5, min:0, max:360, change:vc, stop:vc});
+		$('#geometry-thetaLength', panel).spinner({step:5, min:0, max:180, change:vc, stop:vc});		
 
 		$('#geometry-tint').colpick({
 			colorScheme:'dark',
@@ -5477,7 +5687,7 @@ EditSceneScene.prototype = {
 			
 			var addedObject;
 			var addedObjects = this.populateObject(addTarget, [ objDef ], 
-								{ helpers: true, keepSceneCamera:true, noNameReferences:true, wrapTemplates: true, templates: this.doc.serializedTemplates });
+								{ helpers: true, keepSceneCamera:true, noNameReferences:true, wrapTemplates: true, templates: this.doc.serializedTemplates, skipProps: true });
 			addedObject = addTarget.children[addTarget.children.length - 1];
 			
 			var doAdd = [ [addedObject, addTarget] ];
@@ -5485,7 +5695,7 @@ EditSceneScene.prototype = {
 			this.addUndo({name:"addObject", redo:[this.addObjects, doAdd], undo:[this.deleteObjects, undoAdd] });
 			
 			if(addedObject.isInstance){
-				this.linkObjects(addedObjects, addedObject);
+				this.linkObjects(addedObjects, addedObject, true);
 			}
 			
 			this.refreshScene();
@@ -5701,6 +5911,10 @@ EditSceneScene.prototype = {
 			//editScene.maskInflate(null, -1);
 			break;
 		case 13: // enter
+			if(editScene.objectPickMode){
+				editScene.objectPickMode(null);
+				return;
+			}
 			var btn = $('.ui-dialog .ui-dialog-buttonset button').first();
 			if(btn.length) btn.trigger('click');
 			break;
@@ -6001,10 +6215,23 @@ THREE.Object3D.prototype.serialize = function(templates){
 	
 	} else if(this instanceof THREE.Mesh){
 		def.asset = 'Geometry';
-		if(this.geometry instanceof THREE.PlaneBufferGeometry){
-			def.mesh = 'Plane';
-		} // other types can be added later	
-		
+		def.mesh = this.geometryType;
+		var props = [];
+		switch(this.geometryType){
+		case 'Plane':
+			props = ['width','height','widthSegments','heightSegments'];
+			break;
+		case 'Box':
+			props = ['width','height','depth','widthSegments','heightSegments','depthSegments'];
+			break;
+		case 'Sphere':
+			props = ['radius','widthSegments','heightSegments','phiStart','phiLength','thetaStart','thetaLength'];
+			break;
+		}
+		for(var p in props){
+			var prop = props[p]
+			def[prop] = this.def[prop];
+		}		
 		def.tint = this.material.tint.getHexString();
 		def.addColor = this.material.addColor.getHexString();
 		if(this.material.alpha != 1.0) def.alpha = this.material.alpha;

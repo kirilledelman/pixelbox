@@ -730,6 +730,10 @@ input:active, input:hover, input:focus {
 	outline: 0;
 }
 
+input.active {
+	border: 2px solid white;
+}
+
 input[type=text][disabled],input[type=text][readonly]{
 	color:#AAA;
 }

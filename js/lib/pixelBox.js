@@ -1,11 +1,4 @@
 /*
-	Implement as ImmediateRenderObject
-
-	(?)
-	// functions have to be object properties
-	// prototype functions kill performance
-	// (tested and it was 4x slower !!!)
-
 
 	Events:
 		frame
@@ -15,9 +8,9 @@
 		anim-start
 		anim-loop
 		anim-finish		
-		
-	# problems
-	(?) fog color for Mesh shader needs to be moved to pixel shader
+
+	Later TODO:
+		Find a way to share vertex buffers between different PixelBox data objects
 */
 
 THREE.PixelBoxDepthShader = {
@@ -296,7 +289,7 @@ THREE.PixelBoxShader = {
 		"	float brightness = normalLength - 1.0;",
 		"	vec3 vertexNormal = normalize(normalMatrix * normal);",		
 		
-		"	if(cullBack != 0 && vertexNormal.z < -0.25) { ",
+		"	if(cullBack != 0 && vertexNormal.z < -0.35) { ",
 		"		vColor = vec4(0.0);",
 		"	} else { ",
 		
@@ -1165,12 +1158,8 @@ THREE.PixelBox = function(data){
 	return this;
 }
 
-//THREE.PixelBoxObject.prototype = Object.create(THREE.ImmediateRenderObject.prototype);
-//THREE.PixelBoxObject.prototype.constructor = THREE.PixelBoxObject;
-//_.extend(THREE.PixelBoxObject.prototype, THREE.PointCloud.prototype);
 THREE.PixelBox.prototype = Object.create(THREE.PointCloud.prototype);
 THREE.PixelBox.prototype.constructor = THREE.PixelBox;
-
 
 /* 
 	Tweening functions
