@@ -1,38 +1,15 @@
 /*
 
 
-
-	
-	NEXT:
-	
-	custom properties def.props
-		Number
-		String
-		JSON - valid json
-			
-	for moveTool - convert chosen axis to object parent space (same as mouse move), so the move is in the same space as camera
-		
 	LATER:
 
 	Windows / ANGLE compilation
 
+	for moveTool - convert chosen axis to object parent space (same as mouse move), so the move is in the same space as camera
+	
 	Curve objects - define nice camera and object paths
 
 	[Swap Asset / Instance]
-
-	add textures to planes? - via custom props
-	texture as a resource?
-
-
-	PUBLIC RELEASE:
-	
-	add showMessage's where appropriate, indicating what's happening
-	
-	add examples
-	
-	gogoat.com/pixelbox should have links to github, a demo and link to editor
-	
-	showHelp - add all keyboard shortcuts and link to github for help
 
 */
 
@@ -50,8 +27,6 @@ function EditSceneScene(){
 		
 	this.canvasInteractionsEnabled = true;
 	this.disableCanvasInteractionsOnRelease = false;
-	
-	this.version = '1.0';
 	
 }
 
@@ -185,20 +160,23 @@ EditSceneScene.prototype = {
 			var item = this._undo.pop();
 			this._redo.push(item);
 			this._undoing = true;
+			var undoDesc = [];
 			if(item instanceof Array){
 				for(var i = item.length - 1; i >= 0; i--){
 					var uitem = item[i];
-					if(uitem.name) console.log('<< '+uitem.name);
+					if(uitem.name) undoDesc.push(uitem.name);//console.log('<< '+uitem.name);
 					uitem.undo[0].apply(editScene, uitem.undo.slice(1));				
 				}
 			} else {
-				if(item.name) console.log('<< '+item.name);
+				if(item.name) undoDesc.push(item.name);//console.log('<< '+item.name);
 				item.undo[0].apply(editScene, item.undo.slice(1));
 			}
 			this._undoing = false;
 			this.undoChanged();
 			this.refreshProps();
 			this.rebuildInstances();
+			this.showMessage('Undo' + 
+							(undoDesc.length ? ('<div class="info">'+undoDesc.join(', ')+'</div>') : ''));
 		}
 	},
 	performRedo:function(){
@@ -206,20 +184,24 @@ EditSceneScene.prototype = {
 			var item = this._redo.pop();
 			this._undo.push(item);
 			this._undoing = true;
+			var undoDesc = [];
 			if(item instanceof Array){
 				for(var i = 0; i < item.length; i++){
 					var uitem = item[i];
-					if(uitem.name) console.log('>> '+uitem.name);
+					if(uitem.name) undoDesc.push(uitem.name); //console.log('>> '+uitem.name);
 					uitem.redo[0].apply(editScene, uitem.redo.slice(1));				
 				}
 			} else {
-				if(item.name) console.log('>> '+item.name);
+				if(item.name) undoDesc.push(item.name); //console.log('>> '+item.name);
 				item.redo[0].apply(editScene, item.redo.slice(1));
 			}
 			this._undoing = false;
 			this.undoChanged();
 			this.refreshProps();
 			this.rebuildInstances();
+			this.showMessage('Redo' + 
+				(undoDesc.length ? ('<div class="info">'+undoDesc.join(', ')+'</div>') : ''));
+
 		}
 	},
 
@@ -240,10 +222,11 @@ EditSceneScene.prototype = {
 		this.mouseDownOnObject = null;
 
 		var label = $(e.target).hasClass('object-label') ? e.target : null
-		if((e.target.nodeName.toLowerCase() == 'canvas' || label) && e.button === 0 && !this.shift) {
+		if((e.target.nodeName.toLowerCase() == 'canvas' || label) && e.button === 0 /*&& !this.shift*/) {
 	
 			this.isMouseDown = true;
 		
+			//document.body.focus();
 			this.blur();
 			
 			if(label && $(label).hasClass('selected')){
@@ -288,13 +271,14 @@ EditSceneScene.prototype = {
 			if(this.mouseDownOnObject){
 				this.objectClicked(this.mouseDownOnObject);
 			// clicked in empty space
+			} else if(this.objectPickMode){
+				this.objectPickMode(null);
 			} else if(!(this.shift || this.ctrl || this.alt)){
 				this.objectClicked(null);
 			}
 		}
 		
 		this.isMouseDown = false;
-		this.mouseMoved = false;
 	},
 
 	mouseMove:function(e){
@@ -308,10 +292,6 @@ EditSceneScene.prototype = {
 			if(dist > 2){
 				this.mouseMoved = true;
 				this.lazyMouse = null;
-				
-				if(editScene.objectPickMode){
-					editScene.objectPickMode(null);
-				}
 			}
 		}
 		
@@ -963,13 +943,13 @@ EditSceneScene.prototype = {
 /* ------------------- ------------------- ------------------- ------------------- ------------------- Util */
 
 	/* used during loading */
-	populateObject: Scene.prototype.populateObject,
+	populateObject: THREE.PixelBoxScene.prototype.populateObject,
 
-	makeGeometryObject: Scene.prototype.makeGeometryObject,
+	makeGeometryObject: THREE.PixelBoxScene.prototype.makeGeometryObject,
 
-	linkObjects: Scene.prototype.linkObjects,
+	linkObjects: THREE.PixelBoxScene.prototype.linkObjects,
 	
-	getObjectFromPool:function(){ return null; },
+	upcycle:function(){ return null; },
 	
 	hashStringToInt:function(s){
 	  return s.split("").reduce(function(a,b){a=((a<<5)-a)+b.charCodeAt(0);return a&a},0);              
@@ -1266,8 +1246,11 @@ EditSceneScene.prototype = {
 			// add asset to cache if needed
 			if(!assets.cache.get(asset.name)){
 				asset.importedAsset = _.deepClone(asset, 100);
-				assets.cache.add(asset.name, asset);
-				THREE.PixelBoxUtil.processPixelBoxFrames(asset);
+				if(THREE.PixelBoxUtil.processPixelBoxFrames(asset)){
+					assets.cache.add(asset.name, asset);
+				} else {
+					console.log("Failed to load ",asset);
+				}				
 			}
 		}
 		
@@ -1284,6 +1267,70 @@ EditSceneScene.prototype = {
 			}
 		}
 		this.linkObjects(addedObjects, this.container, true);
+		
+		function dereferenceObject(nameFragments, currentLevel){
+			// start
+			if(typeof(nameFragments) == 'string'){
+				nameFragments = nameFragments.split('.');
+				if(!nameFragments.length) return top;
+				return dereferenceObject(nameFragments, currentLevel);
+				
+			// descend
+			} else if(nameFragments.length){
+				var first = nameFragments[0];
+				nameFragments.splice(0, 1);
+				var obj = null;
+				if(first.substr(0, 1) == '$') { 
+					if(currentLevel.anchors)
+						obj = currentLevel.anchors[first.substr(1)];
+					else 
+						first = first.substr(1);
+				}
+				if(!obj){ 
+					for(var ci = 0, cl = currentLevel.children.length; ci < cl; ci++){
+						if(currentLevel.children[ci].name == first){
+							obj = currentLevel.children[ci];
+							break;
+						}
+					}
+				}
+				if(!obj) return null;
+				if(nameFragments.length) return dereferenceObject(nameFragments, obj);
+				return obj;
+			}
+			
+			return null;
+		}
+		
+		// create props objects
+		for(var i = 0; i < addedObjects.length; i++){
+			var obj = addedObjects[i];
+			if(obj.def.props){
+				obj.props = [];
+				for(var propName in obj.def.props){
+					var val = obj.def.props[propName];
+					var prop = {name:propName};
+					if(val === null || (typeof(val) == 'string' && val.substr(0,1) == '#')){
+						prop.type = "Object3D";
+						var nearestTemplate = obj.nearestTemplate();
+						prop.value = dereferenceObject(val.substr(1), nearestTemplate ? nearestTemplate : this.container);
+					} else {
+						prop.type = "JSON";
+						if(typeof(val) == 'object'){
+							try {
+								prop.value = JSON.stringify(val);
+							} catch(e){
+								prop.value = val.toString();
+							}
+						} else {
+							prop.value = val.toString();
+						}
+					}
+					obj.props.push(prop);
+				}
+			}
+		}
+		
 		this.updateLights = true;
 		
 		// clear undo queue
@@ -1416,7 +1463,7 @@ EditSceneScene.prototype = {
 /* ------------------- ------------------- ------------------- ------------------- ------------------- Scene & asset functions */
 
 	assetUpdated:function(newAsset){
-		this.showMessage('<em>'+newAsset.name+'</em> updated');
+		this.showMessage(newAsset.name+' updated');
 
 		var prevAsset = assets.cache.files[newAsset.name];
 		if(prevAsset){
@@ -1718,23 +1765,26 @@ EditSceneScene.prototype = {
 			var c = new THREE.Color();
 			for(var f = 0; f < asset.frames.length; f++){
 				// convert frame
-				var convertedFrame = new Array(asset.width * asset.height * asset.depth);
 				var currFrame = asset.frames[f];
 				// already converted
-				if(typeof(currFrame) == 'string') continue;
-				for(var i = 0; i < currFrame.o.length; i++){
-					var x = Math.floor(currFrame.p[i * 3] + hw);
-					var y = Math.floor(currFrame.p[i * 3 + 1] + hh);
-					var z = Math.floor(currFrame.p[i * 3 + 2] + hd);
-					var n = new THREE.Vector3(currFrame.n[i * 3], currFrame.n[i * 3 + 1], currFrame.n[i * 3 + 2]);
-					c.setRGB(currFrame.c[i * 4],currFrame.c[i * 4 + 1], currFrame.c[i * 4 + 2]);
-					var a = currFrame.c[i * 4 + 3];
-					var addr = x * asset.height * asset.depth + y * asset.depth + z;
-					convertedFrame[addr] = { x:x, y:y, z:z, c:c.getHex(), a:a, b: Math.max(0, n.length() - 1.0) };
+				if(typeof(currFrame) == 'string') {
+					obj.frames[f] = currFrame;
+				} else {
+					var convertedFrame = new Array(asset.width * asset.height * asset.depth);
+					for(var i = 0; i < currFrame.o.length; i++){
+						var x = Math.floor(currFrame.p[i * 3] + hw);
+						var y = Math.floor(currFrame.p[i * 3 + 1] + hh);
+						var z = Math.floor(currFrame.p[i * 3 + 2] + hd);
+						var n = new THREE.Vector3(currFrame.n[i * 3], currFrame.n[i * 3 + 1], currFrame.n[i * 3 + 2]);
+						c.setRGB(currFrame.c[i * 4],currFrame.c[i * 4 + 1], currFrame.c[i * 4 + 2]);
+						var a = currFrame.c[i * 4 + 3];
+						var addr = x * asset.height * asset.depth + y * asset.depth + z;
+						convertedFrame[addr] = { x:x, y:y, z:z, c:c.getHex(), a:a, b: Math.max(0, n.length() - 1.0) };
+					}
+					
+					// encode
+					THREE.PixelBoxUtil.encodeFrame(convertedFrame, obj);
 				}
-				
-				// encode
-				THREE.PixelBoxUtil.encodeFrame(convertedFrame, obj);
 			}
 			delete obj.assembledFrames;
 		}		
@@ -2123,6 +2173,7 @@ EditSceneScene.prototype = {
 	},
 
 	objectLabelClicked:function(e){
+		if(editScene.mouseMoved) return;
 		var uuid = e.target.id;//.substr(4);
 		var obj = editScene.container.getObjectByUUID(uuid);
 		editScene.objectClicked(obj);
@@ -2508,7 +2559,6 @@ EditSceneScene.prototype = {
 	assetNew:function(e){
 		var dlg = $('<div id="editor-new-asset" class="editor">\
 		<span class="info">Enter new asset name.</span>\
-		<span class="info">This operation is not undo-able.</span>\
 		<div class="center pad5"><input type="text" id="asset-name" size="20" tabindex="0"/>\
 		<br/><br/>\
 		<label for="asset-x" class="right-align w2">Width</label><input class="center" type="text" size="1" tabindex="1" id="asset-x" value="8"/>\
@@ -2545,7 +2595,8 @@ EditSceneScene.prototype = {
 					"smoothNormals":0.5,
 					"occlusion":0.75,
 					"pointSize":1,
-					"frames":[{"p":[],"n":[],"c":[],"o":[]}]
+					"frames":[{"p":[],"n":[],"c":[],"o":[]}],
+					"anims":{}
 					};
 					editScene.addUndo({name:"addAsset",undo:[editScene.deleteAsset, asset],redo:[editScene.importSceneAsset, asset]});
 	      			editScene.importSceneAsset(asset);
@@ -2587,6 +2638,7 @@ EditSceneScene.prototype = {
 		};
 		trav(this.container);
 		var asset = assets.cache.get(assetName);
+		if(!asset) return;
 		if(objs.length){
 		    this.addUndo([
 		    	{name:"deleteObjects", undo:[this.addObjects, objsAdd], redo:[this.deleteObjects, objs]},
@@ -2706,8 +2758,7 @@ EditSceneScene.prototype = {
 	
 	validateRenameObjectNames:function(objects, doArr, undoArr){
 		// { "name":[ [name, name0], undefined, ... , [name5,name5], [name6] ... ], ... }
-		var usedNames = {};
-		
+		var usedNames = {};		
 		
 		// first pass
 		for(var i = 0, l = objects.length; i < l; i++){
@@ -3016,7 +3067,7 @@ EditSceneScene.prototype = {
 		e.target.blur();
 		
 		if(editScene.objectPickMode){
-			editScene.objectPickMode(null);
+			editScene.objectPickMode(undefined); // undefined can be "cancel"
 			return;
 		}
 		
@@ -4182,6 +4233,227 @@ EditSceneScene.prototype = {
 		editScene.refreshProps();		
 	},
 
+	
+/* ------------------- ------------------- ------------------- ------------------- ------------------- Custom props panel */
+	
+	renameProperty:function(arr){
+		for(var i = 0; i < arr.length; i++){
+			var prop = arr[i][0];
+			var name = arr[i][1];
+			prop.name = name;
+		}
+	},
+	
+	addProperty:function(arr){
+		for(var i = 0; i < arr.length; i++){
+			var obj = arr[i][0];
+			var val = arr[i][1];
+			if(obj.props === undefined){
+				obj.props = [];
+			}
+			obj.props.push(val);
+			editScene.touchTemplate(obj);
+		}
+	},
+	
+	removeProperty:function(arr){
+		for(var i = 0; i < arr.length; i++){
+			var obj = arr[i][0];
+			var val = arr[i][1];
+			var index = obj.props.indexOf(val);
+			if(index >= 0) obj.props.splice(index, 1);
+			editScene.touchTemplate(obj);
+		}
+	},
+	
+	addPropertyToSelection:function(e){
+		var doArr = [];
+		var undoArr = [];
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			if(obj.isAnchor) continue;
+			var newProp = { name: "propertyName", type: "JSON", value:"value" };
+			doArr.push([obj, newProp]);
+			undoArr.push([obj, newProp]);
+		}
+		editScene.addUndo({name:"addProperty", undo:[editScene.removeProperty, undoArr],
+											redo:[editScene.addProperty, doArr]});
+		editScene.addProperty(doArr);
+		
+		doArr = [];
+		undoArr = [];
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			if(obj.isAnchor) continue;
+			editScene.validateRenameObjectNames(obj.props, doArr, undoArr);
+		}
+		
+		// validate props names
+		if(doArr.length){
+			editScene.addUndo({name:"renameProperty", undo:[editScene.renameProperty, undoArr],
+													redo:[editScene.renameProperty, doArr]});
+			editScene.mergeUndo(true);
+			editScene.renameProperty(doArr);
+		}		
+		
+		editScene.refreshProps();
+	},
+	
+	propertyDeleteClicked:function(e){
+		var propRow = $(e.target).closest('.prop-row');
+		var propName = propRow.attr('alt');
+		var doArr = [];
+		var undoArr = [];
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			if(obj.isAnchor) continue;
+			var prop = obj.propByName(propName);
+			doArr.push([obj, prop]);
+			undoArr.push([obj, prop]);
+		}
+		editScene.addUndo({name:"deleteProperty", redo:[editScene.removeProperty, doArr],
+											undo:[editScene.addProperty, undoArr]});
+		editScene.removeProperty(doArr);
+		editScene.refreshProps();
+	},
+	
+	setPropertyProp:function(arr, prop){
+		for(var i = 0; i < arr.length; i++){
+			var obj = arr[i][0];
+			var val = arr[i][1];
+			obj[prop] = val;
+		}		
+	},
+	
+	replacePropertyProp:function(arr){
+		for(var i = 0; i < arr.length; i++){
+			var obj = arr[i][0];
+			var prop = arr[i][1];
+			for(var pi = 0; pi < obj.props.length; pi++){
+				if(obj.props[pi].name == prop.name){
+					obj.props[pi] = prop;
+					break;
+				}
+			}			
+		}
+		editScene.refreshProps();		
+	},
+	
+	propertyValueChanged:function(e){
+		var propRow = $(e.target).closest('.prop-row');
+		var propName = propRow.attr('alt');
+		var newVal = $(e.target).val();
+		
+		var doArr = [];
+		var undoArr = [];
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			if(obj.isAnchor) continue;
+			var prop = obj.propByName(propName);
+			doArr.push([prop, newVal]);
+			undoArr.push([prop, prop.value]);
+		}
+		editScene.addUndo({name:"propertyValue", redo:[editScene.setPropertyProp, doArr, 'value'],
+											undo:[editScene.setPropertyProp, undoArr, 'value']});
+		editScene.setPropertyProp(doArr, 'value');
+	},
+
+	propertyTypeChanged:function(e){
+		var propRow = $(e.target).closest('.prop-row');
+		var propName = propRow.attr('alt');
+		var newVal = $(e.target).val();
+		
+		var doArr = [];
+		var undoArr = [];
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			if(obj.isAnchor) continue;
+			var prop = obj.propByName(propName);
+			var newProp = {name:prop.name, type:newVal, value:(newVal == 'Object3D' ? null : '')};
+			doArr.push([obj, newProp]);
+			undoArr.push([obj, prop]);
+		}
+		editScene.addUndo({name:"propertyType", redo:[editScene.replacePropertyProp, doArr],
+											undo:[editScene.replacePropertyProp, undoArr]});
+		editScene.replacePropertyProp(doArr);
+	},
+
+	propertyNameChanged:function(e){
+		var propRow = $(e.target).closest('.prop-row');
+		var propName = propRow.attr('alt');
+		var newVal = $(e.target).val();
+		
+		var doArr = [];
+		var undoArr = [];
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			if(obj.isAnchor) continue;
+			var prop = obj.propByName(propName);
+			doArr.push([prop, newVal]);
+			undoArr.push([prop, prop.name]);
+		}
+		editScene.addUndo({name:"propertyName", redo:[editScene.setPropertyProp, doArr, 'name'],
+											undo:[editScene.setPropertyProp, undoArr, 'name']});
+		editScene.setPropertyProp(doArr, 'name');
+		
+		// check names
+		doArr = [];
+		undoArr = [];
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			if(obj.isAnchor) continue;
+			editScene.validateRenameObjectNames(obj.props, doArr, undoArr);
+		}
+		
+		// validate props names
+		if(doArr.length){
+			editScene.addUndo({name:"renameProperty", undo:[editScene.renameProperty, undoArr],
+													redo:[editScene.renameProperty, doArr]});
+			editScene.mergeUndo(true);
+			editScene.renameProperty(doArr);
+		}	
+		
+		editScene.refreshProps();
+	},
+
+	pickPropertyObjectClicked:function(e){
+		if($(e.target).attr('disabled')) return;
+			
+		var propRow = $(e.target).closest('.prop-row');
+		var propName = propRow.attr('alt');
+		var type = $('select', propRow).val();
+		if(type == 'Object3D'){
+			e.target.blur();
+			if(editScene.objectPickMode){
+				editScene.objectPickMode(undefined); // undefined
+				return;
+			}
+			$(e.target).addClass('active');
+			$('canvas,.object-label,#scene-list div.row:not(.selected),#scene-list div.row:not(.selected) > label').css('cursor','cell');
+			editScene.objectPickMode = function(picked){
+				if(picked !== undefined){
+					var doArr = [];
+					var undoArr = [];
+					for(var i = 0; i < editScene.selectedObjects.length; i++){
+						var obj = editScene.selectedObjects[i];
+						if(obj.isAnchor) continue;
+						var prop = obj.propByName(propName);
+						doArr.push([prop, picked]);
+						undoArr.push([prop, prop.value]);
+					}
+					editScene.addUndo({name:"propertyValue", redo:[editScene.setPropertyProp, doArr, 'value'],
+														undo:[editScene.setPropertyProp, undoArr, 'value']});
+					editScene.setPropertyProp(doArr, 'value');
+					editScene.refreshProps();
+				}
+				$('#panel-custom input').removeClass('active');
+				editScene.objectPickMode = null;
+				$('canvas,.object-label,#scene-list div.row:not(.selected),#scene-list div.row:not(.selected) > label').css('cursor','');
+			};
+			
+		}
+	},
+	
 /* ------------------- ------------------- ------------------- ------------------- ------------------- Properties panel */
 
 	previewScene:function(e){
@@ -4222,12 +4494,12 @@ EditSceneScene.prototype = {
 		}
 		$('#prop-name').attr('placeholder','Object name');
 		$('#prop-object-type').text('');
-		$('#panel-move').show();
-		
+		$('#panel-move').show();				
 
 		$('#editor-props input[type=checkbox].multiple,#panel-pixelbox input[name=pixelbox-animOption].multiple').removeClass('multiple').removeAttr('checked');
 		
 		$('#pixelbox-animName').empty().append('<option value=""/>');
+		$('#props-container').empty();
 		
 		$('#geometry-type option[value="0"]').remove();
 		
@@ -4666,8 +4938,55 @@ EditSceneScene.prototype = {
 				} else if(!mults['pixelbox-add']){
 					$('#pixelbox-add').css({backgroundColor:'#'+obj.addColor.getHexString()});
 				}
-
 			}
+			
+			// custom properties
+			if(obj.props === undefined) obj.props = [];
+			var propsCont = $('#props-container');
+			for(var pi = 0, pl = obj.props.length; pi < pl; pi++){
+				var prop = obj.props[pi];
+				var row = $('div.prop-row[alt="'+prop.name+'"]', propsCont);
+				if(!row.length){
+					row = $('<div class="prop-row" alt="'+prop.name+'">\
+							<a>X</a><input type="text" name="name" size="14" value="'+prop.name+'"/>=\
+							<select name="type"><option value="JSON">JSON</option><option value="Object3D">Object3D</option></select>\
+							<input type="text" name="value" size="16"/></div>');
+					$('a', row).click(editScene.propertyDeleteClicked);
+					$('input[name="name"]', row).change(editScene.propertyNameChanged).on('keyup', this.blurOnEnter);
+					$('select', row).change(editScene.propertyTypeChanged);
+					$('input[name="value"]', row).change(editScene.propertyValueChanged).on('keyup', this.blurOnEnter).click(this.pickPropertyObjectClicked);
+					propsCont.append(row);
+				}
+				if(prevObj && prevObj.propByName(prop.name).type != prop.type){
+					if(!$('select > option[value="multiple"]', row).length) $('select', row).prepend('<option value="multiple">- multiple -</option>');
+					$('select', row).val('multiple');
+					mults['prop-type-'+prop.name] = true;
+					$('input[name="value"]', row).attr('disabled','disabled');
+				} else if(!mults['prop-type-'+prop.name]){
+					var newVal = prop.type;
+					$('select', row).val(prop.type);
+					if(newVal == 'Object3D') $('input[name="value"]', row).attr('readonly','readonly');
+				}
+				if(prevObj && prevObj.propByName(prop.name).name == undefined){
+					row.addClass('multiple');
+					$('input, select, a', row).attr('disabled', 'disabled');
+				}
+				if(prevObj && prevObj.propByName(prop.name).value != prop.value){
+					$('input[name="value"]', row).attr('placeholder','multiple').val('').data('prevVal','');
+					mults['prop-value-'+prop.name] = true;
+				} else if(!mults['prop-value-'+prop.name]){
+					var newVal = prop.value;
+					if(newVal instanceof THREE.Object3D) newVal = newVal.name;
+					$('input[name="value"]', row).attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}
+			}
+			$('#props-container div.prop-row').each(function(index, el){
+				var propName = $(el).attr('alt');
+				if(!obj.propByName(propName).name){
+					$(el).addClass('multiple');
+					$('input, select, a', el).attr('disabled', 'disabled');
+				}
+			});
 			
 			// end loop
 			prevObj = obj;
@@ -4722,7 +5041,8 @@ EditSceneScene.prototype = {
 		} else {
 			$('#panel-move input[type=text]').removeAttr('disabled').spinner('enable');
 			$('#panel-move input[type=checkbox]').removeAttr('disabled');
-			$('#look-at,#prop-name,#obj-from-cam').removeAttr('disabled');			
+			$('#look-at,#prop-name,#obj-from-cam').removeAttr('disabled');
+			$('#panel-custom').show();
 		}
 		
 		if(containsInstances){
@@ -4756,12 +5076,12 @@ EditSceneScene.prototype = {
 		<a id="file">File</a></li><li><a id="edit">Edit</a></li><li><a id="view">View</a></li><li><a id="help">Help</a></li></ul>\
 		</div>\
 		<ul class="editor absolute-pos submenu shortcuts" id="file-submenu">\
-			<li id="file-new">New Scene<em>Ctrl + N</em></li>\
+			<li id="file-new">New Scene</li>\
 			<hr/>\
 			<li id="file-load">Import</li>\
-			<li id="file-export">Export</li>\
+			<li id="file-export">Export<em><span class="ctrl"/> + E</em></li>\
 			<hr/>\
-			<li id="file-hold">Hold</li>\
+			<li id="file-hold">Hold<em><span class="ctrl"/> + S</em></li>\
 			<li id="file-fetch">Fetch</li>\
 			<hr/>\
 			<li id="file-reset">Reset editor</li>\
@@ -5295,7 +5615,7 @@ EditSceneScene.prototype = {
 		vc = valueChanged(this.geometryPropChanged);
 		$('.geometry-width,.geometry-height,.geometry-depth', panel).spinner({step:1, min:1, change:vc, stop:vc});
 		$('.geometry-widthSegments,.geometry-heightSegments,.geometry-depthSegments', panel).spinner({step:1, min:1, max:30, change:vc, stop:vc});
-		$('#geometry-radius', panel).spinner({step:1, min:0, change:vc, stop:vc});		
+		$('#geometry-radius', panel).spinner({min:0, change:vc, stop:vc});
 		$('#geometry-phiStart', panel).spinner({step:5, min:0, max:360, change:vc, stop:vc});
 		$('#geometry-thetaStart', panel).spinner({step:5, min:0, max:180, change:vc, stop:vc});
 		$('#geometry-phiLength', panel).spinner({step:5, min:0, max:360, change:vc, stop:vc});
@@ -5376,6 +5696,14 @@ EditSceneScene.prototype = {
 			}
 		});
 
+// Custom props panel
+		$('#editor-props .panels').append('<div id="panel-custom" class="panel"><h4>Custom Properties</h4>\
+		<div class="sub right-align"><a id="prop-add">+ Add Property</a></div>\
+		</hr><div id="props-container" class="center"/>\
+		</div>');
+		
+		$('#prop-add').click(this.addPropertyToSelection.bind(this));		
+		
 		var savePosOnDrop = function(e, ui) { localStorage_setItem(ui.helper.context.id + '-x', ui.position.left); localStorage_setItem(ui.helper.context.id + '-y', ui.position.top); };
 		var bringToFront = function(e, ui){ $('body').append(ui.helper.context); }
 		function makeDraggablePanel(id, defX, defY, defH, onResizeHandler){
@@ -5522,7 +5850,7 @@ EditSceneScene.prototype = {
 // focus/blur
 		$('input').on('focus',function(e){editScene.focusedTextField = e.target; editScene.disableKeyboardShortcuts();})
 				  .on('blur',function(e){editScene.focusedTextField = null; editScene.enableKeyboardShortcuts();})
-				  .on('keyup',function(e){ if(e.which == 13) e.target.blur(); });
+				  .on('keyup', this.blurOnEnter);
 		
 		$(window).on('dragover', this.onDragFilesOver);
 		$(window).on('dragleave', this.onDragFilesOver);
@@ -5621,7 +5949,7 @@ EditSceneScene.prototype = {
 			break;
 			
 		case 'scene-add-geometry':
-			objDef = { asset: 'Geometry', type:'Plane', name:'floor', color:'999999', receiveShadow:true, scale:[100,100,100], rotation:[-90,0,0] };
+			objDef = { asset: 'Geometry', mesh:'Plane', name:'floor', color:'999999', receiveShadow:true, width: 100, height: 100, rotation:[-90,0,0] };
 			break;
 		
 		case 'scene-add-hemi':
@@ -5717,20 +6045,47 @@ EditSceneScene.prototype = {
 		if(!$('#help-view').length){
 			$('body').append('<div id="help-view" class="no-close">\
 			<span class="info">PixelBox and related tools created by Kirill Edelman.<br/>\
-			Huge thanks to mrdoob for creating <a href="http://threejs.org/" target="_blank">three.js</a></span>\
+			Huge thanks to mrdoob for creating <a href="http://threejs.org/" target="_blank">three.js</a><br/><br/>\
+			<a href="https://github.com/kirilledelman/pixelbox" target="_blank">https://github.com/kirilledelman/pixelbox</a></span>\
 			<hr/>\
-			<h2>Shortcuts</h2>\
-			<em>Ctrl + N</em> create new<br/>\
-			<em>Ctrl + S</em> hold<br/>\
-			<em>Ctrl + E</em> export data<br/>\
+			<h2>View</h2>\
+			<em>LMB</em> rotate view<br/>\
+			<em>Mouse Wheel</em> zoom view<br/>\
+			<em>RMB</em> pan view<br/>\
+			<br/>\
+			<h2>File</h2>\
+			<em>Ctrl + S</em> hold scene<br/>\
+			<em>Ctrl + E</em> export scene data<br/>\
+			<br/>\
+			<h2>Selection</h2>\
+			<em>LMB</em> select object<br/>\
+			<em>Shift + LMB</em> add objects to selection<br/>\
+			<em>Alt + LMB</em> remove objects from selection<br/>\
+			<em>Esc</em> deselect all<br/>\
 			<br/>\
 			<em><span class="ctrl"/>C</em> copy selection<br/>\
 			<em><span class="ctrl"/>X</em> cut selection<br/>\
-			<em><span class="ctrl"/>V</em> paste selection<br/>\
+			<em><span class="ctrl"/>V</em> paste<br/>\
+			<em>Shift + <span class="ctrl"/> V</em> paste into selected<br/>\
+			<br/>\
+			<h2>Transform</h2>\
+			<em>LMB</em> move selection<br/>\
+			<em>Alt + LMB</em> rotate selection<br/>\
+			<em>Ctrl + LMB</em> scale selection<br/>\
+			<br/>\
+			<em>Arrow keys</em> move selection<br/>\
+			<em>Alt + Arrows</em> rotate selection YZ<br/>\
+			<em>Ctrl + Arrows</em> rotate selection XZ<br/>\
+			<em>Ctrl + Alt + Arrows</em> scale selection<br/>\
+			<br/>\
+			<h2>Undo</h2>\
+			<em><span class="ctrl"/>Z</em> undo<br/>\
+			<em>Shift + <span class="ctrl"/>Z</em> redo<br/>\
+			<br/>\
 			</div>');
 		}
 		
-		$('#help-view .ctrl').append(navigator.appVersion.indexOf("Mac")!=-1 ? '⌘ ':'Ctrl + ');
+		$('#help-view .ctrl').append(navigator.appVersion.indexOf("Mac")!=-1 ? '&#8984; ':'Ctrl + ');
 		
 		editScene.disableCanvasInteractions(true);
 		$('#help-view').dialog({
@@ -5745,6 +6100,8 @@ EditSceneScene.prototype = {
 		if(editScene.focusedTextField) editScene.focusedTextField.blur();
 		$('div,span').blur();
 	},
+	
+	blurOnEnter:function(e){ if(e.which == 13) e.target.blur(); },
 	
 	disableCanvasInteractions:function(all){
 		if(this.controls.busy()) { 
@@ -5777,35 +6134,25 @@ EditSceneScene.prototype = {
 /* ------------------- ------------------- ------------------- ------------------- ------------------- Keyboard functions */
 
 	enableKeyboardShortcuts:function(){
-		//key('ctrl+n,⌘+n', function(){ editScene.newDoc(); return false; });
 		key('ctrl+z,⌘+z', function(){ editScene.performUndo(); return false; });
 		key('ctrl+shift+z,⌘+shift+z', function(){ editScene.performRedo(); return false; });
-		//key('ctrl+shift+c,⌘+shift+c', function(){ editScene.frameRangeCopy({}); return false; });
-		//key('ctrl+shift+v,⌘+shift+v', function(){ editScene.frameRangePaste({}); return false; });
-		//key('ctrl+shift+x,⌘+shift+x', function(){ editScene.frameRangeCut({}); return false; });
 		key('ctrl+c,⌘+c', function(){ editScene.copySelection(); return false; });
 		key('ctrl+v,⌘+v', function(){ editScene.pasteSelection({shiftKey:false}); return false; });
 		key('shift+ctrl+v,shift+⌘+v', function(){ editScene.pasteSelection({shiftKey:true}); return false; });
 		key('ctrl+x,⌘+x', function(){ editScene.cutSelection(); return false; });
-		//key('escape', function(){ editScene.cancelPaste(); return false; });
-		//key('ctrl+s,⌘+s', function(){ editScene.holdDoc(); return false; });
-		//key('ctrl+e,⌘+e', function(){ editScene.saveDoc(); return false; });
+		key('ctrl+s,⌘+s', function(){ editScene.holdDoc(); return false; });
+		key('ctrl+e,⌘+e', function(){ editScene.saveDoc(); return false; });
 	},
 
 	disableKeyboardShortcuts:function(){
-		//key.unbind('ctrl+n,⌘+n');
 		key.unbind('ctrl+z,⌘+z');
 		key.unbind('ctrl+shift+z,⌘+shift+z');
 		key.unbind('ctrl+c,⌘+c');
 		key.unbind('ctrl+x,⌘+x');
 		key.unbind('ctrl+v,⌘+v');
 		key.unbind('shift+ctrl+v,shift+⌘+v');
-		//key.unbind('ctrl+shift+c,⌘+shift+c');
-		//key.unbind('ctrl+shift+x,⌘+shift+x');
-		//key.unbind('ctrl+shift+v,⌘+shift+v');
-		//key.unbind('escape');
-		//key.unbind('ctrl+s,⌘+s');
-		//key.unbind('ctrl+e,⌘+e');*/
+		key.unbind('ctrl+s,⌘+s');
+		key.unbind('ctrl+e,⌘+e');
 	},
 
 	/* shortcuts */
@@ -5888,33 +6235,11 @@ EditSceneScene.prototype = {
 		case 18:
 			editScene.alt = true;
 			break;
-		case 219:// [
-			//editScene.maskPlaneStep(-1);
-			break;
-		case 221:// ]
-			//editScene.maskPlaneStep(1);
-			break;
-		case 188:// <
-			//editScene.currentFrame--;
-			break;
-		case 190:// >
-			//editScene.currentFrame++;
-			break;
 		case 8: // del
 		case 46: // back
 			editScene.deleteSelection();
 			break;
-		case 187: // +
-			//editScene.maskInflate(null, 1);
-			break;
-		case 189:// -
-			//editScene.maskInflate(null, -1);
-			break;
 		case 13: // enter
-			if(editScene.objectPickMode){
-				editScene.objectPickMode(null);
-				return;
-			}
 			var btn = $('.ui-dialog .ui-dialog-buttonset button').first();
 			if(btn.length) btn.trigger('click');
 			break;
@@ -5934,8 +6259,10 @@ EditSceneScene.prototype = {
 			break;
 			
 		case 27: // esc
-			if(editScene.objectPickMode){
-				editScene.objectPickMode(null);
+			if($('.submenu:visible').length){
+				$('.submenu').hide();
+			} else if(editScene.objectPickMode){
+				editScene.objectPickMode(undefined);
 			} else if(editScene.canvasInteractionsEnabled){
 				editScene.deselectAll();
 				editScene.selectionChanged();
@@ -5949,15 +6276,16 @@ EditSceneScene.prototype = {
 	},
 	
 	showMessage:function(html){
-		var msg = $('div.bigMessage');
+		var newMsg = $('<div class="bigMessage"/>').html(html);
+		$('body').append(newMsg);
+		var newMsgHeight = newMsg.outerHeight() + 20;
+		var msg = $('div.bigMessage').not(newMsg);
 		msg.each(function(i, el){
 			var offs = $(el).offset();
-			$(el).offset({top:offs.top + 100, left: offs.left });
+			$(el).offset({top:offs.top + newMsgHeight, left: offs.left });
 		});
-		msg = $('<div class="bigMessage"/>').html(html);
-		$('body').append(msg);
-		msg.offset({top: 60, left: Math.floor(0.5 * (window.innerWidth - msg.width())) });
-		setTimeout(function(){ msg.fadeOut(function(){ msg.remove(); }); }, 2000);
+		newMsg.offset({top: 60, left: Math.floor(0.5 * (window.innerWidth - newMsg.width())) });
+		setTimeout(function(){ newMsg.fadeOut(function(){ newMsg.remove(); }); }, 2000);
 	},
 
 /* ------------------- ------------------- ------------------- ------------------- ------------------- Framework */
@@ -5985,9 +6313,9 @@ EditSceneScene.prototype = {
 	    this.controls.panEnabled = this.controls.rotateEnabled = this.controls.zoomEnabled = true;
 	    
    		// projector & mouse picker
-		this.projector = new THREE.Projector();
+		//this.projector = new THREE.Projector();
 		this.raycaster = new THREE.Raycaster( new THREE.Vector3(), new THREE.Vector3(), 0.01, this.camera.far ) ;
-		this.projectorPlane = new THREE.Plane(new THREE.Vector3(0,1,0), 0);
+		//this.projectorPlane = new THREE.Plane(new THREE.Vector3(0,1,0), 0);
 
 		// create render target
 		var renderTargetParameters = { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, format: THREE.RGBFormat, stencilBuffer: false };
@@ -6127,6 +6455,14 @@ THREE.Object3D.prototype.getReferenceName = function(){
 	return nameString;
 };
 
+THREE.Object3D.prototype.propByName = function(n){
+	if(!this.props) return { };
+	for(var i = 0; i < this.props.length; i++){
+		if(this.props[i].name == n) return this.props[i];
+	}
+	return { };
+};
+
 THREE.Object3D.prototype.serialize = function(templates){
 	var def = {
 		name: this.name
@@ -6147,6 +6483,9 @@ THREE.Object3D.prototype.serialize = function(templates){
 	if(!this.visible) def.visible = false;
 	if(this.children.length) def.layers = [];
 	if(this.isTemplate) def.isTemplate = true;
+	
+	var myTemplate = undefined;
+
 	
 	// types
 	if(this.isInstance){
@@ -6274,7 +6613,7 @@ THREE.Object3D.prototype.serialize = function(templates){
 			def.asset = this.geometry.data.name;
 			def.pointSize = this.pointSize;
 			if(this.alpha != 1.0) def.alpha = this.alpha;
-			if(!this.cullBack) def.cullBack = true;
+			if(!this.cullBack) def.cullBack = false;
 			if(this.occlusion != 1.0) def.occlusion = this.occlusion;
 			if(this.tint.getHex() != 0xffffff) def.tint = this.tint.getHexString();
 			if(this.addColor.getHex() != 0) def.add = this.addColor.getHexString();
@@ -6323,6 +6662,43 @@ THREE.Object3D.prototype.serialize = function(templates){
 				else def.containsTemplates.push(child.name);
 			} else {
 				def.layers.push(cdef);
+			}
+		}
+	}
+	
+	// save properties
+	if(this.props && this.props.length){
+		if(myTemplate === undefined) myTemplate = this.nearestTemplate();
+		for(var i = 0, l = this.props.length; i < l; i++){
+			var prop = this.props[i];
+			if(!def.props) def.props = {};
+			if(prop.type == 'Object3D'){
+				var targ = prop.value;
+				def.props[prop.name] = null;
+				if(targ){
+					var targetTemplate = targ.nearestTemplate();
+					if(myTemplate != targetTemplate || !targ.parent){
+						//console.log("Warning: custom property ",prop.name," points to an object inside "
+						// outside hierarchy
+					} else {
+						def.props[prop.name] = '#'+targ.getReferenceName();
+					}
+				}
+			} else {
+				// try number first
+				var pn = parseFloat(prop.value);
+				var val;
+				if(!isNaN(pn) && pn.toString() == prop.value){
+					val = pn;
+				// try json encode
+				} else {
+					try {
+						val = JSON.parse(prop.value);
+					} catch(e){
+						val = prop.value;
+					}
+				}
+				def.props[prop.name] = val;	
 			}
 		}
 	}

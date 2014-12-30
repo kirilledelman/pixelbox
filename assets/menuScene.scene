@@ -1,0 +1,114 @@
+{
+	"name": "menuScene",
+	
+	"maxShadows":2,
+	"clearColor":"003777",
+	"ambient":"000000",
+	"fogColor":"003399",
+	"fogNear":1000,
+	"fogFar":10000,
+	
+	"layers": [
+		{	"name": "camera",
+			"asset": "Camera",
+			"position": [0,50,-50],
+			"lookAt": [0,0,0]
+		},
+		{	"name": "sun",
+			"asset": "DirectionalLight",
+			"position": [-300, 2000, 500],
+			"lookAt": [0, 0, 0],
+			"color": "FFFFEE",			
+			"castShadow": true,
+			"shadowBias": -0.0001,
+			"intensity": 0.5,
+			"shadowVolumeWidth": 256,
+			"shadowVolumeHeight": 256,
+			"shadowMapWidth": 1024	 
+		},
+		{	"name": "firePlaceLight",
+			"asset": "PointLight",
+			"position": [0,-40,150],
+			"color": "ffEE66",
+			"intensity": 6,
+			"distance": 100
+		},
+		{	"name": "fireLight",
+			"asset": "PointLight",
+			"position": [0,20,20],
+			"color": "ff9966",
+			"intensity": 1.5,
+			"distance": 50
+		},
+		{	"name": "ambient",
+			"asset": "HemisphereLight",
+			"colors": ["ff9966", "333399"],
+			"intensity": 0.5
+		},
+		{	"name": "table",
+			"asset": "Plane",
+			"receiveShadow": true,
+			"color":"666666",
+			"position": [0,0,-10],
+			"rotation": [-90,0, 0],
+			"scale": [90,90,90]
+		},
+		{	"name":"milk",
+			"asset":"milkglass",
+			"position":[2, 10, -24],
+			"rotation":[0, 135, 0],
+			"pointSize":0.75,
+			"scale":0.5					
+		},
+		{	"name":"cookie1",
+			"asset":"cookie",
+			"position":[-10, 3, -5],
+			"rotation":[0, 0, 0],
+			"pointSize":0.75,
+			"scale":0.5,
+			"gotoAndStop":0		
+		},
+		{	"name":"cookie2",
+			"asset":"cookie",
+			"position":[-15, 5, 0],
+			"rotation":[15, 0, 15],
+			"pointSize":0.75,
+			"scale":0.5,
+			"gotoAndStop":1
+		},	
+		{	"name":"cookie3",
+			"asset":"cookie",
+			"position":[-5, 3, 15],
+			"rotation":[0, 180, 0],
+			"pointSize":0.75,
+			"scale":0.5,
+			"gotoAndStop":0		
+		},
+		
+		{	"name":"fireplace",
+			"asset":"fireplace",
+			"cullBack":false,
+			"position":[0, -50, 190],
+			"rotation": [0, 180, 0],
+			"pointSize":3.2,
+			"scale":3
+		},
+		
+		{	"name":"fire1",
+			"asset":"fire",
+			"position":[-15, -70, 180],
+			"rotation": [0, 0, 0],
+			"pointSize":4,
+			"scale":5,
+			"loopAnim":"burn"
+		},
+		{	"name":"fire2",
+			"asset":"fire",
+			"position":[20, -80, 180],
+			"rotation": [0, 0, 0],
+			"pointSize":4,
+			"scale":5,
+			"loopFrom":["burn", 2]
+		}
+	]
+}

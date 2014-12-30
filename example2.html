@@ -1,0 +1,173 @@
+<html>
+	<head>
+		<title>PixelBox Example 2</title>
+		<link rel="stylesheet" href="css/normalize.css"/>
+		<link rel="stylesheet" href="css/index.css"/>
+		<meta content="yes" name="apple-mobile-web-app-capable" />		
+		<meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1"/>
+
+		<!-- Note that three.js r.69 used here is modified for PixelBox. https://github.com/kirilledelman/pixelbox for more info. -->
+		<script src="js/lib/three.js"></script>
+		<script src="js/lib/stats.min.js"></script>
+		
+		<!-- jQuery, underscore and lz-string are used throughout PixelBox lib -->
+		<script src="js/lib/jquery-2.1.1.min.js"></script>
+		<script src="js/lib/lz-string.js"></script>
+		<script src="js/lib/underscore.js"></script>
+		
+		<!-- PixelBox base includes -->
+		<script src="js/lib/pixelBox.js"></script>
+		<script src="js/lib/render.js"></script>
+		<script src="js/lib/assets.js"></script>
+		<script src="js/lib/scene.js"></script>
+		
+		<!-- Page's source files -->
+		<script src="js/lib/OrbitControls.js"></script>
+	</head>
+	
+	<body>
+		<a class="show-source" onclick="window.open('view-source:'+window.location.href.toString(),'_blank');">Source</a>
+		<span class="info">
+			<a href="https://github.com/kirilledelman/pixelbox" target="_blank">PixelBox</a>
+			by Kirill Edelman for <a href="http://threejs.org" target="_blank">three.js</a>
+		</span>		
+	
+		<div class="buttons">
+			Scenes <button id="button1">Flock</button> <button id="button2">Planet</button>
+		</div>
+	
+		<script>
+		
+		/*
+		
+			This example shows how to load multiple scenes and switch between them
+		
+		*/
+		
+		$(document).ready(function(){
+		
+			// init PixelBoxRenderer instance
+			
+			if(!renderer.init()){
+				var err = "Your browser doesn't support WebGL";
+				alert(err);
+				console.error(err);
+				return;
+			} else {
+				console.log("WebGL initialized");
+			}
+			
+			// load scene definition using THREE.PixelBoxAssets,
+			// also load a texture used for transition
+			
+			assets.loadAssets({ 
+				scenes: [ 'assets/example2_A.scene',
+						  'assets/example2_B.scene' ],
+				
+				textures: [ 'images/transition1.png' ],
+				
+				// when done, display scene
+				
+				done:function(){
+				
+					// instantiate our ExampleScenes
+					
+					exampleScene1 = new ExampleScene1();
+					exampleScene2 = new ExampleScene2();
+					
+					// set the first as current for renderer
+					
+					renderer.setScene(exampleScene1);
+					
+					// add onclick to buttons to switch scenes
+					
+					$('#button1').click(function(){
+					
+						// switch to scene 2 with simple blend
+						
+						renderer.setScene(exampleScene2, true, 1);
+						
+					});
+
+					$('#button2').click(function(){
+					
+						// switch to scene 1 with texture transition
+						
+						var texture = assets.cache.get('images/transition1.png');
+						
+						renderer.setScene(exampleScene1, texture, 1);
+						
+					});
+
+				}// end done:function
+			});// end assets.loadAssets
+		});// end document.ready
+
+		
+		/*
+			
+			ExampleScene1
+			
+		*/
+		
+		function ExampleScene1(){
+		
+		 	// call superclass constructor
+		 	
+			THREE.PixelBoxScene.call(this);
+			
+			// get scene definition from assets cache
+			
+			var sceneDef = assets.cache.get('example2_A');
+			
+			// populate this scene with the definition
+			
+			this.populateWith(sceneDef);
+				
+			// add controls for easy preview
+			// various controls classes can be found in three.js examples/js/controls folder
+			
+			this.controls = new THREE.OrbitControls(this.camera);
+			
+		}
+		
+		// ExampleScene1 subclasses THREE.PixelBoxScene
+		
+		ExampleScene1.prototype = Object.create(THREE.PixelBoxScene.prototype);
+		ExampleScene1.prototype.constructor = ExampleScene1;
+		
+		/*
+			
+			ExampleScene2
+			
+		*/
+		
+		function ExampleScene2(){
+		
+		 	// call superclass constructor
+		 	
+			THREE.PixelBoxScene.call(this);
+			
+			// get scene definition from assets cache
+			
+			var sceneDef = assets.cache.get('example2_B');
+			
+			// populate this scene with the definition
+			
+			this.populateWith(sceneDef);
+				
+			// add controls for easy preview
+			// various controls classes can be found in three.js examples/js/controls folder
+			
+			this.controls = new THREE.OrbitControls(this.camera);
+			
+		}
+		
+		// ExampleScene2 subclasses THREE.PixelBoxScene
+		
+		ExampleScene2.prototype = Object.create(THREE.PixelBoxScene.prototype);
+		ExampleScene2.prototype.constructor = ExampleScene2;
+		
+		</script>
+	</body>
+</html>

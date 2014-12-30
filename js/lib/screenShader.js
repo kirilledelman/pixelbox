@@ -1,3 +1,9 @@
+/*
+
+	Sample screen shader to use with THREE.PixelBoxScene .useComposer == true
+	
+*/
+
 THREE.ScreenShader = {
 	uniforms: {
 		"tDiffuse":   { type: "t", value: null },
@@ -39,10 +45,6 @@ THREE.ScreenShader = {
 
 };
 
-/**
- * @author alteredq / http://alteredqualia.com/
- */
-
 THREE.ScreenPass = function () {
 	var screenShader = THREE.ScreenShader;
 	this.screenUniforms = THREE.UniformsUtils.clone( screenShader.uniforms );
@@ -70,10 +72,9 @@ THREE.ScreenPass.prototype = {
 		if ( maskActive ) renderer.context.disable( renderer.context.STENCIL_TEST );
 		
 		this.quad.material = this.screenMaterial;
-		this.screenUniforms[ "tDiffuse" ].value = readBuffer;
-		// this.screenUniforms[ "tBloom" ].value = this.renderTargetX;
-
-		// if ( maskActive ) renderer.context.enable( renderer.context.STENCIL_TEST );
+		this.screenUniforms.tDiffuse.value = readBuffer;
+		this.screenUniforms.time.value += delta;
+		
 		if ( this.renderToScreen ) {
 			renderer.render( this.scene, this.camera );
 		} else {

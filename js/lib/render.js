@@ -1,4 +1,12 @@
-function Renderer(){
+/*
+
+	Used in conjunction with THREE.PixelBox and THREE.PixelBoxScene
+
+	
+
+*/
+
+THREE.PixelBoxRenderer = function(){
 
 	this.scene = null;
 	this.webgl = null;
@@ -32,8 +40,8 @@ function Renderer(){
 		// default transition params
 		this.transitionParams = {
 			textureThreshold: 0.5,
-			transitionSpeed: 0.4,
-			useTexture: true
+			transitionDuration: 1,
+			useTexture: false
 		}
 		
 		if(stats){
@@ -56,15 +64,25 @@ function Renderer(){
 		return true;
 	}
 
-	/* scene transition 
-		omit transType for instant transition
-		otherwise transType = number between 1 and 2
+	/* 
+		setScene(newScene [, transType [, speed]]);
+	
+		parameters:
+			
+			(PixelBoxScene) newScene - new scene to make current
+			
+			(*) transType - (optional) transition type.
+							Omit this parameter for instant scene switch.
+							Specify (THREE.Texture) texture for image transition.
+							Specify (BOOL) true for blend transition.
+							
+			(Number) duration - (optional) duration of the transition - default is 1 sec
 	*/
-	this.setScene = function(newScene, transType){
+	this.setScene = function(newScene, transType, duration){
 		this.currentScene = newScene;
 		
 		// ignore if the same scene
-		if(transType != undefined && (((this.scene instanceof Transition) && this.scene.sceneB == newScene && transType != 0) || this.scene == newScene)) { 
+		if(transType != undefined && (((this.scene instanceof THREE.PixelBoxSceneTransition) && this.scene.sceneB == newScene && transType != 0) || this.scene == newScene)) { 
 			console.log("Same scene");
 			return;
 		}
@@ -75,15 +93,16 @@ function Renderer(){
 			newScene.onResized) newScene.onResized();
 	
 		// with transition
-		if(transType != undefined && transType > 0){
+		if(transType != undefined && transType !== 0){
+			if(newScene['addResizeListener']) newScene.addResizeListener();
+			if(newScene['onWillAdd']) newScene.onWillAdd();
+			
 			// add a blank scene if was empty
-			if(!this.scene) this.scene = new EmptyScene();
+			if(!this.scene) this.scene = new THREE.PixelBoxEmptyScene( newScene.clearColor );
 			// if transition is in progress finish current first
-			else if(this.scene instanceof Transition){
+			else if(this.scene instanceof THREE.PixelBoxSceneTransition){
 				this.setScene(this.scene.sceneB, 0);
 			}
-			
-			if(newScene['onWillAdd']) newScene.onWillAdd();
 			
 			// notify scene that it will be removed
 			if(this.scene['onWillRemove']){
@@ -94,10 +113,19 @@ function Renderer(){
 			if(this.transitionScene){
 				this.transitionScene.init(this.scene, newScene);
 			} else {
-				this.transitionScene = new Transition(this.scene, newScene);
+				this.transitionScene = new THREE.PixelBoxSceneTransition(this.scene, newScene);
 			}
-			this.transitionScene.useTexture(transType > 0);
-			this.transitionScene.setTexture(transType - 1); // 0-based
+			
+			if(duration != undefined) this.transitionParams.transitionDuration = duration;
+			else this.transitionParams.transitionDuration = 1;
+			
+			if(transType instanceof THREE.Texture){
+				this.transitionScene.setTexture(transType);
+				this.transitionScene.useTexture(true);
+			} else {
+				this.transitionScene.useTexture(false);
+			}
+			
 			this.transitionScene.setTextureThreshold(this.transitionParams.textureThreshold);
 			this.transitionScene.onTransitionComplete = function(s){ renderer.setScene(s, 0); }
 			this.scene = this.transitionScene;
@@ -105,11 +133,13 @@ function Renderer(){
 		// without transition
 		} else {
 			// notify old scene that it's removed
-			if((this.scene instanceof Transition) && this.scene.sceneA && this.scene.sceneA['onRemoved']){
+			if((this.scene instanceof THREE.PixelBoxSceneTransition) && this.scene.sceneA && this.scene.sceneA['onRemoved']){
+				if(this.scene.sceneA['removeResizeListener']) this.scene.sceneA.removeResizeListener();
 				this.scene.sceneA.onRemoved();
 				this.scene.sceneA = undefined;
 			} else if(this.scene && this.scene['onRemoved']){
 				if(transType == undefined && this.scene['onWillRemove']) this.scene.onWillRemove();
+				if(this.scene['removeResizeListener']) this.scene.removeResizeListener();
 				this.scene.onRemoved();
 			}
 		
@@ -117,9 +147,14 @@ function Renderer(){
 			this.scene = newScene;
 			
 			// callback when scene transition is complete
-			if(transType == undefined && newScene['onWillAdd']) newScene.onWillAdd();
+			if(transType == undefined){ 
+				if(newScene['addResizeListener']) newScene.addResizeListener();
+				if(newScene['onWillAdd']) newScene.onWillAdd();
+			} 
 			if(newScene['onAdded']) newScene.onAdded();
 		}
+		
+		$(window).trigger('resize');
 	}
 
 	/* render */
@@ -143,6 +178,9 @@ function Renderer(){
 		
 		// fill screen
 		$('canvas').css({ width:window.innerWidth, height:window.innerHeight });
+		
+		// update PixelBox viewport uniform
+		THREE.PixelBoxUtil.updateViewPortUniform();
 	};
 
 	/* pause rendering when app is inactive */
@@ -154,17 +192,18 @@ function Renderer(){
 }
 
 /* empty generic scene for transition */
-function EmptyScene(){
-	this.clearColor = 0x0;
+THREE.PixelBoxEmptyScene = function(clearColor){
+	this.clearColor = clearColor != undefined ? clearColor : 0x0;
 	this.camera = new THREE.PerspectiveCamera(70, 1.0, 0.1, 10000 );
 	// setup scene
 	this.scene = new THREE.Scene();
 	// create render target
 	var renderTargetParameters = { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, format: THREE.RGBFormat, stencilBuffer: false };
-	this.fbo = new THREE.WebGLRenderTarget( window.innerWidth * renderer.scale, window.innerHeight * renderer.scale, renderTargetParameters );
+	this.fbo = new THREE.WebGLRenderTarget( renderer.webgl.domElement.width, renderer.webgl.domElement.height, renderTargetParameters );
 }
 
-EmptyScene.prototype = {
+THREE.PixelBoxEmptyScene.prototype = {
+	constructor:THREE.PixelBoxEmptyScene,
 	onWillAdd:function(){},
 	onAdded:function(){},
 	onWillRemove:function(){}, // called before this scene will be transitioned away
@@ -177,18 +216,14 @@ EmptyScene.prototype = {
 	}
 };
 
-/* transition scene */
-function Transition ( sa, sb ) {
+/* transition scene, adopted from three.js examples */
+THREE.PixelBoxSceneTransition = function ( sa, sb ) {
 
 	this.scene = new THREE.Scene();
 	
-	this.cameraOrtho = new THREE.OrthographicCamera(renderer.scale * window.innerWidth / -2, renderer.scale * window.innerWidth / 2,
-													renderer.scale * window.innerHeight / 2, renderer.scale * window.innerHeight / -2, -10, 10);
-
-	this.textures = [];
-	for (var i=0;i<2;i++){
-		this.textures[i] = assets.cache.get('textures/transition/transition'+(i+1)+'.png');
-	}
+	this.cameraOrtho = new THREE.OrthographicCamera(renderer.webgl.domElement.width / -2, renderer.webgl.domElement.width / 2,
+													renderer.webgl.domElement.height / 2, renderer.webgl.domElement.height / -2, -1, 1);
+	
 	this.quadmaterial = new THREE.ShaderMaterial({
 
 		uniforms: {
@@ -216,7 +251,7 @@ function Transition ( sa, sb ) {
 			},
 			tMixTexture: {
 				type: "t",
-				value: this.textures[0]
+				value: null
 			}
 		},
 		vertexShader: [
@@ -259,7 +294,7 @@ function Transition ( sa, sb ) {
 				"gl_FragColor = mix( texel2, texel1, mixf );",
 			"} else {",
 				
-				"gl_FragColor = mix( texel2, texel1, mixRatio );",
+				"gl_FragColor = mix( texel1, texel2, mixRatio );",
 				
 			"}",
 		"}"
@@ -268,14 +303,14 @@ function Transition ( sa, sb ) {
 
 	});		
 
-	quadgeometry = new THREE.PlaneBufferGeometry(window.innerWidth, window.innerHeight);
+	quadgeometry = new THREE.PlaneBufferGeometry(renderer.webgl.domElement.width, renderer.webgl.domElement.height);
 	
 	this.quad = new THREE.Mesh(quadgeometry, this.quadmaterial);
 	this.scene.add(this.quad);
 
 	this.init = function(fromScene, toScene){
 		this.onTransitionComplete = null;
-		this.time = 0;
+		this.smoothTime = this.time = 0;
 		
 		// Link both scenes and their FBOs
 		this.sceneA = fromScene;
@@ -284,8 +319,8 @@ function Transition ( sa, sb ) {
 		this.quadmaterial.uniforms.tDiffuse1.value = fromScene.fbo;
 		this.quadmaterial.uniforms.tDiffuse2.value = toScene.fbo;
 		
-		var ww = window.innerWidth * renderer.scale;
-		var hh = window.innerHeight * renderer.scale;
+		var ww = renderer.webgl.domElement.width;
+		var hh = renderer.webgl.domElement.height;
 		this.quadmaterial.uniforms.tScale.value.set(
 			Math.min(ww / hh, 1),
 			Math.min(hh / ww, 1)			
@@ -301,8 +336,8 @@ function Transition ( sa, sb ) {
 		this.quadmaterial.uniforms.useTexture.value = value?1:0;
 	}
 	
-	this.setTexture = function ( i ) {
-		this.quadmaterial.uniforms.tMixTexture.value = this.textures[i];
+	this.setTexture = function ( tex ) {
+		this.quadmaterial.uniforms.tMixTexture.value = tex;
 	}
 	
 	this.render = function( delta ) {
@@ -310,7 +345,7 @@ function Transition ( sa, sb ) {
 		
 		// Transition animation
 		this.time += delta;
-		this.smoothTime = THREE.Math.smoothstep(this.time * transitionParams.transitionSpeed,0.2,0.8);
+		this.smoothTime = THREE.Math.smoothstep(this.time, 0, transitionParams.transitionDuration);
 		this.quadmaterial.uniforms.mixRatio.value = this.smoothTime;
 
 		// Prevent render both scenes when it's not necessary
@@ -329,10 +364,13 @@ function Transition ( sa, sb ) {
 
 			this.sceneA.render( delta, true );
 			this.sceneB.render( delta, true );
+			
+			THREE.PixelBoxUtil.updateViewPortUniform();
+			
 			renderer.webgl.render( this.scene, this.cameraOrtho, null, true );
 		}
 
 	}
 }
 
-var renderer = new Renderer();
+var renderer = new THREE.PixelBoxRenderer();

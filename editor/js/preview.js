@@ -1,41 +1,17 @@
 function PreviewScene(){
 
-	Scene.call(this); // parent constructor
-	
-/* scene think */
+	this.useComposer = false;
 
-	this.tick = function(delta){
-		Scene.prototype.tick.call(this, delta); // super.tick
-		
-		//this.controls.update(delta);
-	};
-	
-/* scene callbacks */
-	
-	this.onAdded = function(){
-		Scene.prototype.onAdded.call(this);
-		/*$('body').append('<div style="position:absolute; top: 10px; left: 10px; padding: 5px; color:#fff; text-align: center;\
-							background-color:rgba(0,0,0,0.5);">\
-							W A S D to move<br/>R F move up / down<br/>Arrow keys to look</div>');*/
-	};
-	
-	this.onWillRemove = function(){
-		Scene.prototype.onWillRemove.call(this);
-	};
-	
-	this.onRemoved = function(){
-		Scene.prototype.onRemoved.call(this);
-	};	
+	THREE.PixelBoxScene.call(this); // parent constructor
 	
 /* populate scene */
 
 	this.onWillAdd = function(){
-		Scene.prototype.onWillAdd.call(this);
-		
 		if(window.opener && window.loadScene){
 			this.populateWith(JSON.parse(window.loadScene));
 		}
-		this.scene.updateMatrixWorld(true);
+		
+		this.updateMatrixWorld(true);
 		this.controls = new THREE.EditorControls(this.camera, renderer.webgl.domElement);
 		this.controls.center.set(0, 0, -100);
 		this.camera.localToWorld(this.controls.center);
@@ -45,7 +21,7 @@ function PreviewScene(){
 }
 
 /* extends Scene */
-PreviewScene.prototype = Object.create(Scene.prototype);
+PreviewScene.prototype = Object.create(THREE.PixelBoxScene.prototype);
 PreviewScene.prototype.constructor = PreviewScene;
 
 /* called on document load */

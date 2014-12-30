@@ -1,0 +1,146 @@
+<html>
+	<head>
+		<title>PixelBox Example 1</title>
+		<link rel="stylesheet" href="css/normalize.css"/>
+		<link rel="stylesheet" href="css/index.css"/>
+		<meta content="yes" name="apple-mobile-web-app-capable" />		
+		<meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1"/>
+		
+		<!-- 
+			
+			The father of it all. Three.js. All hail mrdoob.
+			
+			Note that three.js r.69 used here is modified for PixelBox
+			
+			Either use this modified version, or get the source (uncompressed) three.js
+			and make PixelBox modification yourself. Modification is in renderBufferDirect function.
+			It adds a if() case for PixelBox rendering:
+			
+				/* begin PixelBox */ 
+				
+				else if ( object instanceof THREE.PixelBox ) {
+	
+					if ( updateBuffers ) {
+		
+						setupVertexAttributes( material, program, geometry, 0 );
+		
+					}
+		
+					var position = geometry.attributes.position;
+		
+					_gl.drawArrays( _gl.POINTS, object.vertexBufferStart, object.vertexBufferLength);
+					_this.info.render.points += object.vertexBufferLength;
+					
+					_this.info.render.calls ++;			
+		
+				} /* end PixelBox */ 
+			
+			See https://github.com/kirilledelman/pixelbox for more info.
+			
+		-->
+		<script src="js/lib/three.js"></script>
+		<script src="js/lib/stats.min.js"></script>
+		
+		<!-- jQuery, underscore and lz-string are used throughout PixelBox lib -->
+		<script src="js/lib/jquery-2.1.1.min.js"></script>
+		<script src="js/lib/lz-string.js"></script>
+		<script src="js/lib/underscore.js"></script>
+		
+		<!-- PixelBox base includes -->
+		<script src="js/lib/pixelBox.js"></script>
+		<script src="js/lib/render.js"></script>
+		<script src="js/lib/assets.js"></script>
+		<script src="js/lib/scene.js"></script>
+		
+		<!-- Page's source files -->
+		<script src="js/lib/OrbitControls.js"></script>
+	</head>
+	
+	<body>
+		<a class="show-source" onclick="window.open('view-source:'+window.location.href.toString(),'_blank');">Source</a>
+		<span class="info">
+			<a href="https://github.com/kirilledelman/pixelbox" target="_blank">PixelBox</a>
+			by Kirill Edelman for <a href="http://threejs.org" target="_blank">three.js</a>
+		</span>		
+	
+		<script>
+		
+		/*
+		
+			This example shows how to load and display a single PixelBoxScene
+		
+		*/
+		
+		$(document).ready(function(){
+			// init PixelBoxRenderer instance
+			// which was auto-created in js/lib/render.js
+			
+			if(!renderer.init()){
+				var err = "Your browser doesn't support WebGL";
+				alert(err);
+				console.error(err);
+				return;
+			} else {
+				console.log("WebGL initialized");
+			}
+			
+			// load scene definition using THREE.PixelBoxAssets
+			// assets is auto-created in js/lib/assets.js
+			
+			assets.loadAssets({ 
+				scenes: [ 'assets/example1.scene' ],
+				
+				// when done, display scene
+				
+				done:function(){
+				
+					// instantiate our ExampleScene
+					
+					exampleScene = new ExampleScene();
+					
+					// set it as current for renderer
+					
+					renderer.setScene(exampleScene);
+					
+				}// end done:function
+			});// end assets.loadAssets
+		});// end document.ready
+		
+		
+		/*
+			
+			ExampleScene extends THREE.PixelBoxScene
+			
+		*/
+		
+		function ExampleScene(){
+		
+		 	// call superclass constructor
+		 	
+			THREE.PixelBoxScene.call(this);
+			
+			// get scene definition from assets cache
+			
+			var sceneDef = assets.cache.get('example1');
+			
+			// populate this scene with the definition
+			
+			this.populateWith(sceneDef);
+				
+			// add controls for easy preview
+			// various controls classes can be found in three.js examples/js/controls folder
+			
+			this.controls = new THREE.OrbitControls(this.camera);
+			
+		}
+		
+		// ExampleScene subclasses THREE.PixelBoxScene
+		
+		ExampleScene.prototype = Object.create(THREE.PixelBoxScene.prototype);
+		ExampleScene.prototype.constructor = ExampleScene;
+		
+	
+		
+		</script>
+	</body>
+</html>

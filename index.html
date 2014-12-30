@@ -1,43 +1,58 @@
 <html>
 	<head>
-		<title>Santa Drop</title>
+		<title>PixelBox</title>
 		<link rel="stylesheet" href="css/normalize.css"/>
 		<link rel="stylesheet" href="css/index.css"/>
-		<link rel="stylesheet" href="css/animations.css"/>
 		<meta content="yes" name="apple-mobile-web-app-capable" />		
-		<meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1"/><!--, -->
-		
-		<script src="js/lib/jquery-2.1.1.min.js"></script>
-		<script src="js/lib/lz-string.js"></script>
-		<script src="js/lib/underscore.js"></script>
-		
-		<script src="js/lib/three.js"></script>
-		<script src="js/lib/projector.js"></script>
-		<script src="js/lib/stats.min.js"></script>
-		<script src="js/lib/pixelBox.js"></script>
-		<script src="js/lib/render.js"></script>
-
-		<script src="js/lib/screenShader.js"></script>
-		<script src="js/lib/postprocessing/EffectComposer.js"></script>
-		<script src="js/lib/postprocessing/RenderPass.js"></script>
-		<script src="js/lib/postprocessing/ShaderPass.js"></script>
-		<script src="js/lib/postprocessing/MaskPass.js"></script>
-		<script src="js/lib/postprocessing/shaders/CopyShader.js"></script>
-		
-		<script src="js/lib/externalInterface.js"></script>
-		<script src="js/lib/orbitControls.js"></script>		
-
-		<script src="js/base.js"></script>
-		<script src="js/assets.js"></script>
-		<script src="js/scene.js"></script>
-		<script src="js/menuScene.js"></script>
-		<script src="js/gameScene.js"></script>
-		
-		<script>
-			$(document).ready(documentReady);
-		</script>
-
+		<meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1"/>
 	</head>
 	
-	<body><div class="page-bg"/></body>
+	<body>
+		<div class="home-info">
+		<h1>PixelBox</h1>
+		<p>PixelBox is an extension for <a href="http://threejs.org/" target="_blank">three.js</a>, for rendering voxel sprites.</p>
+		<p>It includes base classes, a sprite and scene editor, and some examples.</p>
+		<p>PixelBox was originally developed to create <a href="https://itunes.apple.com/us/app/santa-drop-free/id948393987" target="_blank">Santa Drop game for iOS</a>, and then expanded with extra tools and released as open source.</p>
+		<p><h3>Links</h3>
+			<ul>
+				<li><a href="example1.html">Example 1: Single scene</a></li>
+				<li><a href="example2.html">Example 2: Scenes transitions</a></li>
+				<li><a href="example3.html">Example 3: Animations and tweens</a></li>
+				<li><a href="https://github.com/kirilledelman/pixelbox">Project page on github.com</a></li>
+			</ul>
+		</p>
+		
+		<p><h3>PixelBox sprites</h3>
+			<ul>
+				<li>Based on THREE.PointCloud.</li>
+				<li>Multiple named animations, that can be played or looped at variable speed.</li>
+				<li>Named anchors - containers that are animated along with sprite's frames. These can be used to specify where the character's hand is during different animations, for example. Anchors are simple containers that can have other objects added to.</li>
+				<li>Ability to tween any property (such as position, or color).</li>
+				<li>Support transparent or self-illuminated voxels.</li>
+				<li>Cast and receive shadows.</li>
+			</ul>
+		</p>
+		<p><h3>PixelBox scene class</h3>
+			<ul>
+				<li>Parses / populates scenes created with PixelBox scene editor.</li>
+				<li>Support instancing of templates created with scene editor.</li>
+				<li>Object recycling - instead of destroying objects, they get recycled for quicker reuse.</li>
+				<li>Receive notifications when switching scenes from PixelBox renderer class.</li>
+			</ul>
+		</p>
+		<p><h3>PixelBox asset class</h3>
+			<ul>
+				<li>Easy preloading of assets - PixelBox scenes, sprites, image textures, and json files.</li>
+				<li>Load progress and complete notifications.</li>
+			</ul>
+		</p>
+		<p><h3>PixelBox renderer class</h3>
+			<ul>
+				<li>Used to switch between PixelBox scenes, with or without transitions.</li>
+				<li>Scene transitions using textures or blends are adopted from three.js examples.</li>
+				<li>Built-in downsampling of resolution rendering.</li>
+			</ul>
+		</p>
+		</div>
+	</body>
 </html>

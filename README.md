@@ -3,5 +3,10 @@ pixelbox
 
 THREE.js extension for rendering point cloud sprites
 
-TODO:
-Move classes to PixelBox namespace, or add prefix
+Examples:
+Snow
+multiple cameras
+multiple scenes
+spawning instances
+object picking
+animation

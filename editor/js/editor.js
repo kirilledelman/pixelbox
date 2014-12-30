@@ -2,7 +2,6 @@
 
 # TODO
 
-
 	Alt+click in fill mode should "delete fill"
 	
 	Shift+click in fill mode should "surface fill"
@@ -2076,7 +2075,8 @@ EditScene.prototype = {
 		// scale "floor" plane
 		this.shadowPreviewPlane.scale.set(1.0, 1.0, 1.0).multiplyScalar(2.0 * Math.max(this.doc.width, this.doc.depth, this.doc.height));
 		this.shadowPreviewPlane.position.set(this.doc.width * 0.5, -0.6, this.doc.depth * 0.5);
-
+		this.shadowPreviewPlane.material.side = 0;
+		
 		// recenter controls and lights with target
 		this.controls.center.set(this.doc.width * 0.5, this.doc.height * 0.5, this.doc.depth * 0.5);//target
 		this.updatePointLightPos();
@@ -2114,7 +2114,7 @@ EditScene.prototype = {
 	},
 	
 	resetZoom:function(){
-		THREE.PixelBoxUtil.updateViewPortUniform(null);
+		THREE.PixelBoxUtil.updateViewPortUniform(this.camera);
 		this.camera.position.set(512, 512, 512);
 		this.camera.lookAt(new THREE.Vector3(0,0,0));
 		this.controls.focus(this.maskBox, true);
@@ -3691,10 +3691,11 @@ EditScene.prototype = {
 		if(window.loadAsset == editScene.doc.name){
 			window.sceneEditor.assetUpdated(data);
 		} else {
-			window.loadAsset = editScene.doc.name;
+			window.loadAsset = editScene.doc.name;			
 			window.sceneEditor.importSceneAsset(data);
 		}
-		this.showMessage('<em>'+data.name+'</em> updated');
+		
+		editScene.showMessage(data.name+' updated');
 	},
 
 	/* export doc */
@@ -4055,10 +4056,6 @@ EditScene.prototype = {
 			<hr/>\
 			<li id="file-hold">Hold</li>\
 			<li id="file-fetch">Fetch</li>\
-			<!--<hr/>\
-			<li id="file-reset">Reset editor</li>-->\
-			<!--<hr/>\
-			<li id="file-exit">Exit to Main Menu</li>-->\
 		</ul>\
 		<ul class="editor absolute-pos submenu shortcuts" id="edit-submenu">\
 			<li id="edit-resize">Resize Asset</li>\
@@ -4140,7 +4137,10 @@ EditScene.prototype = {
 					localStorage_setItem('editor-bg-color', hex);
 					editScene.clearColor = parseInt(hex,16);					
 				},
-			}).css({zIndex: 1000});
+				onShow:function(dom){
+					$(dom).css({zIndex: 2000000});
+				}
+			});
 		});
 		$('#bg-floor').click(editScene.toggleShowFloor);
 		$('#reset-zoom').click(editScene.resetZoom.bind(editScene));
@@ -4699,28 +4699,37 @@ EditScene.prototype = {
 		if(!$('#help-view').length){
 			$('body').append('<div id="help-view" class="no-close">\
 			<span class="info">PixelBox and related tools created by Kirill Edelman.<br/>\
-			Huge thanks to mrdoob for creating <a href="http://threejs.org/" target="_blank">three.js</a></span>\
+			Huge thanks to mrdoob for creating <a href="http://threejs.org/" target="_blank">three.js</a><br/><br/>\
+			<a href="https://github.com/kirilledelman/pixelbox" target="_blank">https://github.com/kirilledelman/pixelbox</a></span>\
 			<hr/>\
-			<h2>Shortcuts</h2>\
+			<h2>View</h2>\
+			<em>LMB</em> rotate view<br/>\
+			<em>Mouse Wheel</em> zoom view<br/>\
+			<em>RMB</em> pan view<br/>\
+			<br/>\
+			<h2>File</h2>\
 			<em>Ctrl + N</em> create new<br/>\
 			<em>Ctrl + S</em> hold<br/>\
 			<em>Ctrl + E</em> export data<br/>\
 			<br/>\
+			<h2>Selection</h2>\
 			<em><span class="ctrl"/>C</em> copy selection<br/>\
 			<em><span class="ctrl"/>X</em> cut selection<br/>\
-			<em><span class="ctrl"/>V</em> paste selection<br/>\
+			<em><span class="ctrl"/>V</em> paste<br/>\
 			<em>Enter</em> accept paste placement<br/>\
 			<em>Escape</em> cancel paste<br/>\
 			<br/>\
 			<em>F</em> fill selection<br/>\
 			<em>Delete</em> clear selection<br/>\
 			<em>+ -</em> inflate, deflate selection<br/>\
-			<em>[ ]</em> move selection plane ±1 (Selection X,Y,Z mode)<br/>\
-			<em>Shift + Ctrl</em> selection manipulation mode<br/>\
+			<em>[ ]</em> move plane (Selection X,Y,Z mode)<br/>\
+			<em>Shift+Ctrl</em> selection manipulation mode<br/>\
 			<br/>\
-			<em>&lt; &gt;</em> step frame ±1<br/>\
+			<h2>Frames</h2>\
+			<em>&lt; &gt;</em> frame forward/reverse<br/>\
 			<em>Space</em> play/stop<br/>\
 			<br/>\
+			<h2>Undo</h2>\
 			<em><span class="ctrl"/>Z</em> undo<br/>\
 			<em>Shift + <span class="ctrl"/>Z</em> redo<br/>\
 			<br/>\
@@ -4738,7 +4747,7 @@ EditScene.prototype = {
 			</div>');
 		}
 		
-		$('#help-view .ctrl').append(navigator.appVersion.indexOf("Mac")!=-1 ? '⌘ ':'Ctrl + ');
+		$('#help-view .ctrl').append(navigator.appVersion.indexOf("Mac")!=-1 ? '&#8984; ':'Ctrl + ');
 		
 		editScene.disableCanvasInteractions(true);
 		$('#help-view').dialog({
@@ -5038,9 +5047,9 @@ EditScene.prototype = {
 		this.updateDirectLightPos();
 	    
    		// projector & mouse picker
-		this.projector = new THREE.Projector();
+		//this.projector = new THREE.Projector();
 		this.raycaster = new THREE.Raycaster( new THREE.Vector3(), new THREE.Vector3(), 0.01, this.camera.far ) ;
-		this.projectorPlane = new THREE.Plane(new THREE.Vector3(0,1,0), 0);
+		//this.projectorPlane = new THREE.Plane(new THREE.Vector3(0,1,0), 0);
 
 		// create render target
 		var renderTargetParameters = { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, format: THREE.RGBFormat, stencilBuffer: false };

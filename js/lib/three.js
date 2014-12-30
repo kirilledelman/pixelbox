@@ -20277,6 +20277,10 @@ THREE.WebGLRenderer = function ( parameters ) {
 
 				} else if ( material.defaultAttributeValues !== undefined ) {
 
+					if(material.defaultAttributeValues[ key ] === undefined){
+						console.log("Kirill wtf!");
+					} else 
+
 					if ( material.defaultAttributeValues[ key ].length === 2 ) {
 
 						_gl.vertexAttrib2fv( programAttribute, material.defaultAttributeValues[ key ] );
@@ -20416,7 +20420,7 @@ THREE.WebGLRenderer = function ( parameters ) {
 
 			}
 
-		} else /* begin PixelBox */ if ( object instanceof THREE.PixelBox ) {
+		} /* begin PixelBox */ else if ( object instanceof THREE.PixelBox ) {
 
 			if ( updateBuffers ) {
 
@@ -24723,7 +24727,7 @@ THREE.WebGLShader = ( function () {
 		}
 
 		// --enable-privileged-webgl-extension
-		// console.log( type, gl.getExtension( 'WEBGL_debug_shaders' ).getTranslatedShaderSource( shader ) );
+		if(gl.getExtension( 'WEBGL_debug_shaders' )) console.log( type, gl.getExtension( 'WEBGL_debug_shaders' ).getTranslatedShaderSource( shader ) );
 
 		return shader;
 

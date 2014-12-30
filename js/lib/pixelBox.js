@@ -1,14 +1,5 @@
 /*
 
-	Events:
-		frame
-		anchor-meta
-		anim-meta
-		anim-stop
-		anim-start
-		anim-loop
-		anim-finish		
-
 	Later TODO:
 		Find a way to share vertex buffers between different PixelBox data objects
 */
@@ -289,7 +280,7 @@ THREE.PixelBoxShader = {
 		"	float brightness = normalLength - 1.0;",
 		"	vec3 vertexNormal = normalize(normalMatrix * normal);",		
 		
-		"	if(cullBack != 0 && vertexNormal.z < -0.35) { ",
+		"	if(cullBack != 0 && vertexNormal.z <= -0.5) { ",
 		"		vColor = vec4(0.0);",
 		"	} else { ",
 		
@@ -956,7 +947,6 @@ THREE.PixelBox = function(data){
 	
 	// init as PointCloud
 	THREE.PointCloud.call(this, geometry, material);
-	// this.immediateRenderCallback = function( program, _gl, _frustum ){};
 
 	this.customDepthMaterial = depthMaterial;
 	this.castShadow = true;
@@ -968,6 +958,7 @@ THREE.PixelBox = function(data){
 		for(var aname in data.anchors){
 			var obj3d = new THREE.Object3D();
 			obj3d.isContainer = true;
+			obj3d.detached = false;
 			obj3d.isAnchor = true;
 			obj3d.name = aname;
 			obj3d.visible = false;
@@ -1031,18 +1022,23 @@ THREE.PixelBox = function(data){
 		var ev = {type:'frame', frame: f};
 		this.dispatchEvent(ev); ev = null;
 		
+		var degToRad = Math.PI/180.0;
+		
 		// update anchors
 		for(var aname in this.anchors){
 			var anchor = this.anchors[aname];
 			var adata = data.anchors[aname][f];
-			anchor.visible = !!adata.on;
-			anchor.position.set(adata.x - data.width * 0.5, adata.y - data.height * 0.5, adata.z - data.depth * 0.5);
-			anchor.rotation.set(adata.rx, adata.ry, adata.rz);
-			anchor.scale.set(adata.sx || 0.00001, adata.sy || 0.00001, adata.sz || 0.00001);
-			anchor.updateMatrixWorld(true);
-			if(adata.meta.length) { 
-				var ev = {type:'anchor-meta', frame:f, anchor: anchor, meta:adata.meta };
-				this.dispatchEvent(ev); ev = null;
+			if(!anchor.detached){
+				anchor.visible = !!adata.on;
+				anchor.position.set(adata.x - data.width * 0.5, adata.y - data.height * 0.5, adata.z - data.depth * 0.5);
+				anchor.rotation.set(adata.rx * degToRad, adata.ry * degToRad, adata.rz * degToRad);
+				anchor.scale.set(adata.sx || 0.00001, adata.sy || 0.00001, adata.sz || 0.00001);
+				anchor.updateMatrixWorld(true);
+				
+				if(adata.meta.length) { 
+					var ev = {type:'anchor-meta', frame:f, anchor: anchor, meta:adata.meta };
+					this.dispatchEvent(ev); ev = null;
+				}
 			}
 		}
 		
@@ -1153,7 +1149,7 @@ THREE.PixelBox = function(data){
 	this.fasterRaycast = true; // raycast just tests for an intersection (returns first match)
 	
 	// init viewPortScale value if not set
-	if(!THREE.PixelBoxUtil.material.uniforms.viewPortScale.value) THREE.PixelBoxUtil.updateViewPortUniform();
+	// if(!THREE.PixelBoxUtil.material.uniforms.viewPortScale.value) THREE.PixelBoxUtil.updateViewPortUniform();
 	
 	return this;
 }
@@ -1162,17 +1158,29 @@ THREE.PixelBox.prototype = Object.create(THREE.PointCloud.prototype);
 THREE.PixelBox.prototype.constructor = THREE.PixelBox;
 
 /* 
-	Tweening functions
+	Tweening functions:
 	
-	Examples:
+	Tweens are implemented using setTimeout, and are automatically paused/resumed when renderer.pause(bPause) is called
+	All tweens are cancelled when this PixelBox is removed from parent
+	Tweening is done at this PixelBox's .tweenFps rate
+	If you wish to stop tweens, keep a reference to the object you passed to tween(obj) function, and call stopTween(obj) later
+	
+	Example use:
 	
 	potato.tween({ prop:"alpha", from: 1, to: 0, duration: 1.0 })
-	potato.tween({ target: potato.position, from: potato.position, to: vec3, duration: 1.0, done: func() })
+	potato.tween({ target: potato.position, from: potato.position, to: vec3, duration: 1.0, done: someFunc })
 
-	duration - optional, defaults to 1 sec
-	from - optional, defaults to current value
-	done - optional on complete
-	easing - optional easing func of form function (t, b, c, d), where t = current time, b = start value, c = change in value, d = duration (http://gizma.com/easing)
+	parameters:
+
+	(Object) target - 	if target is not given, it defaults to this PixelBox instance
+						if is THREE.Vector3 or THREE.Euler or THREE.Color - tween will interpolate target to "to" param
+						if target is another object, property "prop" is also required and will be interpolated
+	
+	(Number) duration - (optional) duration of interpolation, defaults to 1 sec
+	(same type as target property) from - (optional) starting value, defaults to current value
+	(Function) done - (optional) on complete function
+	(Function) easing - (optional) easing func of form: function (t, b, c, d), where t = current time, b = start value, c = change in value, d = duration (http://gizma.com/easing)
+						There are a few Math.* after the tween functions
 	
 */
 
@@ -1211,7 +1219,7 @@ THREE.PixelBox.prototype.advanceTweenFrame = function(){
 			var tweenObj = this._tweens[i];
 			// advance time, and validate props
 			if(tweenObj.time === undefined) tweenObj.time = 0;
-			else tweenObj.time += nextFrameIn;
+			else tweenObj.time = Math.min(tweenObj.time + nextFrameIn, tweenObj.duration);
 			
 			if(tweenObj.duration === undefined) tweenObj.duration = 1.0;
 			
@@ -1273,15 +1281,41 @@ THREE.PixelBox.prototype.stopTween = function(obj){
 	}
 };
 
+/* easing: t = current time, b = start value, c = change in value, d = duration */
+Math.easeInOutSine = function (t, b, c, d) { return -c/2 * (Math.cos(Math.PI*t/d) - 1) + b; };
+
+Math.easeInSine = function (t, b, c, d) { return -c * Math.cos(t/d * (Math.PI/2)) + c + b; };
+
+Math.easeOutSine = function (t, b, c, d) { return c * Math.sin(t/d * (Math.PI/2)) + b; };
+
+Math.linearTween = function (t, b, c, d) { return c*t/d + b; };
+
 
 /* 
 	Animation functions 
 
-		affected by .animSpeed, which can be negative
+	Animations are implemented using setTimeout, and are automatically paused/resumed when renderer.pause(bPause) is called
+	Animation is stopped when this PixelBox is removed from parent
+	Animations have intrinsic FPS propery, which is multiplied by this PixelBox's .animSpeed (which can be negative for reverse animations)
 		
-		playAnim(animname, [ BOOL fromBeginning ])
-		loopAnim(animName, [ INT numLoops | Infinity, [BOOL fromBeginning] ] )
-		gotoAndStop(animname, [ FLOAT PosWithinAnim | INT frameNumber])
+	Functions:
+
+		playAnim(animname, [ BOOL fromCurrentFrame ]) - plays animation once. fromCurrentFrame is true to start animation from current position
+		loopAnim(animName, [ INT numLoops | Infinity, [BOOL fromCurrentFrame] ] ) - plays animation numLoops times. Specify Infinity constant 
+																					to play forever. fromCurrentFrame is true to start animation 
+																					from current position
+		gotoAndStop(animname, [ FLOAT PosWithinAnim | INT frameNumber]) - seeks position within animation and stops. Position can be a float between
+																		  0.0 and <1.0 or an integer frame number.
+																		  
+    Animation functions emit events (subscribe to events by calling obj.addEventListener(eventType, func) - see THREE.EventDispatcher)
+    
+	    frame			- dispatched each time a frame is changed
+		anchor-meta 	- dispatched whenever anchor has meta data on current frame
+		anim-meta		- dispatched when an animation with meta data starts playing
+		anim-stop		- dispatched whenever animation is stopped
+		anim-start		- dispatched whenever animation is started
+		anim-loop		- dispatched when animation loops around
+		anim-finish		- dispatched when an animation completes
 
 */
 
@@ -1504,23 +1538,35 @@ THREE.PixelBoxUtil.depthMaterial = new THREE.ShaderMaterial( {
 });
 THREE.PixelBoxUtil.depthMaterial._shadowPass = true;
 
-THREE.PixelBoxUtil.updateViewPortUniform = function(event){ 
-	var cam = (renderer.scene && renderer.scene.camera) ? renderer.scene.camera : null;
-	if(!cam) return;
+THREE.PixelBoxUtil.updateViewPortUniform = function(optCamera){ 
 	// get cam scale	
 	var camWorldScale = new THREE.Vector3();
-	renderer.scene.scene.updateMatrixWorld(true);
-	camWorldScale.setFromMatrixScale(cam.matrixWorld);
-	// perspective camera
-	if(cam instanceof THREE.PerspectiveCamera){
-		THREE.PixelBoxUtil.material.uniforms.viewPortScale.value = (renderer.webgl.domElement.height / (2 * Math.tan(0.5 * cam.fov * Math.PI / 180.0))) / camWorldScale.x;
-	// ortho
-	} else {
-		var h = cam.zoom * renderer.webgl.domElement.height / (cam.top * 2);
-		THREE.PixelBoxUtil.material.uniforms.viewPortScale.value = h / camWorldScale.x;
+	
+	// viewPortScale is based on the camera
+	function getValueForCam(cam){
+		camWorldScale.setFromMatrixScale(cam.matrixWorld);
+		// perspective camera
+		if(cam instanceof THREE.PerspectiveCamera){
+			return (renderer.webgl.domElement.height / (2 * Math.tan(0.5 * cam.fov * Math.PI / 180.0))) / camWorldScale.x;
+		// ortho
+		} else {
+			return (cam.zoom * renderer.webgl.domElement.height / (cam.top * 2)) / camWorldScale.x;
+		}	
 	}
+	var val = 1;
+	if(renderer.scene instanceof THREE.PixelBoxSceneTransition && renderer.scene.sceneA instanceof THREE.PixelBoxScene){
+		var t = renderer.scene.smoothTime;
+		var val1 = getValueForCam(renderer.scene.sceneB.camera);
+		val = getValueForCam(renderer.scene.sceneA.camera);
+		val = val + (val1 - val) * t;
+	} else if(optCamera){
+		val = getValueForCam(optCamera);
+	} else if(renderer.currentScene && renderer.currentScene.camera){
+		val = getValueForCam(renderer.currentScene.camera);
+	}
+	
+	THREE.PixelBoxUtil.material.uniforms.viewPortScale.value = val;	
 };
-$(window).on('resize.PixelBox', THREE.PixelBoxUtil.updateViewPortUniform);
 
 THREE.PixelBoxUtil.dispose = function(data){
 	if(data && data.frameData){
@@ -1547,9 +1593,12 @@ THREE.PixelBoxUtil.processPixelBoxFrames = function(data){
 	if(data.frames === null){
 		// special case for PixelBox editor or particle systems
 		data.frameData = [];
-	
+		
+		return true;
 	// parse data for the first time (modifies data object)
 	} else if(data.frames){
+		if(!data.frames.length) return false;
+	
 		// decode frames
 		if(!data.frameData){
 			data.frameData = new Array(data.frames.length);
@@ -1570,7 +1619,10 @@ THREE.PixelBoxUtil.processPixelBoxFrames = function(data){
 		
 		// clean up
 		delete data.frames;
+		return true;
 	}
+	
+	return false;
 };
 
 /* 	
@@ -1787,7 +1839,10 @@ THREE.PixelBoxUtil.decodeFrame = function(dataObject, frameIndex){
 								Math.floor(neighbors[3]) + Math.floor(neighbors[4]) + Math.floor(neighbors[5]);
 								
 			// optimize - discard pixel if can't be seen inside the cloud
-			if(optimize && numNeighbors == 6){
+			if(optimize && numNeighbors == 6 && // <- nearest neighbors
+				getAlpha(x - 2, y, z) + getAlpha(x + 2, y, z) + getAlpha(x, y - 2, z) +
+				getAlpha(x, y + 2, z) + getAlpha(x, y, z - 2) + getAlpha(x, y, z + 2) == 6 // <- extended neighbors
+			){
 				// if pixel is surrounded by completely opaque pixels, it can be discarded
 				optimizeRemoved++;
 				index++;
@@ -2134,10 +2189,15 @@ THREE.PixelBox.prototype.encodeRawFrame = function(dataObject, frameNumber){
 	  return ((number * shift) | 0) / shift;
 	};
 	
+	var hw = this.geometry.data.width * 0.5;
+	var hh = this.geometry.data.height * 0.5;
+	var hd = this.geometry.data.depth * 0.5;
+	
 	for(var i = start; i < end; i++){
-		if(fd.c.array[i * 4 + 3] > 0){
+		if(fdc.array[i * 4 + 3] > 0){
 			obj.c.push(trunc(fdc.array[i * 4]), trunc(fdc.array[i * 4 + 1]), trunc(fdc.array[i * 4 + 2]), trunc(fdc.array[i * 4 + 3]));
-			obj.p.push(fdp.array[i * 3] - this.geometry.data.width * 0.5, fdp.array[i * 3 + 1] - this.geometry.data.height * 0.5, fdp.array[i * 3 + 2] - this.geometry.data.depth * 0.5);
+			//obj.p.push(fdp.array[i * 3] - this.geometry.data.width * 0.5, fdp.array[i * 3 + 1] - this.geometry.data.height * 0.5, fdp.array[i * 3 + 2] - this.geometry.data.depth * 0.5);
+			obj.p.push(fdp.array[i * 3], fdp.array[i * 3 + 1], fdp.array[i * 3 + 2]);
 			obj.n.push(trunc(fdn.array[i * 3]), trunc(fdn.array[i * 3 + 1]), trunc(fdn.array[i * 3 + 2]));
 			obj.o.push(trunc(fdo.array[i]));
 		}
@@ -2275,7 +2335,10 @@ THREE.PixelBox.prototype.replaceFrame = function(frameData, frameIndex){
 							Math.floor(neighbors[3]) + Math.floor(neighbors[4]) + Math.floor(neighbors[5]);
 
 		// optimize - discard pixel if can't be seen inside the cloud
-		if(optimize && numNeighbors == 6){
+		if(optimize && numNeighbors == 6 && // <- nearest neighbors
+			getAlpha(x - 2, y, z) + getAlpha(x + 2, y, z) + getAlpha(x, y - 2, z) +
+			getAlpha(x, y + 2, z) + getAlpha(x, y, z - 2) + getAlpha(x, y, z + 2) == 6 // <- extended neighbors
+		){
 			frameBuffers.c.array[index * 4 + 3] = 0.0; // set alpha to 0
 			optimizeRemoved++;
 			index++;			
@@ -2620,21 +2683,3 @@ THREE.PixelBox.prototype.replaceFramePartial = function(strokeSet, frameIndex){
 	// return time
 	return (new Date()).getTime() - startTime.getTime();
 }
-
-
-/* easing: t = current time, b = start value, c = change in value, d = duration */
-Math.easeInOutSine = function (t, b, c, d) {
-	return -c/2 * (Math.cos(Math.PI*t/d) - 1) + b;
-};
-
-Math.easeInSine = function (t, b, c, d) {
-	return -c * Math.cos(t/d * (Math.PI/2)) + c + b;
-};
-
-Math.easeOutSine = function (t, b, c, d) {
-	return c * Math.sin(t/d * (Math.PI/2)) + b;
-};
-
-Math.linearTween = function (t, b, c, d) {
-	return c*t/d + b;
-};

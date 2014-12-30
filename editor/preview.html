@@ -5,18 +5,25 @@
 
 		<script src="../js/lib/jquery-2.1.1.min.js"></script>
 		<script src="../js/lib/underscore.js"></script>
-		<script src="../js/lib/keymaster.js"></script>
 		<script src="../js/lib/lz-string.js"></script>
 
 		<script src="../js/lib/three.js"></script>
-		<script src="../js/lib/projector.js"></script>
 		<script src="../js/lib/pixelBox.js"></script>
 		<script src="../js/lib/render.js"></script>
 		<script src="../js/lib/stats.min.js"></script>
 		
-		<script src="../js/scene.js"></script>
-		<script src="../js/assets.js"></script>
+		<!-- postprocessing only needed if Scene.useComposer == true -->
+		<script src="../js/lib/postprocessing/shaders/CopyShader.js"></script>
+		<script src="../js/lib/postprocessing/EffectComposer.js"></script>
+		<script src="../js/lib/postprocessing/RenderPass.js"></script>
+		<script src="../js/lib/postprocessing/ShaderPass.js"></script>
+		<script src="../js/lib/postprocessing/MaskPass.js"></script>
+		<script src="../js/lib/screenShader.js"></script>
+		
+		<script src="../js/lib/scene.js"></script>
+		<script src="../js/lib/assets.js"></script>
 		<script src="js/editorControls.js"></script>
+		
 		<script src="js/preview.js"></script>
 
 	</head>

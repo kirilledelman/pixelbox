@@ -202,6 +202,14 @@ label.object-label.droppable.active {
 	margin: 0.2em;
 }
 
+#props-container .prop-row {
+	font-size: 10px;
+}
+
+#props-container .prop-row input[type=text]{
+	font-size: 12px;
+}
+
 #anim-list div.anim-row,#anchor-list div.anchor-row {
 	padding: 0.5em;
 	padding-left: 1em;
@@ -625,7 +633,8 @@ ul.ui-tabs-nav li.ui-state-active a {
 
 #help-view em { 
 	margin-right: 10px;
-	width:80px;
+	width:120px;
+	font-size: 12px;
 	text-align: right;
 	display: inline-block;
 }
@@ -718,6 +727,13 @@ div.bigMessage {
 	color:black;
 	font-size: 25px;
 	font-weight: bold;
+	text-align: center;
+}
+
+div.bigMessage .info {
+	font-weight: normal;
+	font-size: 16px;
+	color: #666;
 }
 
 
