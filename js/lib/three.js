@@ -20277,10 +20277,6 @@ THREE.WebGLRenderer = function ( parameters ) {
 
 				} else if ( material.defaultAttributeValues !== undefined ) {
 
-					if(material.defaultAttributeValues[ key ] === undefined){
-						console.log("Kirill wtf!");
-					} else 
-
 					if ( material.defaultAttributeValues[ key ].length === 2 ) {
 
 						_gl.vertexAttrib2fv( programAttribute, material.defaultAttributeValues[ key ] );
@@ -24727,7 +24723,7 @@ THREE.WebGLShader = ( function () {
 		}
 
 		// --enable-privileged-webgl-extension
-		if(gl.getExtension( 'WEBGL_debug_shaders' )) console.log( type, gl.getExtension( 'WEBGL_debug_shaders' ).getTranslatedShaderSource( shader ) );
+		// console.log( type, gl.getExtension( 'WEBGL_debug_shaders' ).getTranslatedShaderSource( shader ) );
 
 		return shader;
 

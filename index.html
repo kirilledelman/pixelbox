@@ -18,6 +18,11 @@
 				<li><a href="example1.html">Example 1: Single scene</a></li>
 				<li><a href="example2.html">Example 2: Scenes transitions</a></li>
 				<li><a href="example3.html">Example 3: Animations and tweens</a></li>
+				<li>Example 4: Instancing templates and object recycling</li>
+				<li>Example 5: Animation events</li>
+				<li class="clear"/>
+				<li><a href="./editor" class="scene-editor">PixelBox Scene Editor</a></li>
+				<li class="clear"/>
 				<li><a href="https://github.com/kirilledelman/pixelbox">Project page on github.com</a></li>
 			</ul>
 		</p>
@@ -35,9 +40,9 @@
 		<p><h3>PixelBox scene class</h3>
 			<ul>
 				<li>Parses / populates scenes created with PixelBox scene editor.</li>
-				<li>Support instancing of templates created with scene editor.</li>
+				<li>Supports instancing of templates created with scene editor.</li>
 				<li>Object recycling - instead of destroying objects, they get recycled for quicker reuse.</li>
-				<li>Receive notifications when switching scenes from PixelBox renderer class.</li>
+				<li>Receives notifications when switching scenes from PixelBox renderer class.</li>
 			</ul>
 		</p>
 		<p><h3>PixelBox asset class</h3>
@@ -54,5 +59,10 @@
 			</ul>
 		</p>
 		</div>
+		<script>
+			if(navigator.appVersion.indexOf("Windows")!=-1){
+				$('a.scene-editor').append(' - use Chrome on Windows');
+			}
+		</script>
 	</body>
 </html>

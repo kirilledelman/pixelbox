@@ -5,6 +5,7 @@
 .submenu { 
 	z-index: 1000100; 
 	overflow-y: auto;
+	overflow-x: hidden;
 	max-height: 350px;
 	min-width: 100px;
 	border-bottom: 1px solid #333;

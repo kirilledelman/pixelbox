@@ -30,6 +30,16 @@ div.home-info h3 {
 	margin: 0;
 }
 
+li {
+	list-style-type: square;
+	list-style-position: outside;
+}
+
+li.clear {
+	list-style-type: none;
+	height: 0.25em;
+	margin: 0;
+}
 
 a,a:visited {
 	color: #66f542;

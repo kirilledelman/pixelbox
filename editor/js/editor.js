@@ -5167,7 +5167,7 @@ function documentReady(){
 
 /* global helper functions */
 function localStorage_init(onReady) {
-	if(chrome && chrome.storage){
+	if(window['chrome'] && chrome.storage){
 		chrome.storage.local.get(null, function(obj){
 			window.storageShadow = obj;
 			onReady();
@@ -5176,7 +5176,7 @@ function localStorage_init(onReady) {
 }
 
 function localStorage_setItem(key, val){
-	if(chrome && chrome.storage){
+	if(window['chrome'] && chrome.storage){
 		var kv = {};
 		window.storageShadow[key] = kv[key] = val.toString();
 		chrome.storage.local.set(kv);
@@ -5186,7 +5186,7 @@ function localStorage_setItem(key, val){
 }
 
 function localStorage_getItem(key){
-	if(chrome && chrome.storage){
+	if(window['chrome'] && chrome.storage){
 		return (window.storageShadow[key] !== undefined) ? window.storageShadow[key] : null;
 	} else {
 		return localStorage.getItem(key);
@@ -5195,7 +5195,7 @@ function localStorage_getItem(key){
 }
 
 function localStorage_clear(){
-	if(chrome && chrome.storage){
+	if(window['chrome'] && chrome.storage){
 		chrome.storage.local.clear();
 		window.storageShadow = {};
 	} else {

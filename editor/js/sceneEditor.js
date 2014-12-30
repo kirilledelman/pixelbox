@@ -970,7 +970,7 @@ EditSceneScene.prototype = {
 	
 	download:function(filename, contents) {
 		if(typeof(contents) == 'object') contents = JSON.stringify(contents);
-		if(chrome && chrome.storage){
+		if(window['chrome'] && chrome.storage){
 			chrome.fileSystem.chooseEntry({type: 'saveFile', suggestedName: filename}, function(writableFileEntry) {
 			    writableFileEntry.createWriter(function(writer) {
 			      writer.onwriteend = function(e) {
@@ -1005,7 +1005,7 @@ EditSceneScene.prototype = {
 	      "Reset": function() { 
 	      	localStorage_clear();
 	      	$(this).dialog("close"); 
-	      	if(chrome && chrome.storage){
+	      	if(window['chrome'] && chrome.storage){
 		      	chrome.runtime.reload();
 	      	} else {
 	      		window.location.reload();
@@ -1256,7 +1256,7 @@ EditSceneScene.prototype = {
 		
 		// populate
 		var opts = { helpers: true, keepSceneCamera:true, noNameReferences: true, wrapTemplates: true, templates: dataObject.templates, skipProps: true };
-		var addedObjects = this.populateObject(this.container, dataObject.layers, opts);
+		var addedObjects = this.populateObject(this.container, dataObject.layers ? dataObject.layers : [], opts);
 		if(dataObject.containsTemplates){
 			for(var ti = 0; ti < dataObject.containsTemplates.length; ti++){
 				var td = dataObject.templates[dataObject.containsTemplates[ti]];
@@ -2307,7 +2307,7 @@ EditSceneScene.prototype = {
 		}
 		var asset = _.deepClone(origAsset.importedAsset, 100);
 		console.log("Editing ",asset);
-		if(chrome && chrome.storage){
+		if(window['chrome'] && chrome.storage){
 			chrome.app.window.create('editor/editor.html', { 
 				id: asset.name,
 				outerBounds: {
@@ -2596,7 +2596,7 @@ EditSceneScene.prototype = {
 					"occlusion":0.75,
 					"pointSize":1,
 					"frames":[{"p":[],"n":[],"c":[],"o":[]}],
-					"anims":{}
+					"anims":[]
 					};
 					editScene.addUndo({name:"addAsset",undo:[editScene.deleteAsset, asset],redo:[editScene.importSceneAsset, asset]});
 	      			editScene.importSceneAsset(asset);
@@ -4459,7 +4459,7 @@ EditSceneScene.prototype = {
 	previewScene:function(e){
 	 	var loadScene = editScene.exportScene(true, false);
 	 	console.log(JSON.parse(loadScene));
-		if(chrome && chrome.storage){
+		if(window['chrome'] && chrome.storage){
 			chrome.app.window.create('editor/preview.html', { 
 				outerBounds: {
 			      width: Math.max(400, Math.floor(window.outerWidth / 2)),
@@ -6801,12 +6801,18 @@ function documentReady(){
 	localStorage_init(function(){
 		editScene.init();
 		renderer.setScene(editScene);
-	});
+		
+		// browser warning
+		if(!window['chrome'] || window['chrome']['storage'] == undefined){
+			alert("Running PixelBox scene editor in the browser.\n\nPlease note that scene editor was designed to run as Chrome extension. Running it in the browser window should work, but some features, especially those having to do with local storage and file saving / export may not always work correctly. If you're planning to sink production time in using the editor, I recommend running it as Chrome app. For more info visit https://github.com/kirilledelman/pixelbox");
+		}
+	});	
+	
 }
 
 /* global helper functions */
 function localStorage_init(onReady) {
-	if(chrome && chrome.storage){
+	if(window['chrome'] && chrome.storage){
 		chrome.storage.local.get(null, function(obj){
 			window.storageShadow = obj;
 			onReady();
@@ -6815,7 +6821,7 @@ function localStorage_init(onReady) {
 }
 
 function localStorage_setItem(key, val){
-	if(chrome && chrome.storage){
+	if(window['chrome'] && chrome.storage){
 		var kv = {};
 		window.storageShadow[key] = kv[key] = val.toString();
 		chrome.storage.local.set(kv);
@@ -6825,7 +6831,7 @@ function localStorage_setItem(key, val){
 }
 
 function localStorage_getItem(key){
-	if(chrome && chrome.storage){
+	if(window['chrome'] && chrome.storage){
 		return (window.storageShadow[key] !== undefined) ? window.storageShadow[key] : null;
 	} else {
 		return localStorage.getItem(key);
@@ -6834,7 +6840,7 @@ function localStorage_getItem(key){
 }
 
 function localStorage_clear(){
-	if(chrome && chrome.storage){
+	if(window['chrome'] && chrome.storage){
 		chrome.storage.local.clear();
 		window.storageShadow = {};
 	} else {
