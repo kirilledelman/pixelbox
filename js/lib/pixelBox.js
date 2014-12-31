@@ -843,8 +843,6 @@ THREE.MeshPixelBoxMaterial = function(params){
 	
 	function param(pname, defaultValue){ if(params && params[pname] != undefined) return params[pname]; return defaultValue; }
 	
-	material.side = THREE.DoubleSide;
-	
 	var uniforms = material.uniforms;
 	uniforms.tintColor.value.set(param('tint', 0xffffff));
 	uniforms.addColor.value.set(param('addColor', 0x0));
@@ -1068,14 +1066,14 @@ THREE.PixelBox = function(data){
 	
 	// pre-bind
 	this.advanceAnimationFrame = THREE.PixelBox.prototype.advanceAnimationFrame.bind(this);
-	this.advanceTweenFrame = THREE.PixelBox.prototype.advanceTweenFrame.bind(this);
+	// this.advanceTweenFrame = THREE.PixelBox.prototype.advanceTweenFrame.bind(this);
 
-	this.tweenFps = 20;
-	this._tweens = [];
-	this._tweenInterval = 0;
+	// this.tweenFps = 20;
+	// this._tweens = [];
+	// this._tweenInterval = 0;
 	
 	this.addEventListener('removed', this.stopAnim);
-	this.addEventListener('removed', this.stopTweens);
+	// this.addEventListener('removed', this.stopTweens);
 	
 	// add shorthand accessors
 	Object.defineProperty(this, 'asset', {
@@ -1178,7 +1176,7 @@ function applyTween(tweenObj){
 	}
 }
 
-THREE.PixelBox.prototype.advanceTweenFrame = function(){
+THREE.Object3D.prototype.advanceTweenFrame = function(){
 	if(this._tweenInterval) clearTimeout(this._tweenInterval);
 	
 	var nextFrameIn = 1.0 / this.tweenFps;
@@ -1212,7 +1210,7 @@ THREE.PixelBox.prototype.advanceTweenFrame = function(){
 			applyTween(tweenObj);
 			
 			if(tweenObj.time >= tweenObj.duration){
-				if(tweenObj.done !== undefined) tweenObj.done.call(tweenObj.target);
+				if(tweenObj.done !== undefined) tweenObj.done.call(this, tweenObj);
 				this._tweens.splice(i, 1);	
 			}			
 		}
@@ -1225,14 +1223,21 @@ THREE.PixelBox.prototype.advanceTweenFrame = function(){
 	}
 };
 
-THREE.PixelBox.prototype.tween = function(obj){
+THREE.Object3D.prototype.tween = function(obj){
 	if(!_.isArray(obj)) obj = [obj];
+	// first time
+	if(!this.hasOwnProperty('advanceTweenFrame')){
+		this._tweens = [];
+		this.advanceTweenFrame = this.advanceTweenFrame.bind(this);
+	}
+	if(this.tweenFps === undefined) this.tweenFps = 30; // default
 	this._tweens = this._tweens.concat(obj);
 	if(!this._tweenInterval) setTimeout(this.advanceTweenFrame, 1000 / this.tweenFps);
 };
 
 /* stops all tweens */
-THREE.PixelBox.prototype.stopTweens = function(){
+THREE.Object3D.prototype.stopTweens = function(){
+	if(!this._tweens) return;
 	this._tweens.length = 0;
 	delete this._tweens;
 	this._tweens = [];
@@ -1241,7 +1246,8 @@ THREE.PixelBox.prototype.stopTweens = function(){
 };
 
 /* stops specific tween */
-THREE.PixelBox.prototype.stopTween = function(obj){
+THREE.Object3D.prototype.stopTween = function(obj){
+	if(!this._tweens) return;
 	var index = this._tweens.indexOf(obj);
 	if(index !== -1){
 		this._tweens.splice(index, 1);

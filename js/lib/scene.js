@@ -22,6 +22,9 @@ THREE.PixelBoxScene = function(){
 	this.ambientLight = new THREE.AmbientLight(0x0);
 	this.add(this.ambientLight);
 	
+	// flag to call PixelBoxUtil.updateLights
+	this.updateLights = true;
+	
 	// default camera
 	this._camera = new THREE.PerspectiveCamera(60, renderer.webgl.domElement.width / renderer.webgl.domElement.height, 1, 2000000 );
 	this._camera.name = 'camera';
@@ -117,10 +120,11 @@ THREE.PixelBoxScene.prototype.instantiate = function(templateName, options){
 	var def = this.templates[templateName];
 	
 	if(def) {
+		options = options ? options : {};
 		options.templates = this.templates;
 		var objs = this.populateObject(null, [def], options);
 		if(objs.length) {
-			var obj = obj[0];
+			var obj = objs[0];
 			this.linkObjects(objs, obj);
 			return obj;
 		}
@@ -153,7 +157,7 @@ THREE.PixelBoxScene.prototype.instantiate = function(templateName, options){
 
 THREE.PixelBoxScene.prototype.recycle = function(scrap){
 	// accept object or an array of objects
-	if(!_.isArray(scrap)) objs = [ scrap ];
+	if(!_.isArray(scrap)) scrap = [ scrap ];
 	
 	var objs, obj;
 	for(var si = 0, sl = scrap.length; si < sl; si++){
@@ -794,14 +798,40 @@ THREE.PixelBoxScene.prototype.makeGeometryObject = function(layer){
 		layer.heightSegments = param('heightSegments',1,1);
 		layer.width = param('width',10);
 		layer.height = param('height',10);
-		geom = new THREE.PlaneBufferGeometry(layer.width, layer.height,layer.widthSegments, layer.heightSegments);
+		if(!layer.inverted)
+			geom = new THREE.PlaneBufferGeometry(layer.width, layer.height,layer.widthSegments, layer.heightSegments);
+		else
+			geom = new THREE.PlaneGeometry(layer.width, layer.height,layer.widthSegments, layer.heightSegments);
+
 		break;
 	}
+	
+	// flip normals
+	if(layer.inverted){
+		for ( var i = 0; i < geom.faces.length; i ++ ) {
+		    var face = geom.faces[ i ];
+		    var temp = face.a;
+		    face.a = face.c;
+		    face.c = temp;
+		}
+		
+		geom.computeFaceNormals();
+		geom.computeVertexNormals();
+		
+		var faceVertexUvs = geom.faceVertexUvs[ 0 ];
+		for ( var i = 0; i < faceVertexUvs.length; i ++ ) {
+		    var temp = faceVertexUvs[ i ][ 0 ];
+		    faceVertexUvs[ i ][ 0 ] = faceVertexUvs[ i ][ 2 ];
+		    faceVertexUvs[ i ][ 2 ] = temp;
+		}
+	}
+	
 	return geom;
 };
 
 /* links "#targetName.$anchorname.targetName" style references to objects in the hierarchy
-	Used by Spot and Direct lights */
+	Used by Spot and Direct lights 
+	*/
 THREE.PixelBoxScene.prototype.linkObjects = function(objs, top, skipProps){
 	
 	function dereferenceObject(nameFragments, currentLevel){
@@ -837,6 +867,7 @@ THREE.PixelBoxScene.prototype.linkObjects = function(objs, top, skipProps){
 		
 		return null;
 	}
+	
 	// link
 	for(var i = 0, l = objs.length; i < l; i++){
 		var obj = objs[i];
@@ -844,6 +875,7 @@ THREE.PixelBoxScene.prototype.linkObjects = function(objs, top, skipProps){
 		var propVal;
 		var found;
 		var nearestTemplate = undefined;
+		this.updateLights = this.updateLights || (obj instanceof THREE.Light);
 		if(obj instanceof THREE.SpotLight || obj instanceof THREE.DirectionalLight){
 			propVal = obj.def.target;
 			if(typeof(propVal) == 'string' && propVal.substr(0,1) == '#'){
@@ -871,6 +903,7 @@ THREE.PixelBoxScene.prototype.linkObjects = function(objs, top, skipProps){
 			}
 		}
 	}
+	
 };
 
 /* ================================================================================ Scene unloading */
@@ -918,6 +951,21 @@ THREE.PixelBoxScene.prototype.removeResizeListener = function(){
 THREE.PixelBoxScene.prototype.render = function( delta, rtt ) {
 	this.tick(delta);
 	
+	// remove maxShadows placeholders
+	if(this.placeHolderLights){
+		for(var i = 0; i < this.placeHolderLights.length; i++){
+			this.remove(this.placeHolderLights[i]);
+		}
+		this.recycle(this.placeHolderLights);
+		this.placeHolderLights = null;
+		this.updateLights = true;
+	}
+	
+	if(this.updateLights){
+		THREE.PixelBoxUtil.updateLights(this, true);
+		this.updateLights = false;
+	}
+	
 	renderer.webgl.setClearColor( this.clearColor, 1);
 	
 	if(this.useComposer){
@@ -928,16 +976,6 @@ THREE.PixelBoxScene.prototype.render = function( delta, rtt ) {
 		else renderer.webgl.render( this, this.camera );
 	}
 	
-	// remove maxShadows placeholders
-	if(this.placeHolderLights){
-		for(var i = 0; i < this.placeHolderLights.length; i++){
-			this.remove(this.placeHolderLights[i]);
-		}
-		this.recycle(this.placeHolderLights);
-		this.placeHolderLights = null;
-		
-		THREE.PixelBoxUtil.updateLights(this, true);
-	}
 };
 
 /* resize callback */

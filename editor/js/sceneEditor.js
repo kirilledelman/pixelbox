@@ -3541,6 +3541,7 @@ EditSceneScene.prototype = {
 			if(obj.helper) obj.helper.update();
 			editScene.touchTemplate(obj);
 		}
+		editScene.refreshProps();
 	},
 	
 	cameraFovChanged:function(val){
@@ -3910,7 +3911,6 @@ EditSceneScene.prototype = {
 		editScene.addUndo({name:prop, mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
 											redo:[editScene.setObjectProperty, doArr, prop]});
 		editScene.setObjectProperty(doArr, prop);
-		editScene.refreshProps();
 	},
 
 	pixelboxStippleChanged:function(val){
@@ -3925,7 +3925,6 @@ EditSceneScene.prototype = {
 		editScene.addUndo({name:'pixelBoxStipple', mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
 											redo:[editScene.setObjectProperty, doArr, prop]});
 		editScene.setObjectProperty(doArr, prop);
-		editScene.refreshProps();
 	},
 
 	pixelboxAlphaChanged:function(val){
@@ -3940,7 +3939,6 @@ EditSceneScene.prototype = {
 		editScene.addUndo({name:'pixelBoxAlpha', mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
 											redo:[editScene.setObjectProperty, doArr, prop]});
 		editScene.setObjectProperty(doArr, prop);
-		editScene.refreshProps();
 	},
 
 	pixelboxOcclusionChanged:function(val){
@@ -3955,7 +3953,6 @@ EditSceneScene.prototype = {
 		editScene.addUndo({name:prop, mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
 											redo:[editScene.setObjectProperty, doArr, prop]});
 		editScene.setObjectProperty(doArr, prop);
-		editScene.refreshProps();
 	},
 
 	pixelboxCullBackChanged:function(e){
@@ -3971,7 +3968,6 @@ EditSceneScene.prototype = {
 		editScene.addUndo({name:prop, mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
 											redo:[editScene.setObjectProperty, doArr, prop]});
 		editScene.setObjectProperty(doArr, prop);
-		editScene.refreshProps();
 	},
 
 	pixelboxAnimSpeedChanged:function(val){
@@ -4049,7 +4045,6 @@ EditSceneScene.prototype = {
 		editScene.addUndo({name:"tint", undo:[editScene.setObjectProperty, undoArr, prop],
 											redo:[editScene.setObjectProperty, doArr, prop]});
 		editScene.setObjectProperty(doArr, prop);
-		editScene.refreshProps();
 	},
 
 	pixelboxSetAddColor:function(val){//int
@@ -4065,7 +4060,6 @@ EditSceneScene.prototype = {
 		editScene.addUndo({name:"addColor", undo:[editScene.setObjectProperty, undoArr, prop],
 											redo:[editScene.setObjectProperty, doArr, prop]});
 		editScene.setObjectProperty(doArr, prop);
-		editScene.refreshProps();
 	},
 
 
@@ -4196,6 +4190,22 @@ EditSceneScene.prototype = {
 											redo:[editScene.setGeometryType, doArr]});
 		editScene.setGeometryType(doArr);
 		editScene.refreshProps();		
+	},
+	
+	geometryInvertChanged:function(e){
+		var val = $('#geometry-invert')[0].checked;
+		var prop = 'inverted';
+		var doArr = [];
+		var undoArr = [];
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, !!obj.inverted]);
+		}
+		editScene.addUndo({name:"geometryInverted", undo:[editScene.setGeometryProperty, undoArr, prop],
+											redo:[editScene.setGeometryProperty, doArr, prop]});
+		editScene.setGeometryProperty(doArr, prop);
+		editScene.refreshProps();
 	},
 	
 	setGeometryProperty:function(arr, prop){
@@ -4822,6 +4832,13 @@ EditSceneScene.prototype = {
 					$('#geometry-addColor').css({backgroundColor:'transparent'}); mults['geometry-addColor'] = true;
 				} else if(!mults['geometry-addColor']){
 					$('#geometry-addColor').css({backgroundColor:'#'+obj.material.addColor.getHexString()});
+				}
+				// invert
+				if(prevObj && prevObj.def.inverted != obj.def.inverted){
+					$('#geometry-invert').addClass('multiple')[0].checked = false;
+					mults['geometry-invert'] = true;
+				} else if(!mults['geometry-invert']){
+					$('#geometry-invert')[0].checked = obj.def.inverted;
 				}
 				// type
 				if(prevObj && prevObj.geometryType != obj.geometryType){
@@ -5556,6 +5573,7 @@ EditSceneScene.prototype = {
 			<option value="Box">Box</option>\
 			<option value="Sphere">Sphere</option>\
 			</select>\
+			<input tabindex="0" type="checkbox" id="geometry-invert"/><label for="geometry-invert" class="w3">Invert normals</label>\
 			<hr/>\
 			<div id="geometry-Plane" class="subpanel">\
 			<label for="geometry-plane-width" class="w31 pad5 right-align">Width</label>\
@@ -5612,6 +5630,7 @@ EditSceneScene.prototype = {
 		$('#geometry-brightness').spinner({step:0.1, change:vc, stop:vc});
 
 		$('#geometry-type').change(this.geometryTypeChanged);
+		$('#geometry-invert').change(this.geometryInvertChanged);
 		
 		var panel = $('#panel-geometry');
 		vc = valueChanged(this.geometryPropChanged);
@@ -6572,7 +6591,8 @@ THREE.Object3D.prototype.serialize = function(templates){
 		for(var p in props){
 			var prop = props[p]
 			def[prop] = this.def[prop];
-		}		
+		}
+		def.inverted = !!this.inverted;	
 		def.tint = this.material.tint.getHexString();
 		def.addColor = this.material.addColor.getHexString();
 		if(this.material.alpha != 1.0) def.alpha = this.material.alpha;

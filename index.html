@@ -18,8 +18,9 @@
 				<li><a href="example1.html">Example 1: Single scene</a></li>
 				<li><a href="example2.html">Example 2: Scenes transitions</a></li>
 				<li><a href="example3.html">Example 3: Animations and tweens</a></li>
-				<li>Example 4: Instancing templates and object recycling</li>
+				<li><a href="example4.html">Example 4: Instancing templates and object recycling</a></li>
 				<li>Example 5: Animation events</li>
+				<li>Example 6: Object picking</li>
 				<li class="clear"/>
 				<li><a href="./editor" class="scene-editor">PixelBox Scene Editor</a></li>
 				<li class="clear"/>
@@ -30,28 +31,31 @@
 		<p><h3>PixelBox sprites</h3>
 			<ul>
 				<li>Based on THREE.PointCloud.</li>
-				<li>Multiple named animations, that can be played or looped at variable speed.</li>
-				<li>Named anchors - containers that are animated along with sprite's frames. These can be used to specify where the character's hand is during different animations, for example. Anchors are simple containers that can have other objects added to.</li>
-				<li>Ability to tween any property (such as position, or color).</li>
-				<li>Support transparent or self-illuminated voxels.</li>
+				<li>Multiple named animations, that can be played or looped at variable speed, forward or backward.</li>
+				<li>Named anchors that are animated along with sprite's frames. They can be used, for example, to specify where the character's hand is during different animations. Other objects can be added to anchors, which serve as simple containers.</li>
+				<li>Ability to tween any property, such as opacity, position, or color.</li>
+				<li>Support transparent and self-illuminated voxels.</li>
 				<li>Cast and receive shadows.</li>
+				<li>Sprite opacity, tint, and additive color.</li>
+				<li>Sprite stipple (pattern transparency).</li>
+				<li>Animation and anchor events.</li>
 			</ul>
 		</p>
-		<p><h3>PixelBox scene class</h3>
+		<p><h3>PixelBoxScene class</h3>
 			<ul>
 				<li>Parses / populates scenes created with PixelBox scene editor.</li>
 				<li>Supports instancing of templates created with scene editor.</li>
-				<li>Object recycling - instead of destroying objects, they get recycled for quicker reuse.</li>
-				<li>Receives notifications when switching scenes from PixelBox renderer class.</li>
+				<li>Object recycling: instead of destroying objects, they get recycled for quicker reuse.</li>
+				<li>Receives notifications when switching scenes from PixelBoxRenderer class.</li>
 			</ul>
 		</p>
-		<p><h3>PixelBox asset class</h3>
+		<p><h3>PixelBoxAssets class</h3>
 			<ul>
 				<li>Easy preloading of assets - PixelBox scenes, sprites, image textures, and json files.</li>
 				<li>Load progress and complete notifications.</li>
 			</ul>
 		</p>
-		<p><h3>PixelBox renderer class</h3>
+		<p><h3>PixelBoxRenderer class</h3>
 			<ul>
 				<li>Used to switch between PixelBox scenes, with or without transitions.</li>
 				<li>Scene transitions using textures or blends are adopted from three.js examples.</li>

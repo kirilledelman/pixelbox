@@ -1,6 +1,6 @@
 <html>
 	<head>
-		<title>PixelBox Example 3</title>
+		<title>PixelBox Example 4</title>
 		<link rel="stylesheet" href="css/normalize.css"/>
 		<link rel="stylesheet" href="css/index.css"/>
 		<meta content="yes" name="apple-mobile-web-app-capable" />		
@@ -33,17 +33,15 @@
 		</span>		
 	
 		<div class="buttons">
-			LoopAnim <button id="button1">Awake</button> <button id="button2">Sleep</button>
-			<hr/>
-			Tween rotation <button id="button3">Start</button>
+			<button id="button1">PEW</button>
 		</div>
 	
 		<script>
 		
 		/*
 		
-			This example shows how to find and access objects in a loaded scene,
-			play animations and perform tweens.
+			This example shows how create instances of a template,
+			and how to dispose / recycle an object.
 		
 		*/
 		
@@ -63,7 +61,7 @@
 			// load scene definition using THREE.PixelBoxAssets,
 			
 			assets.loadAssets({ 
-				scenes: [ 'assets/example3.scene' ],
+				scenes: [ 'assets/example4.scene' ],
 				
 				// when done, display scene
 				
@@ -77,53 +75,56 @@
 					
 					renderer.setScene(exampleScene);
 					
-					// button1 will loop the animation 'awake'
+					// button1 will spawn an instance of a template
 					
 					$('#button1').click(function(){
 						
-						exampleScene.robot.head.loopAnim('awake');
+						// create an instance of 'pew' template from sceneDef
+						
+						var pew = exampleScene.instantiate('pew');
+						
+						// set position to camera's position
+						
+						pew.position.copy(exampleScene.camera.position);
+						
+						// pick a random color
+						
+						var color = new THREE.Color();
+						color.setHSL(Math.random(), 0.5, 0.5);
+						
+						// tint plasma ( part of 'pew' template )
+						pew.plasma.tint.copy(color);
+						
+						// tint point light ( part of 'pew' template )
+						pew.pointlight.color.copy(color);						
+						
+						// add it to the scene
+						
+						exampleScene.add(pew);						
+						
+						// get camera's forward direction -500 units along Z
+						
+						var forward = exampleScene.camera.localToWorld(new THREE.Vector3(0, 0, -500));
+						
+						// tween pew's position to that point
+						
+						pew.tween({	target: pew.position,
+									to: forward,
+									duration: 5,
+									done: function(tweenObj){
+										
+										// when tween finishes recycle the template
+										
+										exampleScene.recycle(this); 
+										
+									}
+								  });
 						
 					});
-
-					// button2 will loop the animation 'sleep'
-
-					$('#button2').click(function(){
-					
-						exampleScene.robot.head.loopAnim('sleep');
-						
-					});
-
-					// button2 will tween some properties
-
-					$('#button3').click(function(){
-					
-						// tween exampleScene.robot.left_arm.rotation
-					
-						var newRotation = exampleScene.robot.left_arm.rotation.clone();
-						newRotation.x += Math.PI;
-					
-						exampleScene.robot.tween({ 
-							target: exampleScene.robot.left_arm.rotation, 
-							to: newRotation,
-							duration: 0.5 });
-							
-						// tween exampleScene.robot.right_arm.rotation
-					
-						newRotation = exampleScene.robot.right_arm.rotation.clone();
-						newRotation.x -= Math.PI;
-					
-						exampleScene.robot.tween({ 
-							target: exampleScene.robot.right_arm.rotation, 
-							to: newRotation,
-							duration: 0.5 });
-							
-					});
-
 
 				}// end done:function
 			});// end assets.loadAssets
 		});// end document.ready
-		
 		
 		/*
 			
@@ -139,7 +140,7 @@
 			
 			// get scene definition from assets cache
 			
-			var sceneDef = assets.cache.get('example3');
+			var sceneDef = assets.cache.get('example4');
 			
 			// populate this scene with the definition
 			
