@@ -6592,7 +6592,7 @@ THREE.Object3D.prototype.serialize = function(templates){
 			var prop = props[p]
 			def[prop] = this.def[prop];
 		}
-		def.inverted = !!this.inverted;	
+		def.inverted = !!this.def.inverted;	
 		def.tint = this.material.tint.getHexString();
 		def.addColor = this.material.addColor.getHexString();
 		if(this.material.alpha != 1.0) def.alpha = this.material.alpha;
