@@ -1930,6 +1930,7 @@ EditScene.prototype = {
 				for(var aname in frameAnchors){
 					if(!obj.anchors[aname]) obj.anchors[aname] = [];
 					var fa = frameAnchors[aname];
+					if(aname == 'PIVOT' && f > 0) continue; // only one frame of pivot
 					obj.anchors[aname].push({
 						x:fa.x, y:fa.y, z:fa.z, rx: fa.rx, ry: fa.ry, rz: fa.rz, sx:fa.sx, sy:fa.sy, sz:fa.sz, meta:fa.meta, on:fa.on
 					});
@@ -3847,9 +3848,9 @@ EditScene.prototype = {
 			if(isRaw){
 				assembledFrameData.length = dataObject.width * dataObject.depth * dataObject.height;
 				for(var i = 0; i < frameData.o.length; i++){
-					var x = frameData.p[i * 3] + dataObject.width * 0.5;
-					var y = frameData.p[i * 3 + 1] + dataObject.height * 0.5;
-					var z = frameData.p[i * 3 + 2] + dataObject.depth * 0.5;
+					var x = frameData.p[i * 3];
+					var y = frameData.p[i * 3 + 1];
+					var z = frameData.p[i * 3 + 2];
 					var addr = x * dataObject.depth * dataObject.height + y * dataObject.depth + z;
 					tempColor.setRGB(frameData.c[i * 4],frameData.c[i * 4 + 1],frameData.c[i * 4 + 2]);
 					tempVec.set(frameData.n[i * 3], frameData.n[i * 3 + 1], frameData.n[i * 3 + 2]);
@@ -3933,7 +3934,7 @@ EditScene.prototype = {
 			for(var aname in anchors){
 				var anchorFrames = anchors[aname];
 				if(!anchorIds[aname]) anchorIds[aname] = THREE.Math.generateUUID();
-				var obj = _.deepClone(anchorFrames[frameIndex]);
+				var obj = _.deepClone(anchorFrames.length <= frameIndex ? anchorFrames[0] : anchorFrames[frameIndex]);
 				obj.name = aname;
 				obj.id = anchorIds[aname];
 				if(frameIndex){

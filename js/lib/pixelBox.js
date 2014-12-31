@@ -926,6 +926,7 @@ THREE.PixelBox = function(data){
 	this.anchors = {};
 	if(data.anchors){
 		for(var aname in data.anchors){
+			if(aname == 'PIVOT') continue;
 			var obj3d = new THREE.Object3D();
 			obj3d.isContainer = true;
 			obj3d.detached = false;
@@ -1569,13 +1570,21 @@ THREE.PixelBoxUtil.processPixelBoxFrames = function(data){
 	} else if(data.frames){
 		if(!data.frames.length) return false;
 	
+		// pivot
+		var pivot = new THREE.Vector3();
+		if(data.anchors && data.anchors['PIVOT']){
+			pivot.set(data.anchors['PIVOT'][0].x, data.anchors['PIVOT'][0].y, data.anchors['PIVOT'][0].z);
+		} else {
+			pivot.set(data.width * 0.5, data.height * 0.5, data.depth * 0.5);
+		}
+	
 		// decode frames
 		if(!data.frameData){
 			data.frameData = new Array(data.frames.length);
 			for(var f = 0; f < data.frames.length; f++){
 				data.frameData[f] = THREE.PixelBoxUtil.decodeFrame(data, f);
 			}
-			THREE.PixelBoxUtil.finalizeFrames(data);
+			THREE.PixelBoxUtil.finalizeFrames(data, pivot);
 		}
 		
 		// change anims to an object
@@ -1936,7 +1945,7 @@ THREE.PixelBoxUtil.decodeFrame = function(dataObject, frameIndex){
 			colors.push(colorObj.r, colorObj.g, colorObj.b, assembledFrameData[index].a);
 			
 			// position
-			positions.push(x - hw, y - hh, z - hd);
+			positions.push(x, y, z);
 			
 			// normal
 			normals.push(normal.x, normal.y, normal.z); 
@@ -1961,7 +1970,7 @@ THREE.PixelBoxUtil.decodeFrame = function(dataObject, frameIndex){
 
 */
 
-THREE.PixelBoxUtil.finalizeFrames = function(dataObject){
+THREE.PixelBoxUtil.finalizeFrames = function(dataObject, pivot){
 	var ffd = dataObject.frameData[0];
 	var curOffset = 0;
 	var lastNonEmpty = 0;
@@ -1990,6 +1999,13 @@ THREE.PixelBoxUtil.finalizeFrames = function(dataObject){
 			delete fd.o;
 		}
 	}
+	// offset by pivot
+	for(var i = 0, l = ffd.p.length; i < l; i+=3){
+		ffd.p[i] -= pivot.x;
+		ffd.p[i + 1] -= pivot.y;
+		ffd.p[i + 2] -= pivot.z;
+	}
+	
 	// create buffers
 	ffd.p = new THREE.BufferAttribute(new Float32Array(ffd.p), 3);
 	ffd.c = new THREE.BufferAttribute(new Float32Array(ffd.c), 4);
@@ -2167,7 +2183,7 @@ THREE.PixelBox.prototype.encodeRawFrame = function(dataObject, frameNumber){
 		if(fdc.array[i * 4 + 3] > 0){
 			obj.c.push(trunc(fdc.array[i * 4]), trunc(fdc.array[i * 4 + 1]), trunc(fdc.array[i * 4 + 2]), trunc(fdc.array[i * 4 + 3]));
 			//obj.p.push(fdp.array[i * 3] - this.geometry.data.width * 0.5, fdp.array[i * 3 + 1] - this.geometry.data.height * 0.5, fdp.array[i * 3 + 2] - this.geometry.data.depth * 0.5);
-			obj.p.push(fdp.array[i * 3], fdp.array[i * 3 + 1], fdp.array[i * 3 + 2]);
+			obj.p.push(fdp.array[i * 3] + hw, fdp.array[i * 3 + 1] + hh, fdp.array[i * 3 + 2] + hd);
 			obj.n.push(trunc(fdn.array[i * 3]), trunc(fdn.array[i * 3 + 1]), trunc(fdn.array[i * 3 + 2]));
 			obj.o.push(trunc(fdo.array[i]));
 		}
@@ -2184,16 +2200,16 @@ THREE.PixelBox.prototype.addFrameAt = function(frameIndex){
 	var clr = new Array();
 	var nrm = new Array();
 	var occ = new Array();
+	var currentPivot = new THREE.Vector3();
+	if(data.offset){
+		currentPivot.set(Math.floor(data.width * 0.5), Math.floor(data.height * 0.5), Math.floor(data.depth * 0.5));
+	}
 	for(var x = 0; x < data.width; x++){
 	for(var y = 0; y < data.height; y++){
 	for(var z = 0; z < data.depth; z++){
-		if(data.offset){
-			pos.push(x - Math.floor(data.width * 0.5),
-					 y - Math.floor(data.height * 0.5),
-					 z - Math.floor(data.depth * 0.5));
-		} else {
-			pos.push(x,y,z);
-		}
+		pos.push(x - currentPivot.x,
+				 y - currentPivot.y,
+				 z - currentPivot.z);
 		clr.push(1,1,1,1);
 		nrm.push(0,1,0);
 		occ.push(0);

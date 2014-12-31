@@ -1748,7 +1748,9 @@ EditSceneScene.prototype = {
 		if(raw){
 			if(typeof(asset.frames[0]) == 'string'){
 				// frames need to be converted to raw
-				var model = new THREE.PixelBox(processedAsset);
+				var pivotlessAsset = _.deepClone(asset,100);
+				pivotlessAsset.anchors = {};
+				var model = new THREE.PixelBox(pivotlessAsset);
 				
 				// process frames
 				for(var f = 0; f < asset.frames.length; f++){
@@ -1761,7 +1763,6 @@ EditSceneScene.prototype = {
 			}
 		} else {
 			// process frames
-			var hw = asset.width * 0.5, hh = asset.height * 0.5, hd = asset.depth * 0.5;
 			var c = new THREE.Color();
 			for(var f = 0; f < asset.frames.length; f++){
 				// convert frame
@@ -1772,9 +1773,9 @@ EditSceneScene.prototype = {
 				} else {
 					var convertedFrame = new Array(asset.width * asset.height * asset.depth);
 					for(var i = 0; i < currFrame.o.length; i++){
-						var x = Math.floor(currFrame.p[i * 3] + hw);
-						var y = Math.floor(currFrame.p[i * 3 + 1] + hh);
-						var z = Math.floor(currFrame.p[i * 3 + 2] + hd);
+						var x = Math.floor(currFrame.p[i * 3]);// + pivot.x);
+						var y = Math.floor(currFrame.p[i * 3 + 1]);// + pivot.y);
+						var z = Math.floor(currFrame.p[i * 3 + 2]);// + pivot.z);
 						var n = new THREE.Vector3(currFrame.n[i * 3], currFrame.n[i * 3 + 1], currFrame.n[i * 3 + 2]);
 						c.setRGB(currFrame.c[i * 4],currFrame.c[i * 4 + 1], currFrame.c[i * 4 + 2]);
 						var a = currFrame.c[i * 4 + 3];
@@ -2596,7 +2597,8 @@ EditSceneScene.prototype = {
 					"occlusion":0.75,
 					"pointSize":1,
 					"frames":[{"p":[],"n":[],"c":[],"o":[]}],
-					"anims":[]
+					"anims":[],
+					"anchors":{"PIVOT":[{x:xx*0.5,y:yy*0.5,z:zz*0.5,rx:0,ry:0,rz:0,sx:1,sy:1,sz:1,on:true,meta:"Object pivot"}]}
 					};
 					editScene.addUndo({name:"addAsset",undo:[editScene.deleteAsset, asset],redo:[editScene.importSceneAsset, asset]});
 	      			editScene.importSceneAsset(asset);
