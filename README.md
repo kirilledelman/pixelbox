@@ -8,7 +8,6 @@ PixelBox was originally developed to create [Santa Drop game for iOS](https://it
 
 ## Links
 
-* [PixelBox Wiki](https://github.com/kirilledelman/pixelbox/wiki/PixelBox)
 * [Example 1: Single scene](http://gogoat.com/pixelbox/example1.html)
 * [Example 2: Transitions and composer](http://gogoat.com/pixelbox/example2.html)
 * [Example 3: Animations and tweens](http://gogoat.com/pixelbox/example3.html)
@@ -16,6 +15,12 @@ PixelBox was originally developed to create [Santa Drop game for iOS](https://it
 * [Example 5: Animation events](http://gogoat.com/pixelbox/example5.html)
 * [Example 6: Snow](http://gogoat.com/pixelbox/example6.html)
 * [Scene Editor / Sprite Editor](PixelBox Scene Editor) - works best with Google Chrome.
+
+Project source also contains above examples, as well as the Scene Editor as Google Chrome extension / app.
+
+## Documentation
+
+[PixelBox Wiki](https://github.com/kirilledelman/pixelbox/wiki/PixelBox) has all available documentation for this project.
 
 ## PixelBox sprites
 * Based on THREE.PointCloud.
