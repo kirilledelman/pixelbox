@@ -1,12 +1,9 @@
-pixelbox
+PixelBox
 ========
 
-THREE.js extension for rendering point cloud sprites
+PixelBox is an extension for [three.js](http://threejs.org), for rendering voxel sprites.
 
-Examples:
-Snow
-multiple cameras
-multiple scenes
-spawning instances
-object picking
-animation
+It includes base classes, a sprite and scene editor, and some examples.
+
+PixelBox was originally developed to create [Santa Drop game for iOS](https://itunes.apple.com/us/app/santa-drop-free/id948393987), and then expanded with extra tools and released as open source.
+
