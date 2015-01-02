@@ -1,6 +1,6 @@
 <html>
 	<head>
-		<title>PixelBox Example 4</title>
+		<title>PixelBox Example 6</title>
 		<link rel="stylesheet" href="css/normalize.css"/>
 		<link rel="stylesheet" href="css/index.css"/>
 		<meta content="yes" name="apple-mobile-web-app-capable" />		
@@ -32,22 +32,17 @@
 			by Kirill Edelman for <a href="http://threejs.org" target="_blank">three.js</a>
 		</span>		
 	
-		<div class="buttons">
-			Click to PEW
-		</div>
-	
 		<script>
 		
 		/*
 		
-			This example shows how create instances of a template,
-			and how to dispose / recycle an object.
+			This example shows how to add custom animated particles to scene
 		
 		*/
 		
 		$(document).ready(function(){
-		
 			// init PixelBoxRenderer instance
+			// which was auto-created in js/lib/render.js
 			
 			if(!renderer.init()){
 				var err = "Your browser doesn't support WebGL";
@@ -58,10 +53,11 @@
 				console.log("WebGL initialized");
 			}
 			
-			// load scene definition using THREE.PixelBoxAssets,
+			// load scene definition using THREE.PixelBoxAssets
+			// assets is auto-created in js/lib/assets.js
 			
 			assets.loadAssets({ 
-				scenes: [ 'assets/example4.scene' ],
+				scenes: [ 'assets/example6.scene' ],
 				
 				// when done, display scene
 				
@@ -74,76 +70,27 @@
 					// set it as current for renderer
 					
 					renderer.setScene(exampleScene);
-
-					// click will spawn an instance of a template
-							
-					$(document).on('click', function(){
-						
-						// create an instance of 'pew' template from sceneDef
-						
-						var pew = exampleScene.instantiate('pew');
-						
-						// set position to camera's position
-						
-						pew.position.copy(exampleScene.camera.position);
-						
-						// pick a random color
-						
-						var color = new THREE.Color();
-						color.setHSL(Math.random(), 0.5, 0.5);
-						
-						// tint plasma ( part of 'pew' template )
-						
-						pew.plasma.tint.copy(color);
-						
-						// tint point light ( part of 'pew' template )
-						
-						pew.pointlight.color.copy(color);						
-						
-						// add it to the scene
-						
-						exampleScene.add(pew);						
-						
-						// get camera's forward direction -1000 units along Z
-						
-						var forward = exampleScene.camera.localToWorld(new THREE.Vector3(0, 0, -1000));
-						
-						// tween pew's position to that point
-						
-						pew.tween({	target: pew.position,
-									to: forward,
-									duration: 3,
-									done: function(tweenObj){
-										
-										// when tween finishes recycle the template
-										
-										exampleScene.recycle(this); 
-										
-									}
-								  });
-						
-					});
-
-
+					
 				}// end done:function
 			});// end assets.loadAssets
 		});// end document.ready
 		
+		
 		/*
 			
-			ExampleScene
+			ExampleScene extends THREE.PixelBoxScene
 			
 		*/
 		
 		function ExampleScene(){
 		
-		 	// call parent constructor
+		 	// call superclass constructor
 		 	
 			THREE.PixelBoxScene.call(this);
 			
 			// get scene definition from assets cache
 			
-			var sceneDef = assets.cache.get('example4');
+			var sceneDef = assets.cache.get('example6');
 			
 			// populate this scene with the definition
 			
@@ -154,31 +101,77 @@
 			
 			this.controls = new THREE.OrbitControls(this.camera);
 			
-			// tick function will spin all asteroids
+			// make controls look at a point a bit above the snowman
+			
+			this.controls.target.set(0, 7, 0);
+			this.controls.update();
+			
+			// create a PixelBox instance, with 100x1x100 = 10000 particles
+			
+			this.snow = new THREE.PixelBox( { frames: null, width:100, height:1, depth:100 } );
+			this.snow.pointSize = 0.2;
+			this.snow.cullBack = false;
+			
+			// add frame / set frame
+			
+			this.snow.addFrameAt(0); // this creates particles
+			this.snow.frame = 0; // this refreshes the buffers
+			
+			// set initial snow particle positions
+			// particle is { i: particleIndex, p: position, n: normal, c: color, a: alpha, o: occlusion, b: brightness }
+			
+			this.snow.updateFrameWithCallback(function(particle){
+				
+				// random 100x50x100 box
+				
+				particle.p.set(100 * Math.random() - 50, 50 * Math.random(), 100 * Math.random() - 50);
+				
+			});
+			
+			// tick function will update snow each frame
 			
 			this.tick = function(deltaTime){
-				
-				// scene has a container object 'asteroids', loop over its children
-				
-				for(var i = 0, l = this.asteroids.children.length; i < l; i++){
-					
-					// spin each asteroid within
-					
-					this.asteroids.children[i].rotateY(deltaTime * 0.5);
-
-					this.asteroids.children[i].rotateX(deltaTime * 0.1);
-					
-				}
-					
-			};						
 			
-		}
+				// update particles with callback "updateSnow". Second parameter is also passed to callback function
+				
+				this.snow.updateFrameWithCallback(this.updateSnow, { timePassed: deltaTime });
+				
+			};
+			
+			// callback function for updating snow
+			
+			this.updateSnow = function(particle, extraParameters){
+				
+				// fall
+				
+				particle.p.y -= extraParameters.timePassed * 10 * Math.seededRandom(particle.i);
+				
+				
+				// move in x / z plane a bit
+				
+				particle.p.x += extraParameters.timePassed * 4 * (Math.seededRandom(particle.p.y * 0.1) - 0.5);
+				particle.p.z += extraParameters.timePassed * 4 * (Math.seededRandom(particle.p.x * 0.2) - 0.5);
+				
+				// when reached ground, start from top + randomize x / z coord
+				
+				if(particle.p.y <= 0){
+					particle.p.set(100 * Math.random() - 50, 50, 100 * Math.random() - 50);
+				}
+			};
+			
+			// add to scene
+			
+			this.add(this.snow);
+			
+		} // end ExampleScene constructor
 		
 		// ExampleScene subclasses THREE.PixelBoxScene
 		
 		ExampleScene.prototype = Object.create(THREE.PixelBoxScene.prototype);
 		ExampleScene.prototype.constructor = ExampleScene;
-				
+		
+	
+		
 		</script>
 	</body>
 </html>

@@ -3847,10 +3847,23 @@ EditScene.prototype = {
 			var assembledFrameData = [];
 			if(isRaw){
 				assembledFrameData.length = dataObject.width * dataObject.depth * dataObject.height;
+				//compatibility test
+				// if contains negative positions, offset by half size
+				var offset = new THREE.Vector3(0,0,0);
 				for(var i = 0; i < frameData.o.length; i++){
 					var x = frameData.p[i * 3];
 					var y = frameData.p[i * 3 + 1];
 					var z = frameData.p[i * 3 + 2];
+					if(x < 0 || y < 0 || z < 0){
+						offset.set(Math.floor(dataObject.width * 0.5), Math.floor(dataObject.height * 0.5), Math.floor(dataObject.depth * 0.5));
+						break;
+					}
+				}
+				
+				for(var i = 0; i < frameData.o.length; i++){
+					var x = frameData.p[i * 3] + offset.x;
+					var y = frameData.p[i * 3 + 1] + offset.y;
+					var z = frameData.p[i * 3 + 2] + offset.z;
 					var addr = x * dataObject.depth * dataObject.height + y * dataObject.depth + z;
 					tempColor.setRGB(frameData.c[i * 4],frameData.c[i * 4 + 1],frameData.c[i * 4 + 2]);
 					tempVec.set(frameData.n[i * 3], frameData.n[i * 3 + 1], frameData.n[i * 3 + 2]);

@@ -97,10 +97,15 @@
 
 					$('#button3').click(function(){
 					
+						// stop tweens if already running
+						// pass true to snap tweens to their finish values
+						
+						exampleScene.robot.stopTweens(true);
+					
 						// tween exampleScene.robot.left_arm.rotation
 					
 						var newRotation = exampleScene.robot.left_arm.rotation.clone();
-						newRotation.x += Math.PI;
+						newRotation.x -= Math.PI;
 					
 						exampleScene.robot.tween({ 
 							target: exampleScene.robot.left_arm.rotation, 

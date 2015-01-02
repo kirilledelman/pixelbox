@@ -829,6 +829,10 @@ EditSceneScene.prototype = {
 		this.addUndo({name:"reparent", redo:[this.parentObjects, doArr, shiftOpt], undo:[this.parentObjects, undoArr, shiftOpt] });
 		this.parentObjects(doArr, shiftOpt);
 		
+		if(this.validateAllObjectNames()){
+			this.mergeUndo(true);
+		}
+		
 		// prevent parenting to many objects		
 		editScene.dragRowStopped();
 	},
@@ -869,6 +873,12 @@ EditSceneScene.prototype = {
 		this.camera.position.set(512, 512, 512);
 		this.camera.lookAt(new THREE.Vector3(0,0,0));
 		this.controls.focus(this.container, true);
+		
+		this.scene.updateMatrixWorld(true);
+		for(var i = 0; i < this.scene.children.length; i++){
+			var obj = this.scene.children[i];
+			if(obj.isHelper) obj.update();
+		}
 	},
 	
 	/* updates text labels on all elements in container, recursive */
@@ -1575,6 +1585,7 @@ EditSceneScene.prototype = {
 					// copy common props
 					newObj.def = obj3d.def;
 					newObj.name = obj3d.name;
+					newObj.cullBack = obj3d.cullBack;
 					newObj.position.copy(obj3d.position);
 					newObj.scale.copy(obj3d.scale);
 					newObj.rotation.copy(obj3d.rotation);
@@ -3632,15 +3643,22 @@ EditSceneScene.prototype = {
 
 /* ------------------- ------------------- ------------------- ------------------- ------------------- Light panel */
 
-	lightAngleChanged:function(val){
+	lightAngleChanged:function(origVal){
 		var doArr = [];
 		var undoArr = [];
 		var prop = 'angle';
-		val = Math.PI * val / 180;
+		var val = Math.PI * origVal / 180;
 		for(var i = 0; i < editScene.selectedObjects.length; i++){
 			var obj = editScene.selectedObjects[i];
 			doArr.push([obj, val]);
 			undoArr.push([obj, obj[prop]]);
+			if(obj.shadowCamera){
+				obj.shadowCameraFov = origVal * 2;
+				if(obj.shadowCamera.parent){
+					obj.shadowCamera.parent.remove(obj.shadowCamera);
+				}
+				obj.shadowCamera = null;
+			}
 		}
 		editScene.addUndo({name:"lightAngle", mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
 											redo:[editScene.setObjectProperty, doArr, prop]});
@@ -6528,6 +6546,8 @@ THREE.Object3D.prototype.serialize = function(templates){
 		def.asset = 'DirectionalLight';
 		if(this.shadowCameraRight != 128) def.shadowVolumeWidth = this.shadowCameraRight * 2;
 		if(this.shadowCameraTop != 128) def.shadowVolumeHeight = this.shadowCameraTop * 2;
+		def.shadowNear = this.shadowCameraNear;
+		def.shadowFar = this.shadowCameraFar;
 		def.shadowBias = this.shadowBias;
 		def.color = this.color.getHexString();
 		def.intensity = this.intensity;
@@ -6550,6 +6570,8 @@ THREE.Object3D.prototype.serialize = function(templates){
 		def.intensity = this.intensity;
 		def.distance = this.distance;
 		def.exponent = this.exponent;
+		def.shadowNear = this.shadowCameraNear;
+		def.shadowFar = this.shadowCameraFar;
 		def.angle = this.angle * radToDeg;
 		// target is under the same parent/anchor
 		var myTemplate = this.nearestTemplate();

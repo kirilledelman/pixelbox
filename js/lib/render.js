@@ -27,7 +27,7 @@ THREE.PixelBoxRenderer = function(){
 		
 		// create renderer
 		this.webgl = webgl = new THREE.WebGLRenderer({devicePixelRatio:1.0, antialias: false, autoClear: false, alpha: false, maxLights:16, preserveDrawingBuffer: false, precision:'highp' });
-		document.body.appendChild(webgl.domElement);
+		$(document.body).prepend(webgl.domElement);
 		webgl.updateStyle = false;
 		webgl.setSize(window.innerWidth * this.scale, window.innerHeight * this.scale);
 		

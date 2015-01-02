@@ -25,6 +25,9 @@ THREE.PixelBoxScene = function(){
 	// flag to call PixelBoxUtil.updateLights
 	this.updateLights = true;
 	
+	// when updating lights, also recompile materials
+	this.updateMaterials = true; 
+	
 	// default camera
 	this._camera = new THREE.PerspectiveCamera(60, renderer.webgl.domElement.width / renderer.webgl.domElement.height, 1, 2000000 );
 	this._camera.name = 'camera';
@@ -159,7 +162,7 @@ THREE.PixelBoxScene.prototype.recycle = function(scrap){
 	// accept object or an array of objects
 	if(!_.isArray(scrap)) scrap = [ scrap ];
 	
-	var objs, obj;
+	var objs, obj, containsLights = false;
 	for(var si = 0, sl = scrap.length; si < sl; si++){
 		var obj = scrap[si];
 		objs = obj.recursiveRemoveChildren();
@@ -172,13 +175,13 @@ THREE.PixelBoxScene.prototype.recycle = function(scrap){
 			if(obj instanceof THREE.PixelBox){
 				typeName = obj.geometry.data.name;
 			} else if(obj instanceof THREE.DirectionalLight){
-				typeName = 'DirectionalLight';
+				typeName = 'DirectionalLight'; containsLights = true;
 			} else if(obj instanceof THREE.HemisphereLight){
-				typeName = 'HemisphereLight';
+				typeName = 'HemisphereLight'; containsLights = true;
 			} else if(obj instanceof THREE.PointLight){
-				typeName = 'PointLight';
+				typeName = 'PointLight'; containsLights = true;
 			} else if(obj instanceof THREE.SpotLight){
-				typeName = 'SpotLight';
+				typeName = 'SpotLight'; containsLights = true;
 			} else if(obj instanceof THREE.Mesh){
 				typeName = 'Geometry';
 			} else if(obj instanceof THREE.PerspectiveCamera){
@@ -197,8 +200,10 @@ THREE.PixelBoxScene.prototype.recycle = function(scrap){
 					this.objectPool[typeName].push(obj);
 				}
 			}
-		}		
+		}	
 	}
+	
+	if(containsLights) this.updateLights = true;
 };
 
 /* 
@@ -444,8 +449,8 @@ THREE.PixelBoxScene.prototype.populateObject = function(object, layers, options)
 		case 'DirectionalLight':
 			if(!obj3d) obj3d = new THREE.DirectionalLight(0xffffff, 1.0);
 		    obj3d.shadowMapWidth = obj3d.shadowMapHeight = 1024;
-		    obj3d.shadowCameraNear = 5;
-			obj3d.shadowCameraFar = 10000;
+		    obj3d.shadowCameraNear = (layer.shadowNear != undefined ? layer.shadowNear : 1);
+			obj3d.shadowCameraFar = (layer.shadowFar != undefined ? layer.shadowFar : 10000);
 			obj3d.shadowCameraRight = (layer.shadowVolumeWidth != undefined ? layer.shadowVolumeWidth : 256) * 0.5;
 		    obj3d.shadowCameraLeft = -obj3d.shadowCameraRight;
 			obj3d.shadowCameraTop = (layer.shadowVolumeHeight != undefined ? layer.shadowVolumeHeight : (obj3d.shadowCameraRight * 2)) * 0.5;
@@ -477,8 +482,8 @@ THREE.PixelBoxScene.prototype.populateObject = function(object, layers, options)
 		case 'SpotLight':
 			if(!obj3d) obj3d = new THREE.SpotLight(0xffffff, 1.0, 100, Math.PI / 3, 70);
 		    obj3d.shadowMapWidth = obj3d.shadowMapHeight = 1024;
-		    obj3d.shadowCameraNear = 5;
-			obj3d.shadowCameraFar = obj3d.distance;
+		    obj3d.shadowCameraNear = (layer.shadowNear != undefined ? layer.shadowNear : 1);
+			obj3d.shadowCameraFar = (layer.shadowFar != undefined ? layer.shadowFar : obj3d.distance);
 			obj3d.shadowBias = (layer.shadowBias != undefined ? layer.shadowBias : -0.0005);
 			if(obj3d.shadowMap){
 				obj3d.shadowMap.dispose();
@@ -492,11 +497,11 @@ THREE.PixelBoxScene.prototype.populateObject = function(object, layers, options)
 			}
 			if(layer.color != undefined) obj3d.color.set(parseInt(layer.color, 16));
 			if(layer.intensity != undefined) obj3d.intensity = layer.intensity;
-			if(layer.distance != undefined) obj3d.shadowCameraFar = obj3d.distance = layer.distance;
+			if(layer.distance != undefined) obj3d.distance = layer.distance;
 			if(layer.exponent != undefined) obj3d.exponent = layer.exponent;
 			if(layer.angle != undefined){
 				obj3d.angle = layer.angle * degToRad;
-				obj3d.shadowCameraFov = layer.angle;
+				obj3d.shadowCameraFov = layer.angle * 2;
 			}
 			if(layer.shadowMapWidth != undefined) obj3d.shadowMapWidth = obj3d.shadowMapHeight = layer.shadowMapWidth;
 			if(layer.shadowMapHeight != undefined) obj3d.shadowMapHeight = layer.shadowMapHeight;
@@ -875,7 +880,7 @@ THREE.PixelBoxScene.prototype.linkObjects = function(objs, top, skipProps){
 		var propVal;
 		var found;
 		var nearestTemplate = undefined;
-		this.updateLights = this.updateLights || (obj instanceof THREE.Light);
+		this.updateMaterials = this.updateLights = this.updateLights || (obj instanceof THREE.Light);
 		if(obj instanceof THREE.SpotLight || obj instanceof THREE.DirectionalLight){
 			propVal = obj.def.target;
 			if(typeof(propVal) == 'string' && propVal.substr(0,1) == '#'){
@@ -962,8 +967,9 @@ THREE.PixelBoxScene.prototype.render = function( delta, rtt ) {
 	}
 	
 	if(this.updateLights){
-		THREE.PixelBoxUtil.updateLights(this, true);
+		THREE.PixelBoxUtil.updateLights(this, this.updateMaterials);
 		this.updateLights = false;
+		this.updateMaterials = false;
 	}
 	
 	renderer.webgl.setClearColor( this.clearColor, 1);

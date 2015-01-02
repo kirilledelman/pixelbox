@@ -4,6 +4,10 @@ body {
 	color: white;
 	background-color: #024273;
 	font-size: 20px;
+}
+
+body.home {
+	text-shadow: 0px 2px 0px black;
 	background: url(../images/background.png);
 }
 
@@ -30,21 +34,56 @@ div.home-info h3 {
 	margin: 0;
 }
 
+div.float-right {
+	font-size: 0.7em;
+	position: absolute;
+	top: 0;
+	right:0;
+	padding: 1em;
+	text-align: center;
+}
+
+div.scrollable {
+	overflow: hidden;
+	height: 2em;
+	padding:0.5em;
+	position: relative;
+}
+
+div#log {
+	white-space: nowrap;
+	width: auto;
+	height: 2em;
+	position: absolute;
+}
+
+div#log span {
+	background-color: black;
+	padding: 0.25em;
+	margin: 0 0.1em;
+}
+
+ul { margin: 0; padding: 0 0 0 0.5em; }
+
 li {
 	list-style-type: square;
 	list-style-position: outside;
-}
-
-li.clear {
-	list-style-type: none;
-	height: 0.25em;
 	margin: 0;
 }
 
+ul.links li {
+	list-style-type: none;
+	list-style-position: outside;
+	margin: 0;
+	padding: 0.25em;
+}
+
+
 a,a:visited {
-	color: #66f542;
+	color: #80c4ff;
 	padding: 0.2em;
 	cursor: pointer;
+	text-decoration: none;
 }
 
 a.show-source {
@@ -82,10 +121,53 @@ canvas {
 	height: 100%;
 	position: fixed;
 	top:0px; left:0px;
-	z-index: -1000;
+		
+	cursor: pointer;
     
     image-rendering: optimizeSpeed;
     image-rendering: -moz-crisp-edges;
     image-rendering: -webkit-optimize-contrast;
     image-rendering: optimize-contrast;
 }
+
+@media only screen 
+and (min-device-width : 320px) 
+and (max-device-width : 568px) {
+
+	body {
+		font-size: 16px;
+	}
+	
+	div.home-info h1 {
+		font-size: 2.5em;
+	}
+}
+
+@media only screen 
+and (min-device-width : 540px) 
+and (max-device-width : 960px) {
+
+	body {
+		font-size: 16px;
+	}
+
+	div.home-info h1 {
+		font-size: 2.5em;
+	}
+	
+}
+
+@media only screen 
+and (min-device-width : 375px) 
+and (max-device-width : 667px) {
+
+	body {
+		font-size: 16px;
+	}
+
+	div.home-info h1 {
+		font-size: 2.5em;
+	}
+	
+}
+

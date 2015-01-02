@@ -1,6 +1,6 @@
 <html>
 	<head>
-		<title>PixelBox Example 4</title>
+		<title>PixelBox Example 5</title>
 		<link rel="stylesheet" href="css/normalize.css"/>
 		<link rel="stylesheet" href="css/index.css"/>
 		<meta content="yes" name="apple-mobile-web-app-capable" />		
@@ -33,15 +33,21 @@
 		</span>		
 	
 		<div class="buttons">
-			Click to PEW
+			<button id="playAnim-button">playAnim("stand")</button> 
+			<button id="loopAnim-button">loopAnim("run")</button> 
+			<button id="loopAnimTwice-button">loopAnim("greet", 2)</button> 
+			<button id="stopAnim-button">stopAnim</button>
+			<div class="scrollable">
+				<div id="log"></div>
+			</div>
+			<a id="clear-log">clear</a>
 		</div>
 	
 		<script>
 		
 		/*
 		
-			This example shows how create instances of a template,
-			and how to dispose / recycle an object.
+			This example shows how to receive animation events
 		
 		*/
 		
@@ -61,7 +67,7 @@
 			// load scene definition using THREE.PixelBoxAssets,
 			
 			assets.loadAssets({ 
-				scenes: [ 'assets/example4.scene' ],
+				scenes: [ 'assets/example5.scene' ],
 				
 				// when done, display scene
 				
@@ -75,55 +81,45 @@
 					
 					renderer.setScene(exampleScene);
 
-					// click will spawn an instance of a template
-							
-					$(document).on('click', function(){
+					// playAnim button
+
+					$('#playAnim-button').click(function(){
 						
-						// create an instance of 'pew' template from sceneDef
-						
-						var pew = exampleScene.instantiate('pew');
-						
-						// set position to camera's position
-						
-						pew.position.copy(exampleScene.camera.position);
-						
-						// pick a random color
-						
-						var color = new THREE.Color();
-						color.setHSL(Math.random(), 0.5, 0.5);
-						
-						// tint plasma ( part of 'pew' template )
-						
-						pew.plasma.tint.copy(color);
-						
-						// tint point light ( part of 'pew' template )
-						
-						pew.pointlight.color.copy(color);						
-						
-						// add it to the scene
-						
-						exampleScene.add(pew);						
-						
-						// get camera's forward direction -1000 units along Z
-						
-						var forward = exampleScene.camera.localToWorld(new THREE.Vector3(0, 0, -1000));
-						
-						// tween pew's position to that point
-						
-						pew.tween({	target: pew.position,
-									to: forward,
-									duration: 3,
-									done: function(tweenObj){
-										
-										// when tween finishes recycle the template
-										
-										exampleScene.recycle(this); 
-										
-									}
-								  });
+						exampleScene.guy.playAnim('stand');
 						
 					});
 
+					// loopAnimTwice button
+
+					$('#loopAnimTwice-button').click(function(){
+						
+						exampleScene.guy.loopAnim('greet', 2);
+						
+					});
+
+					// loopAnim button
+
+					$('#loopAnim-button').click(function(){
+						
+						exampleScene.guy.loopAnim('run');
+						
+					});
+					
+					// stopAnim button
+
+					$('#stopAnim-button').click(function(){
+						
+						exampleScene.guy.stopAnim();
+						
+					});
+					
+					// clear log
+					
+					$('#clear-log').click(function(){
+					
+						$('#log').empty().css({ left: 0 });
+					
+					});
 
 				}// end done:function
 			});// end assets.loadAssets
@@ -143,7 +139,7 @@
 			
 			// get scene definition from assets cache
 			
-			var sceneDef = assets.cache.get('example4');
+			var sceneDef = assets.cache.get('example5');
 			
 			// populate this scene with the definition
 			
@@ -154,23 +150,26 @@
 			
 			this.controls = new THREE.OrbitControls(this.camera);
 			
-			// tick function will spin all asteroids
+			// event handler function
 			
-			this.tick = function(deltaTime){
+			this.animationEventFunction = function(event){
 				
-				// scene has a container object 'asteroids', loop over its children
+				// print event type 
 				
-				for(var i = 0, l = this.asteroids.children.length; i < l; i++){
-					
-					// spin each asteroid within
-					
-					this.asteroids.children[i].rotateY(deltaTime * 0.5);
+				$('#log').append('<span>' + event.type + '</span>');
+				
+				// scroll to the end
+				
+				$('#log').animate({ left: Math.min(0, $('#log').parent().outerWidth() - $('#log').outerWidth()) });
+			};
+			
+			// add event listeners for animation events
+			// "guy" is a PixelBox instance, part of example5 scene
 
-					this.asteroids.children[i].rotateX(deltaTime * 0.1);
-					
-				}
-					
-			};						
+			this.guy.addEventListener('anim-start', this.animationEventFunction);
+			this.guy.addEventListener('anim-stop', this.animationEventFunction);
+			this.guy.addEventListener('anim-loop', this.animationEventFunction);
+			this.guy.addEventListener('anim-finish', this.animationEventFunction);			
 			
 		}
 		

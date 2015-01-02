@@ -27,9 +27,8 @@ THREE.PixelBoxDepthShader = {
 		"		max(length(vec3(modelMatrix[0][1],modelMatrix[1][1],modelMatrix[2][1] )),",
 		"		length(vec3(modelMatrix[0][2],modelMatrix[1][2],modelMatrix[2][2] ))));",
 		"	if(projectionMatrix[3][3] == 0.0){",// perspective
-		"		float camDist = length((modelMatrix * vec4(position,1.0)).xyz - cameraPosition);",
 		"		float fov = 2.0 * atan(1.0 / projectionMatrix[1][1]);",
-		"		gl_PointSize = pointScaleMult * pointSize * 800.0 * fov / pow(gl_Position.w, 1.0);",
+		"		gl_PointSize = pointScaleMult * pointSize * 600.0 * fov / pow(gl_Position.w, 1.0 + fov * 0.25);",
 		"	} else {", // ortho
 		"		gl_PointSize = pointScaleMult * pointSize * 6.0;",
 		"	} ",
@@ -920,11 +919,17 @@ THREE.PixelBox = function(data){
 	this.castShadow = true;
 	this.pixelBox = true;
 	
+	// create pivot
+	this._pivot = new THREE.Vector3(data.width * 0.5, data.height * 0.5, data.depth * 0.5);	
+	
 	// create anchors
 	this.anchors = {};
 	if(data.anchors){
 		for(var aname in data.anchors){
-			if(aname == 'PIVOT') continue;
+			if(aname == 'PIVOT') { 
+				this._pivot.set(data.anchors[aname][0].x, data.anchors[aname][0].y, data.anchors[aname][0].z);
+				continue;
+			}
 			var obj3d = new THREE.Object3D();
 			obj3d.isContainer = true;
 			obj3d.detached = false;
@@ -937,6 +942,17 @@ THREE.PixelBox = function(data){
 	} else {
 		data.anchors = {};
 	}
+	
+	// fix bounding sphere
+	geometry.computeBoundingSphere = function(){
+		if (this.geometry.boundingSphere === null ) {
+			this.geometry.boundingSphere = new THREE.Sphere();
+		}
+		
+		this.geometry.boundingSphere.center.copy(this._pivot);
+		this.geometry.boundingSphere.radius = 0.5 * Math.max(this.geometry.data.width, this.geometry.data.depth, this.geometry.data.height);
+		
+	}.bind(this);
 	
 	// create frame setter on pointcloud
 	geometry.data = data;
@@ -999,7 +1015,7 @@ THREE.PixelBox = function(data){
 			var adata = data.anchors[aname][f];
 			if(!anchor.detached){
 				anchor.visible = !!adata.on;
-				anchor.position.set(adata.x - data.width * 0.5, adata.y - data.height * 0.5, adata.z - data.depth * 0.5);
+				anchor.position.set(adata.x - this._pivot.x, adata.y - this._pivot.y, adata.z - this._pivot.z);
 				anchor.rotation.set(adata.rx * degToRad, adata.ry * degToRad, adata.rz * degToRad);
 				anchor.scale.set(adata.sx || 0.00001, adata.sy || 0.00001, adata.sz || 0.00001);
 				anchor.updateMatrixWorld(true);
@@ -1233,11 +1249,21 @@ THREE.Object3D.prototype.tween = function(obj){
 	if(this.tweenFps === undefined) this.tweenFps = 30; // default
 	this._tweens = this._tweens.concat(obj);
 	if(!this._tweenInterval) setTimeout(this.advanceTweenFrame, 1000 / this.tweenFps);
+	
+	return obj;
 };
 
 /* stops all tweens */
-THREE.Object3D.prototype.stopTweens = function(){
+THREE.Object3D.prototype.stopTweens = function(snapToFinish, callDone){
 	if(!this._tweens) return;
+	if(snapToFinish){
+		for(var i = 0, l = this._tweens.length; i < l; i++){
+			var tweenObj = this._tweens[i];
+			tweenObj.time = tweenObj.duration;
+			applyTween(tweenObj);
+			if(callDone && tweenObj.done !== undefined) tweenObj.done.call(this, tweenObj); 
+		}
+	}
 	this._tweens.length = 0;
 	delete this._tweens;
 	this._tweens = [];
@@ -1246,10 +1272,16 @@ THREE.Object3D.prototype.stopTweens = function(){
 };
 
 /* stops specific tween */
-THREE.Object3D.prototype.stopTween = function(obj){
+THREE.Object3D.prototype.stopTween = function(obj, snapToFinish, callDone){
 	if(!this._tweens) return;
 	var index = this._tweens.indexOf(obj);
 	if(index !== -1){
+		if(snapToFinish){
+			var tweenObj = this._tweens[index];
+			tweenObj.time = tweenObj.duration;
+			applyTween(tweenObj);
+			if(callDone && tweenObj.done !== undefined) tweenObj.done.call(this, tweenObj);
+		}	
 		this._tweens.splice(index, 1);
 		if(!this._tweens.length && this._tweenInterval) { 
 			clearTimeout(this._tweenInterval);
@@ -1480,7 +1512,7 @@ THREE.PixelBox.prototype.updateFrameWithCallback = function(callBack, extraParam
 		frameBuffers.c.array[addr * 4] = pobj.c.r;
 		frameBuffers.c.array[addr * 4 + 1] = pobj.c.g;
 		frameBuffers.c.array[addr * 4 + 2] = pobj.c.b;
-		frameBuffers.c.array[addr * 4 + 3] = pobj.c.a;
+		frameBuffers.c.array[addr * 4 + 3] = pobj.a;
 	}
 	
 	frameBuffers.c.needsUpdate = true;
@@ -1582,7 +1614,7 @@ THREE.PixelBoxUtil.processPixelBoxFrames = function(data){
 			pivot.set(data.anchors['PIVOT'][0].x, data.anchors['PIVOT'][0].y, data.anchors['PIVOT'][0].z);
 		} else {
 			pivot.set(data.width * 0.5, data.height * 0.5, data.depth * 0.5);
-		}
+		}		
 	
 		// decode frames
 		if(!data.frameData){
