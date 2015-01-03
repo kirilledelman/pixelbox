@@ -15,7 +15,7 @@ THREE.PixelBoxAssets = function(){
 		(Object) info - specifies what to load (all params optional)
 		
 			(Array) info.textures - array of paths to images to load as THREE.Texture
-			(Array) info.models - array of paths to json or LZ-String-compressed PixelBox asset files
+			(Array) info.assets - array of paths to json or LZ-String-compressed PixelBox asset files
 			(Array) info.scenes - array of paths to json or LZ-String-compressed PixelBox scene files
 			(Array) info.json - array of paths to json files to load and parse
 			
@@ -150,7 +150,7 @@ THREE.PixelBoxAssets = function(){
 								console.error("Failed to parse JSON for "+url,e,json);
 							}
 							// process
-							assets.cache.add(json.name, json);
+							assets.cache.add(url, json);
 						}
 						assets.assetLoaded();
 					});
