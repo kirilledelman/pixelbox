@@ -754,7 +754,7 @@ THREE.PixelBoxScene.prototype.populateObject = function(object, layers, options)
 		}
 
 		// callback
-		if(options.initObject) options.initObject(obj3d, layer);			
+		if(options.initObject) options.initObject(obj3d, layer);
 	}
 	
 	return objectsCreated;
@@ -945,11 +945,11 @@ THREE.PixelBoxScene.prototype.dispose = function(){
 /* ================================================================================ THREE.PixelBoxRenderer callbacks */
 
 THREE.PixelBoxScene.prototype.addResizeListener = function(){
-	$(window).on('resize.'+this.constructor.name, this.onResized.bind(this));
+	$(window).on('resize.'+(this.constructor.name ? this.constructor.name : "PixelBoxScene"), this.onResized.bind(this));
 };
 
 THREE.PixelBoxScene.prototype.removeResizeListener = function(){
-	$(window).off('resize.'+this.constructor.name);
+	$(window).off('resize.'+(this.constructor.name ? this.constructor.name : "PixelBoxScene"));
 };
 
 /* render callback */
