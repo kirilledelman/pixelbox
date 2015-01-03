@@ -14,7 +14,7 @@ PixelBox was originally developed to create [Santa Drop game for iOS](https://it
 * [Example 4: Instancing templates and object recycling](http://gogoat.com/pixelbox/example4.html)
 * [Example 5: Animation events](http://gogoat.com/pixelbox/example5.html)
 * [Example 6: Snow](http://gogoat.com/pixelbox/example6.html)
-* [Scene Editor / Sprite Editor](PixelBox Scene Editor) - works best with Google Chrome.
+* [Scene Editor / Sprite Editor](http://gogoat.com/pixelbox/editor) - works best with Google Chrome.
 
 Project source also contains above examples, as well as the Scene Editor as Google Chrome extension / app.
 
