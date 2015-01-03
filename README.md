@@ -20,7 +20,7 @@ Project source also contains above examples, as well as the Scene Editor as Goog
 
 ## Documentation
 
-[PixelBox Wiki](https://github.com/kirilledelman/pixelbox/wiki/PixelBox) has all available documentation for this project.
+[PixelBox Wiki](https://github.com/kirilledelman/pixelbox/wiki) has all available documentation for this project.
 
 ## PixelBox sprites
 * Based on THREE.PointCloud.
