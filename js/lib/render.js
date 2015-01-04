@@ -65,7 +65,7 @@ THREE.PixelBoxRenderer = function(){
 	}
 
 	/* 
-		setScene(newScene [, transType [, speed]]);
+		setScene(newScene [, transType [, duration]]);
 	
 		parameters:
 			

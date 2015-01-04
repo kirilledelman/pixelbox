@@ -39,7 +39,7 @@ EditSceneScene.prototype = {
 		// clean up
 		for(var i = 0; i < children.length; i++){
 			var obj = children[i];
-			if(obj.dispose) obj.dispose();
+			if(obj.dispose) obj.dispose(true);
 			else if(obj.shadowMap) obj.shadowMap.dispose();
 		}
 		for(var a in assets.cache.files){
@@ -54,7 +54,7 @@ EditSceneScene.prototype = {
 				var val = arg[p];
 				if(typeof(val)!='object') continue;
 				if(val && val instanceof THREE.Object3D){
-					if(val.pixelBox) val.dispose();
+					if(val.pixelBox) val.dispose(true);
 					checkArgs(p.children);
 				} else if(val && val.frameData && val.width){
 					THREE.PixelBoxUtil.dispose(val);

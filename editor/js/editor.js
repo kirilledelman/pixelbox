@@ -1202,7 +1202,7 @@ EditScene.prototype = {
 				
 				// destroy pasted object visual
 				if(this.paste){
-					this.paste.dispose();
+					this.paste.dispose(true);
 					this.scene.remove(this.paste);
 					delete this.paste;
 				}
@@ -2086,7 +2086,7 @@ EditScene.prototype = {
 		
 		// recreate model
 		if(this.model){
-			this.model.dispose();
+			this.model.dispose(true);
 			this.scene.remove(this.model);
 		}
 		
@@ -5129,7 +5129,7 @@ EditScene.prototype = {
 		this.controls.panEnabled = this.controls.rotateEnabled = this.controls.zoomEnabled = false;
 		$(window).off('.editor');
 		if(this.model){
-			this.model.dispose();
+			this.model.dispose(true);
 			this.scene.remove(this.model);
 		}		
 	},

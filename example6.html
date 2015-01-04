@@ -103,7 +103,7 @@
 			
 			// make controls look at a point a bit above the snowman
 			
-			this.controls.target.set(0, 7, 0);
+			this.controls.target.set(0, 12, 0);
 			this.controls.update();
 			
 			// create a PixelBox instance, with 100x1x100 = 10000 particles
@@ -111,6 +111,7 @@
 			this.snow = new THREE.PixelBox( { frames: null, width:100, height:1, depth:100 } );
 			this.snow.pointSize = 0.2;
 			this.snow.cullBack = false;
+			this.snow.castShadow = false;
 			
 			// add frame / set frame
 			

@@ -41,7 +41,7 @@
 		</span>		
 	
 		<div class="buttons">
-			Scenes <button id="button1">Flock</button> <button id="button2">Planet</button>
+			Scenes <button id="button2">Planet</button> <button id="button1">Flock</button>
 		</div>
 	
 		<script>
@@ -87,9 +87,9 @@
 					exampleScene1 = new ExampleScene1();
 					exampleScene2 = new ExampleScene2();
 					
-					// set the first as current for renderer
+					// set scene current for renderer
 					
-					renderer.setScene(exampleScene1);
+					renderer.setScene(exampleScene2);
 					
 					// add onclick to buttons to switch scenes
 					
@@ -158,8 +158,7 @@
 		
 			// turn on composer before calling superclass constructor
 			// 		this.composer will contain THREE.EffectComposer instance
-			// 		this.screenPass will be an example screen noise shader
-			// 		see THREE.PixelBoxScene for implementation details
+			// 		this.composer.screenPass will be an example screen noise shader
 			
 			this.useComposer = true;
 		

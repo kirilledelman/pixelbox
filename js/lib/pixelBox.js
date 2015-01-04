@@ -1055,16 +1055,18 @@ THREE.PixelBox = function(data){
 	this.frame = 0;
 	this.totalFrames = data.frameData.length;
 
-	// add dispose function for unloading
-	this.dispose = function(){
+	// dispose function
+	this.dispose = function(unloadAsset){
 		if(this.geometry){
-			if(this.geometry.data){
-				THREE.PixelBoxUtil.dispose(this.geometry.data);
-				console.log("Disposed of "+this.geometry.data.name);
-				delete this.geometry.data;
+			if(unloadAsset){
+				if(this.geometry.data){
+					THREE.PixelBoxUtil.dispose(this.geometry.data);
+					delete this.geometry.data;
+				}
+				this.geometry.dispose();
 			}
-			this.geometry.dispose();
 			delete this.geometry;
+			this.material.dispose();
 		}
 	};
 	
@@ -1439,6 +1441,12 @@ THREE.PixelBox.prototype.gotoAndStop = function(animName, positionWithinAnimatio
 	
 	if(this._animationInterval){
 		this.stopAnim();
+	}
+	
+	// stop
+	if(diff){
+		var ev = {type:'anim-stop', anim:this.currentAnimation};
+		this.dispatchEvent(ev); ev = null;
 	}
 	
 	// current anim

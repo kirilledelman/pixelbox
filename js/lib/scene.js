@@ -265,6 +265,8 @@ THREE.PixelBoxScene.prototype.populateWith = function(sceneDef, options){
 			} catch(e){
 				console.error("Failed to parse JSON ",e,json);
 			}
+		} else {
+			asset = _.deepClone(asset, 100);
 		}
 		
 		// already loaded
@@ -275,7 +277,6 @@ THREE.PixelBoxScene.prototype.populateWith = function(sceneDef, options){
 		
 		// add asset to cache if needed
 		assets.cache.add(asset.name, asset);
-		sceneDef.assets[i] = asset;
 	}
 	
 	options = options ? options : {};
@@ -336,8 +337,8 @@ THREE.PixelBoxScene.prototype.populateWith = function(sceneDef, options){
 		
 			(BOOL) helpers - create THREE.*Helper for lights and camera
 			(BOOL) keepSceneCamera - don't override scene's camera with one in sceneDef
-			(BOOL) noNameReferences - don't create object[name] references in parent
 			(BOOL) wrapTemplates - wraps instances in Object3D container
+			(BOOL) noNameReferences - don't create object[name] references in parent
 			(BOOL) skipProps - passes skipProps parameter to linkObjects call to skip def.props parsing 
 	
 */
@@ -922,23 +923,29 @@ THREE.PixelBoxScene.prototype.linkObjects = function(objs, top, skipProps){
 	and assets that only exist in a scene as part of scene definition should be part of sceneDef
 	
 */		
-THREE.PixelBoxScene.prototype.dispose = function(){
+THREE.PixelBoxScene.prototype.dispose = function(unloadAssets){
+	// remove all children
+	this.recycle(this.children.concat());
+	
 	// clear object pool
 	for(var otype in this.objectPool){
 		var objects = this.objectPool[otype];
 		for(var i = 0, l = objects.length; i < l; i++){
 			var obj = objects[i];
-			obj.dispose();
+			if(obj['dispose']) obj.dispose();
 		}
 		delete this.objectPool[otype];
 	}
-	// clean up assets that were loaded with this scene
-	for(var aname in assets.cache.files){
-		var asset = assets.cache.files[aname];
-		if(asset.frameData && asset.includedWithScene == this){
-			THREE.PixelBoxUtil.dispose(asset);
+	
+	if(unloadAssets){
+		// clean up assets that were loaded with this scene
+		for(var aname in assets.cache.files){
+			var asset = assets.cache.files[aname];
+			if(asset.frameData && asset.includedWithScene == this){
+				THREE.PixelBoxUtil.dispose(asset);
+				delete assets.cache.files[aname];
+			}
 		}
-		delete assets.cache.files[aname];
 	}
 };
 
@@ -966,7 +973,7 @@ THREE.PixelBoxScene.prototype.render = function( delta, rtt ) {
 		this.updateLights = true;
 	}
 	
-	if(this.updateLights){
+	if(this.updateLights || this.updateMaterials){
 		THREE.PixelBoxUtil.updateLights(this, this.updateMaterials);
 		this.updateLights = false;
 		this.updateMaterials = false;
@@ -1068,11 +1075,10 @@ THREE.Object3D.prototype.recursiveRemoveChildren = function(omit){
 		removedChildren = removedChildren.concat(child.recursiveRemoveChildren(omit));
 		if(child.stopTweens) child.stopTweens();
 		if(child.stopAnim) child.stopAnim();
-		//child.think = null;
 		if(child['name']){
-			if(child.anchored && this.parent[child.name]) {
+			if(child.anchored && this.parent[child.name] && this.parent[child.name] == child) {
 				delete this.parent[child.name];
-			} else if(this[child.name]){
+			} else if(this[child.name] == child){
 				delete this[child.name];
 			}
 		}
