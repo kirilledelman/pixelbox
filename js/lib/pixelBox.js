@@ -909,6 +909,35 @@ THREE.PixelBox = function(data){
 	// create geometry
 	var geometry = new THREE.BufferGeometry();
 	
+	// create pivot
+	this._pivot = new THREE.Vector3(data.width * 0.5, data.height * 0.5, data.depth * 0.5);	
+	
+	// bounding sphere respect pivot
+	geometry.computeBoundingSphere = function(){
+		if (this.geometry.boundingSphere === null ) {
+			this.geometry.boundingSphere = new THREE.Sphere();
+		}
+		
+		this.geometry.boundingSphere.center.set(
+			this.geometry.data.width * 0.5 - this._pivot.x,
+			this.geometry.data.height * 0.5 - this._pivot.y,
+			this.geometry.data.depth * 0.5 - this._pivot.z
+		);
+		this.geometry.boundingSphere.radius = 0.5 * Math.max(this.geometry.data.width, this.geometry.data.depth, this.geometry.data.height);
+	}.bind(this);
+
+	// bounding box respect pivot
+	geometry.computeBoundingBox = function() {
+		if ( this.geometry.boundingBox === null ) {
+			this.geometry.boundingBox = new THREE.Box3();
+		}
+
+		this.geometry.boundingBox.min.set(0,0,0);
+		this.geometry.boundingBox.max.set(this.geometry.data.width, this.geometry.data.height, this.geometry.data.depth);
+		this.geometry.boundingBox.translate(this._pivot.clone().multiplyScalar(-1));
+		
+	}.bind(this);
+	
 	// process data
 	THREE.PixelBoxUtil.processPixelBoxFrames(data);
 	
@@ -918,9 +947,6 @@ THREE.PixelBox = function(data){
 	this.customDepthMaterial = depthMaterial;
 	this.castShadow = true;
 	this.pixelBox = true;
-	
-	// create pivot
-	this._pivot = new THREE.Vector3(data.width * 0.5, data.height * 0.5, data.depth * 0.5);	
 	
 	// create anchors
 	this.anchors = {};
@@ -942,17 +968,6 @@ THREE.PixelBox = function(data){
 	} else {
 		data.anchors = {};
 	}
-	
-	// fix bounding sphere
-	geometry.computeBoundingSphere = function(){
-		if (this.geometry.boundingSphere === null ) {
-			this.geometry.boundingSphere = new THREE.Sphere();
-		}
-		
-		this.geometry.boundingSphere.center.copy(this._pivot);
-		this.geometry.boundingSphere.radius = 0.5 * Math.max(this.geometry.data.width, this.geometry.data.depth, this.geometry.data.height);
-		
-	}.bind(this);
 	
 	// create frame setter on pointcloud
 	geometry.data = data;
@@ -1030,12 +1045,16 @@ THREE.PixelBox = function(data){
 		}),
 	});	
 	
+	// precompute
+	//this.geometry.computeBoundingSphere();
+	//this.geometry.computeBoundingBox();
+
 	// set frame / anim params
 	this.vertexBufferStart = 0;
 	this.vertexBufferLength = 0;
 	this.frame = 0;
 	this.totalFrames = data.frameData.length;
-	
+
 	// add dispose function for unloading
 	this.dispose = function(){
 		if(this.geometry){
