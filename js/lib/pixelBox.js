@@ -1167,8 +1167,7 @@ THREE.PixelBox.prototype.constructor = THREE.PixelBox;
 	Tweening functions:
 	
 	Tweens are implemented using setTimeout, and are automatically paused/resumed when renderer.pause(bPause) is called
-	All tweens are cancelled when this PixelBox is removed from parent
-	Tweening is done at this PixelBox's .tweenFps rate
+	Tweening is done at .tweenFps rate (default is 30 frames per second)
 	If you wish to stop tweens, keep a reference to the object you passed to tween(obj) function, and call stopTween(obj) later
 	
 	Example use:
@@ -1183,6 +1182,7 @@ THREE.PixelBox.prototype.constructor = THREE.PixelBox;
 						if target is another object, property "prop" is also required and will be interpolated
 	
 	(Number) duration - (optional) duration of interpolation, defaults to 1 sec
+	(INT) fps - tween FPS
 	(same type as target property) from - (optional) starting value, defaults to current value
 	(Function) done - (optional) on complete function
 	(Function) easing - (optional) easing func of form: function (t, b, c, d), where t = current time, b = start value, c = change in value, d = duration (http://gizma.com/easing)
@@ -1267,7 +1267,7 @@ THREE.Object3D.prototype.tween = function(obj){
 		this._tweens = [];
 		this.advanceTweenFrame = this.advanceTweenFrame.bind(this);
 	}
-	if(this.tweenFps === undefined) this.tweenFps = 30; // default
+	this.tweenFps = Math.floor(Math.max(1, (obj.fps ? obj.fps : (this.tweenFps !== undefined ? this.tweenFps : 30))));
 	this._tweens = this._tweens.concat(obj);
 	if(!this._tweenInterval) setTimeout(this.advanceTweenFrame, 1000 / this.tweenFps);
 	
@@ -1714,8 +1714,8 @@ THREE.PixelBoxUtil.updateLights = function(scene, updateAllMaterials){
 	if(!uniforms.directionalLightShadowMap.value.length){
 		uniforms.spotLightShadowMap.value.push(0);
 	}
-	if(!uniforms.directionalLightShadowMap.value.length){
-		uniforms.directionalLightShadowMap.value.push(0);
+	if(!uniforms.spotLightShadowMap.value.length){
+		uniforms.spotLightShadowMap.value.push(0);
 	}
 };
 

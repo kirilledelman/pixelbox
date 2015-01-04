@@ -166,7 +166,16 @@ THREE.PixelBoxScene.prototype.recycle = function(scrap){
 	for(var si = 0, sl = scrap.length; si < sl; si++){
 		var obj = scrap[si];
 		objs = obj.recursiveRemoveChildren();
-		if(obj.parent) obj.parent.remove(obj);
+		if(obj.parent) { 
+			if(obj['name']){
+				if(obj.anchored && obj.parent.parent && obj.parent.parent[obj.name] == obj) {
+					delete obj.parent.parent[obj.name];
+				} else if(obj.parent[obj.name] == obj){
+					delete obj.parent[obj.name];
+				}
+			}
+			obj.parent.remove(obj);
+		}
 		objs.push(obj);
 	
 		for(var i = 0, l = objs.length; i < l; i++){
@@ -1028,19 +1037,19 @@ THREE.Object3D.prototype.isVisibleRecursive = function(){
 }
 
 /* another can be an array or a single object */
-THREE.Object3D.prototype.isDescendentOf = function(another){
+THREE.Object3D.prototype.isDescendantOf = function(another){
 	if(!this.parent) return false;
 	if(_.isArray(another)){
 		for(var i = 0, l = another.length; i < l; i++){
 			var ai = another[i];
 			if(this.parent == ai) return true;
-			var p = this.parent.isDescendentOf(ai);
+			var p = this.parent.isDescendantOf(ai);
 			if(p) return true;
 		}
 		return false;
 	} else {
 		if(this.parent == another) return true;
-		return this.parent.isDescendentOf(another);
+		return this.parent.isDescendantOf(another);
 	}
 }
 

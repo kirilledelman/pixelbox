@@ -329,7 +329,7 @@ EditSceneScene.prototype = {
 		
 		for(var i = 0, l = this.selectedObjects.length; i < l; i++){
 			var obj = this.selectedObjects[i];
-			if(obj.isAnchor || obj.isDescendentOf(this.selectedObjects)) continue;
+			if(obj.isAnchor || obj.isDescendantOf(this.selectedObjects)) continue;
 			
 			obj.origPosition = obj.position.clone();
 			obj.origQuaternion = obj.quaternion.clone();
@@ -653,7 +653,7 @@ EditSceneScene.prototype = {
 		
 		// find templates that will be deleted
 		editScene.container.traverse(function(obj){
-			if(obj.isTemplate && (obj.selected || obj.isDescendentOf(toDelete))){
+			if(obj.isTemplate && (obj.selected || obj.isDescendantOf(toDelete))){
 				templates.push(obj.name);
 			}
 		});
@@ -690,7 +690,7 @@ EditSceneScene.prototype = {
 			for(var j = toCopy.length - 1; j >= 0; j--){
 				if(i == j) continue;
 				var obj2 = toCopy[j];
-				if(obj2.isDescendentOf(obj)){
+				if(obj2.isDescendantOf(obj)){
 					toCopy.splice(i, 1);
 					break;
 				}
@@ -1982,7 +1982,7 @@ EditSceneScene.prototype = {
 			var invalid = false;
 			for(var i = 0; i < draggedObjects.length; i++){
 				// no parenting to dragged objects themselves, or instances
-				if(obj == draggedObjects[i] || obj.isDescendentOf(draggedObjects[i]) || obj.isInstance || obj.omit){
+				if(obj == draggedObjects[i] || obj.isDescendantOf(draggedObjects[i]) || obj.isInstance || obj.omit){
 					invalid = true;
 					break;
 				}
