@@ -47,3 +47,7 @@ Project source also contains above examples, as well as the Scene Editor as Goog
 * Used to switch between PixelBox scenes, with or without transitions.
 * Scene transitions using textures or blends are adopted from three.js examples.
 * Built-in downsampling of resolution rendering.
+
+## Contact
+
+You can contact the developer by [email](mailto:kirill.edelman@gmail.com)
