@@ -1,6 +1,6 @@
 ![Santa PixelBox](https://raw.githubusercontent.com/kirilledelman/pixelbox/master/images/docs-santa.png)
 
-### PixelBox is an extension for [three.js](http://threejs.org), for rendering voxel sprites.
+### PixelBox - an extension for [three.js](http://threejs.org), for rendering voxel sprites.
 
 It includes base classes, a sprite and scene editor, and some examples.
 
