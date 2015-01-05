@@ -2827,12 +2827,12 @@ EditSceneScene.prototype = {
 			
 			if(obj3d.isTemplate) allTemplates.push(obj3d);
 			
-			// get all children except for templates
+			// get all children except for templates and anchors
 			var childrenSansTemplates = [];
 			for(var i = 0; i < obj3d.children.length; i++){
 				var child = obj3d.children[i];
 				// templates
-				if(!child.isTemplate) childrenSansTemplates.push(child);
+				if(!child.isTemplate && !child.isAnchor) childrenSansTemplates.push(child);
 			}
 			
 			// validate/rename
