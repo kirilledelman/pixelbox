@@ -4635,61 +4635,61 @@ EditSceneScene.prototype = {
 			if(prevObj && prevObj.position.x != obj.position.x){
 				$('#prop-x').attr('placeholder','M').val('').data('prevVal',''); mults['x'] = true;
 			} else if(!mults['x']){
-				$('#prop-x').attr('placeholder','').val(obj.position.x).data('prevVal', obj.position.x.toString());
+				$('#prop-x:not(:focus)').attr('placeholder','').val(obj.position.x).data('prevVal', obj.position.x.toString());
 			}
 			//y
 			if(prevObj && prevObj.position.y != obj.position.y){
 				$('#prop-y').attr('placeholder','M').val('').data('prevVal',''); mults['y'] = true;
 			} else if(!mults['x']){
-				$('#prop-y').attr('placeholder','').val(obj.position.y).data('prevVal', obj.position.y.toString());
+				$('#prop-y:not(:focus)').attr('placeholder','').val(obj.position.y).data('prevVal', obj.position.y.toString());
 			}
 			//z
 			if(prevObj && prevObj.position.z != obj.position.z){
 				$('#prop-z').attr('placeholder','M').val('').data('prevVal',''); mults['z'] = true;
 			} else if(!mults['z']){
-				$('#prop-z').attr('placeholder','').val(obj.position.z).data('prevVal', obj.position.z.toString());
+				$('#prop-z:not(:focus)').attr('placeholder','').val(obj.position.z).data('prevVal', obj.position.z.toString());
 			}
 			//rx
 			if(prevObj && prevObj.rotation.x != obj.rotation.x){
 				$('#prop-rx').attr('placeholder','M').val('').data('prevVal',''); mults['rx'] = true;
 			} else if(!mults['rx']){
 				var newVal = Math.round(radToDeg * obj.rotation.x);
-				$('#prop-rx').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				$('#prop-rx:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
 			}
 			//ry
 			if(prevObj && prevObj.rotation.y != obj.rotation.y){
 				$('#prop-ry').attr('placeholder','M').val('').data('prevVal',''); mults['ry'] = true;
 			} else if(!mults['ry']){
 				var newVal = Math.round(radToDeg * obj.rotation.y);
-				$('#prop-ry').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				$('#prop-ry:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
 			}
 			//rz
 			if(prevObj && prevObj.rotation.z != obj.rotation.z){
 				$('#prop-rz').attr('placeholder','M').val('').data('prevVal',''); mults['rz'] = true;
 			} else if(!mults['rz']){
 				var newVal = Math.round(radToDeg * obj.rotation.z);
-				$('#prop-rz').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				$('#prop-rz:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
 			}
 			//sx
 			if(prevObj && prevObj.scale.x != obj.scale.x){
 				$('#prop-sx').attr('placeholder','M').val('').data('prevVal',''); mults['sx'] = true;
 			} else if(!mults['sx']){
 				var newVal = fake0(obj.scale.x);
-				$('#prop-sx').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				$('#prop-sx:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
 			}
 			//ry
 			if(prevObj && prevObj.scale.y != obj.scale.y){
 				$('#prop-sy').attr('placeholder','M').val('').data('prevVal',''); mults['sy'] = true;
 			} else if(!mults['sy']){
 				var newVal = fake0(obj.scale.y);
-				$('#prop-sy').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				$('#prop-sy:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
 			}
 			//rz
 			if(prevObj && prevObj.scale.z != obj.scale.z){
 				$('#prop-sz').attr('placeholder','M').val('').data('prevVal',''); mults['sz'] = true;
 			} else if(!mults['sz']){
 				var newVal = fake0(obj.scale.z);
-				$('#prop-sz').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				$('#prop-sz:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
 			}
 			
 			// camera
@@ -4698,25 +4698,25 @@ EditSceneScene.prototype = {
 					$('#cam-fov').attr('placeholder','M').val('').data('prevVal',''); mults['cam-fov'] = true;
 				} else if(!mults['cam-fov']){
 					var newVal = obj.fov;
-					$('#cam-fov').attr('placeholder','').val(newVal).data('prevVal', newVal);
+					$('#cam-fov:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
 				}
 				if(prevObj && prevObj.zoom != obj.zoom){
 					$('#cam-zoom').attr('placeholder','M').val('').data('prevVal',''); mults['cam-zoom'] = true;
 				} else if(!mults['cam-zoom']){
 					var newVal = Math.floor(obj.zoom * 100);
-					$('#cam-zoom').attr('placeholder','').val(newVal).data('prevVal', newVal);
+					$('#cam-zoom:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
 				}
 				if(prevObj && prevObj.near != obj.near){
 					$('#cam-near').attr('placeholder','M').val('').data('prevVal',''); mults['cam-near'] = true;
 				} else if(!mults['cam-near']){
 					var newVal = obj.near;
-					$('#cam-near').attr('placeholder','').val(newVal).data('prevVal', newVal);
+					$('#cam-near:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
 				}
 				if(prevObj && prevObj.far != obj.far){
 					$('#cam-far').attr('placeholder','M').val('').data('prevVal',''); mults['cam-far'] = true;
 				} else if(!mults['cam-far']){
 					var newVal = obj.far;
-					$('#cam-far').attr('placeholder','').val(newVal).data('prevVal', newVal);
+					$('#cam-far:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
 				}
 				if(this.selectedObjects.length == 1){
 					$('#cam-default')[0].checked = !!obj.isDefault;
@@ -4752,68 +4752,68 @@ EditSceneScene.prototype = {
 					$('#light-intensity').attr('placeholder','M').val('').data('prevVal',''); mults['light-intensity'] = true;
 				} else if(!mults['light-intensity']){
 					var newVal = notNaN(parseFloat(obj.intensity));
-					$('#light-intensity').attr('placeholder','').val(newVal).data('prevVal', newVal);
+					$('#light-intensity:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
 				}
 				if(prevObj && prevObj.distance != obj.distance){
 					$('#light-distance').attr('placeholder','M').val('').data('prevVal',''); mults['light-distance'] = true;
 				} else if(!mults['light-distance']){
 					var newVal = notNaN(parseFloat(obj.distance));
-					$('#light-distance').attr('placeholder','').val(newVal).data('prevVal', newVal);
+					$('#light-distance:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
 				}
 				if(prevObj && prevObj.exponent != obj.exponent){
 					$('#light-exponent').attr('placeholder','M').val('').data('prevVal',''); mults['light-exponent'] = true;
 				} else if(!mults['light-exponent']){
 					var newVal = notNaN(parseFloat(obj.exponent));
-					$('#light-exponent').attr('placeholder','').val(newVal).data('prevVal', newVal);
+					$('#light-exponent:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
 				}
 				if(prevObj && prevObj.angle != obj.angle){
 					$('#light-angle').attr('placeholder','M').val('').data('prevVal',''); mults['light-angle'] = true;
 				} else if(!mults['light-angle']){
 					var newVal = notNaN(parseFloat(obj.angle * radToDeg));
-					$('#light-angle').attr('placeholder','').val(newVal).data('prevVal', newVal);
+					$('#light-angle:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
 				}
 				
 				if(prevObj && prevObj.shadowBias != obj.shadowBias){
 					$('#light-shadow-bias').attr('placeholder','M').val('').data('prevVal',''); mults['light-shadow-bias'] = true;
 				} else if(!mults['light-shadow-bias']){
 					var newVal = notNaN(parseFloat(obj.shadowBias));
-					$('#light-shadow-bias').attr('placeholder','').val(newVal).data('prevVal', newVal);
+					$('#light-shadow-bias:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
 				}
 				if(prevObj && prevObj.shadowCameraNear != obj.shadowCameraNear){
 					$('#light-shadow-near').attr('placeholder','M').val('').data('prevVal',''); mults['light-shadow-near'] = true;
 				} else if(!mults['light-shadow-near']){
 					var newVal = notNaN(parseFloat(obj.shadowCameraNear));
-					$('#light-shadow-near').attr('placeholder','').val(newVal).data('prevVal', newVal);
+					$('#light-shadow-near:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
 				}
 				if(prevObj && prevObj.shadowCameraFar != obj.shadowCameraFar){
 					$('#light-shadow-far').attr('placeholder','M').val('').data('prevVal',''); mults['light-shadow-far'] = true;
 				} else if(!mults['light-shadow-far']){
 					var newVal = notNaN(parseFloat(obj.shadowCameraFar));
-					$('#light-shadow-far').attr('placeholder','').val(newVal).data('prevVal', newVal);
+					$('#light-shadow-far:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
 				}
 				if(prevObj && prevObj.shadowCameraRight != obj.shadowCameraRight){
 					$('#light-shadow-vol-width').attr('placeholder','M').val('').data('prevVal',''); mults['light-shadow-vol-width'] = true;
 				} else if(!mults['light-shadow-vol-width']){
 					var newVal = notNaN(parseFloat(obj.shadowCameraRight)) * 2;
-					$('#light-shadow-vol-width').attr('placeholder','').val(newVal).data('prevVal', newVal);
+					$('#light-shadow-vol-width:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
 				}
 				if(prevObj && prevObj.shadowCameraTop != obj.shadowCameraTop){
 					$('#light-shadow-vol-height').attr('placeholder','M').val('').data('prevVal',''); mults['light-shadow-vol-height'] = true;
 				} else if(!mults['light-shadow-vol-height']){
 					var newVal = notNaN(parseFloat(obj.shadowCameraTop)) * 2;
-					$('#light-shadow-vol-height').attr('placeholder','').val(newVal).data('prevVal', newVal);
+					$('#light-shadow-vol-height:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
 				}
 				if(prevObj && prevObj.shadowMapWidth != obj.shadowMapWidth){
 					$('#light-shadow-map-width').attr('placeholder','M').val('').data('prevVal',''); mults['light-shadow-map-width'] = true;
 				} else if(!mults['light-shadow-map-width']){
 					var newVal = notNaN(parseFloat(obj.shadowMapWidth));
-					$('#light-shadow-map-width').attr('placeholder','').val(newVal).data('prevVal', newVal);
+					$('#light-shadow-map-width:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
 				}
 				if(prevObj && prevObj.shadowMapHeight != obj.shadowMapHeight){
 					$('#light-shadow-map-height').attr('placeholder','M').val('').data('prevVal',''); mults['light-shadow-map-height'] = true;
 				} else if(!mults['light-shadow-map-height']){
 					var newVal = notNaN(parseFloat(obj.shadowMapHeight));
-					$('#light-shadow-map-height').attr('placeholder','').val(newVal).data('prevVal', newVal);
+					$('#light-shadow-map-height:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
 				}
 				if(prevObj && prevObj.target && obj.target && prevObj.target != obj.target){
 					$('#light-target').attr('placeholder','M').val('').data('prevVal',''); mults['light-target'] = true;
@@ -4827,19 +4827,19 @@ EditSceneScene.prototype = {
 					$('#geometry-stipple').attr('placeholder','M').val('').data('prevVal',''); mults['geometry-stipple'] = true;
 				} else if(!mults['geometry-stipple']){
 					var newVal = obj.material.stipple;
-					$('#geometry-stipple').attr('placeholder','').val(newVal).data('prevVal', newVal);
+					$('#geometry-stipple:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
 				}
 				if(prevObj && prevObj.material.alpha != obj.material.alpha){
 					$('#geometry-alpha').attr('placeholder','M').val('').data('prevVal',''); mults['geometry-alpha'] = true;
 				} else if(!mults['geometry-alpha']){
 					var newVal = obj.material.alpha;
-					$('#geometry-alpha').attr('placeholder','').val(newVal).data('prevVal', newVal);
+					$('#geometry-alpha:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
 				}
 				if(prevObj && prevObj.material.brightness != obj.material.brightness){
 					$('#geometry-brightness').attr('placeholder','M').val('').data('prevVal',''); mults['geometry-brightness'] = true;
 				} else if(!mults['geometry-occlusion']){
 					var newVal = obj.material.brightness;
-					$('#geometry-brightness').attr('placeholder','').val(newVal).data('prevVal', newVal);
+					$('#geometry-brightness:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
 				}
 				if(prevObj && prevObj.material.tint.getHex() != obj.material.tint.getHex()){
 					$('#geometry-tint').css({backgroundColor:'transparent'}); mults['geometry-tint'] = true;
@@ -4881,7 +4881,7 @@ EditSceneScene.prototype = {
 							$('.geometry-'+p,panel).attr('placeholder','M').val('').data('prevVal',''); mults['geometry-'+p] = true;
 						} else if(!mults['geometry-'+p]){
 							var newVal = obj.def[p];
-							$('.geometry-'+p,panel).attr('placeholder','').val(newVal).data('prevVal', newVal);
+							$('.geometry-'+p+':not(:focus)',panel).attr('placeholder','').val(newVal).data('prevVal', newVal);
 						}
 					}
 					props = ['radius','phiStart','phiLength','thetaStart','thetaLength'];
@@ -4891,7 +4891,7 @@ EditSceneScene.prototype = {
 							$('#geometry-'+p,panel).attr('placeholder','M').val('').data('prevVal',''); mults['geometry-'+p] = true;
 						} else if(!mults['geometry-'+p]){
 							var newVal = obj.def[p];
-							$('#geometry-'+p,panel).attr('placeholder','').val(newVal).data('prevVal', newVal);
+							$('#geometry-'+p+':not(:focus)',panel).attr('placeholder','').val(newVal).data('prevVal', newVal);
 						}
 					}
 					
@@ -4902,25 +4902,25 @@ EditSceneScene.prototype = {
 					$('#pixelbox-pointSize').attr('placeholder','M').val('').data('prevVal',''); mults['pointSize'] = true;
 				} else if(!mults['pointSize']){
 					var newVal = obj.pointSize;
-					$('#pixelbox-pointSize').attr('placeholder','').val(newVal).data('prevVal', newVal);
+					$('#pixelbox-pointSize:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
 				}
 				if(prevObj && prevObj.stipple != obj.stipple){
 					$('#pixelbox-stipple').attr('placeholder','M').val('').data('prevVal',''); mults['stipple'] = true;
 				} else if(!mults['stipple']){
 					var newVal = obj.stipple;
-					$('#pixelbox-stipple').attr('placeholder','').val(newVal).data('prevVal', newVal);
+					$('#pixelbox-stipple:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
 				}
 				if(prevObj && prevObj.alpha != obj.alpha){
 					$('#pixelbox-alpha').attr('placeholder','M').val('').data('prevVal',''); mults['pixelbox-alpha'] = true;
 				} else if(!mults['pixelbox-alpha']){
 					var newVal = obj.alpha;
-					$('#pixelbox-alpha').attr('placeholder','').val(newVal).data('prevVal', newVal);
+					$('#pixelbox-alpha:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
 				}
 				if(prevObj && prevObj.occlusion != obj.occlusion){
 					$('#pixelbox-occlusion').attr('placeholder','M').val('').data('prevVal',''); mults['occlusion'] = true;
 				} else if(!mults['occlusion']){
 					var newVal = obj.occlusion;
-					$('#pixelbox-occlusion').attr('placeholder','').val(newVal).data('prevVal', newVal);
+					$('#pixelbox-occlusion:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
 				}
 				if(prevObj && prevObj.cullBack != obj.cullBack){
 					$('#pixelbox-cullBack').addClass('multiple')[0].checked = false;
@@ -4939,7 +4939,7 @@ EditSceneScene.prototype = {
 					$('#pixelbox-animSpeed').attr('placeholder','M').val('').data('prevVal',''); mults['animSpeed'] = true;
 				} else if(!mults['animSpeed']){
 					var newVal = obj.animSpeed;
-					$('#pixelbox-animSpeed').attr('placeholder','').val(newVal).data('prevVal', newVal);
+					$('#pixelbox-animSpeed:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
 				}
 				
 				// add anims to anim name box
@@ -4963,7 +4963,7 @@ EditSceneScene.prototype = {
 					$('#pixelbox-animFrame').attr('placeholder','M').val('').data('prevVal',''); mults['animFrame'] = true;
 				} else if(!mults['animFrame']){
 					var newVal = obj.def['animFrame'] ? obj.def['animFrame'] : 0;
-					$('#pixelbox-animFrame').attr('placeholder','').val(newVal).data('prevVal', newVal);
+					$('#pixelbox-animFrame:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
 				}
 				if(prevObj && prevObj.tint.getHex() != obj.tint.getHex()){
 					$('#pixelbox-tint').css({backgroundColor:'transparent'}); mults['pixelbox-tint'] = true;
