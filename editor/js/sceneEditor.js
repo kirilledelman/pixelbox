@@ -688,10 +688,10 @@ EditSceneScene.prototype = {
 		for(var i = toCopy.length - 1; i >= 0; i--){
 			var obj = toCopy[i];
 			for(var j = toCopy.length - 1; j >= 0; j--){
-				if(i == j) continue;
 				var obj2 = toCopy[j];
+				if(obj == obj2) continue;
 				if(obj2.isDescendantOf(obj)){
-					toCopy.splice(i, 1);
+					toCopy.splice(j, 1);
 					break;
 				}
 			}
