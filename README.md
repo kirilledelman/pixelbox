@@ -6,6 +6,8 @@ It includes base classes, a sprite and scene editor, and some examples.
 
 PixelBox was originally developed to create [Santa Drop game for iOS](https://itunes.apple.com/us/app/santa-drop-free/id948393987), and then expanded with extra tools and released as open source.
 
+![Santa PixelBox](https://raw.githubusercontent.com/kirilledelman/pixelbox/master/images/docs-santa.png)
+
 ## Links
 
 * [Example 1: Single scene](http://gogoat.com/pixelbox/example1.html)
