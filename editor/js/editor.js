@@ -2423,6 +2423,8 @@ EditScene.prototype = {
 	},
 
 	animSelect:function(e){
+		if(editScene.playing) editScene.stop();
+	
 		var row = $(e.target).closest('.anim-row');
 		$('#anim-list .anim-row').removeClass('selected');
 		
@@ -2706,6 +2708,10 @@ EditScene.prototype = {
 
 	anchorsVisibleChanged:function(e){
 		this.anchors.visible = e.target.checked;
+		if(!this.anchors.visible){
+			$('#anchor-list .anchor-row').removeClass('selected');
+			$('#anchor-details').hide();
+		}
 		localStorage_setItem('show-anchors', this.anchors.visible);
 	},
 
@@ -3150,7 +3156,18 @@ EditScene.prototype = {
 	/* play */
 	play:function(){
 		editScene.frameAfterPlaying = editScene._currentFrame;
-		editScene.playing = setInterval(function(){ editScene.currentFrame++; }, 200);
+		
+		var index = -1;
+		var selRow = $('#anim-list div.selected');
+		if(selRow.length) index = parseInt(selRow.attr('id').substr(9));
+		var selAnim = index >= 0 ? editScene.doc.anims[index] : null;
+		var firstFrame = selAnim ? selAnim.start : 0;
+		var lastFrame = selAnim ? (selAnim.start + selAnim.length) : editScene.doc.frames.length;
+		var speed = selAnim ? (1000 / Math.max(0.1, selAnim.fps)) : 200;
+		editScene.playing = setInterval(function(){
+			if(editScene._currentFrame + 1 >= lastFrame) editScene.currentFrame = firstFrame;
+			else editScene.currentFrame++;
+		}, speed);
 		var options = { label: "Pause", icons: { primary: "ui-icon-pause" } };
 		$('#frame-play').button( "option", options );
 		editScene.container.visible = false;
