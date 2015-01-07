@@ -65,25 +65,6 @@ THREE.PixelBoxAssets = function(){
 							} catch(e){
 								console.error("Failed to parse JSON for "+url,e,json);
 							}
-							// process scene's assets
-							/*if(json.assets){
-								for(var i in json.assets){
-									var data = json.assets[i];
-									// compressed as string? uncompress and parse
-									if(typeof(data) == 'string'){
-										data = LZString.decompressFromBase64(data);
-										try {
-											data = JSON.parse(data);
-										} catch(e){
-											console.error("Failed to parse JSON in scene asset:"+data, e, json);
-										}
-									}
-									json.assets[i] = data;
-									
-									// process
-									THREE.PixelBoxUtil.processPixelBoxFrames(data);
-								}
-							}*/
 							assets.cache.add(json.name, json);
 						}
 						assets.assetLoaded();
