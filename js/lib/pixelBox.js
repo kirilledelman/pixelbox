@@ -1011,12 +1011,14 @@ THREE.PixelBox = function(data){
 		// set offset/length
 		// regular frame
 		if(fd.s != undefined){
-			this.vertexBufferStart = fd.s;
-			this.vertexBufferLength = fd.l;
+			//this.vertexBufferStart = fd.s;
+			//this.vertexBufferLength = fd.l;
+			geom.offsets = [ { index: fd.s, count: fd.l } ];
 		// no offsets stored, use full range (editor)
 		} else if(fd.o){
-			this.vertexBufferStart = 0;
-			this.vertexBufferLength = fd.o.array.length;
+			//this.vertexBufferStart = 0;
+			//this.vertexBufferLength = fd.o.array.length;
+			geom.offsets = [];
 		}
 		
 		var ev = {type:'frame', frame: f};
