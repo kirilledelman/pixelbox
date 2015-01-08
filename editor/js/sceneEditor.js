@@ -344,6 +344,7 @@ EditSceneScene.prototype = {
 		if(mb.y1 < mb.y) { temp = mb.y; mb.y = mb.y1; mb.y1 = temp; }
 	
 		var ctrlWasDown = e.ctrlKey;
+		var altWasDown = e.altKey;
 	
 		// construct a frustum from selected volume
 	
@@ -398,11 +399,14 @@ EditSceneScene.prototype = {
 		var frustum = new THREE.Frustum(nearPlane, farPlane, leftPlane, rightPlane, topPlane, bottomPlane);
 		var transformedFrustum = new THREE.Frustum();
 
-		this.deselectAll();
+		this.container.updateMatrixWorld(true);
+
 		this.container.traverseVisible(function(obj){
 			var found = null;
 			if(obj == editScene.container) return;
 			if(obj instanceof THREE.PixelBox || obj instanceof THREE.Mesh){
+			
+				obj.geometry.boundingBox = null;
 				obj.geometry.computeBoundingBox();
 				
 				// transform frustum into object space
@@ -436,7 +440,7 @@ EditSceneScene.prototype = {
 			if(found){
 				var parentInstance = obj.parentInstance();
 				if(parentInstance) editScene.selectObject(parentInstance, true);
-				else editScene.selectObject(obj, true);
+				else editScene.selectObject(obj, !altWasDown);
 			}
 		});
 		
