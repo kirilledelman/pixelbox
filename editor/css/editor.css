@@ -21,6 +21,16 @@
 
 #undo-buttons, #menu-bar { z-index: 1000000; }
 
+#marquee {
+	position: absolute;
+	background-color: rgba(255, 255, 255, 0.1);
+	border: 2px dotted white;
+	outline-color: black;
+	outline-width: 2px;
+	outline-style: solid;
+	z-index: 2000000;
+}
+
 #editor-toolbar {
 	position: absolute;
 	text-align: right;

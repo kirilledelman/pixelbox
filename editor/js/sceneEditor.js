@@ -269,6 +269,8 @@ EditSceneScene.prototype = {
 		// select object if mouse hasn't moved
 		if(this.transformingObjectsMode){
 			this.finishTransformObjects(e);
+		} else if(this.marquee){ 
+			this.finishMarquee(e);
 		} else if(!this.mouseMoved && e.target.nodeName == 'CANVAS' && e.button === 0){
 			// clicked on object
 			if(this.mouseDownOnObject){
@@ -301,11 +303,148 @@ EditSceneScene.prototype = {
 		if(this.isMouseDown && this.mouseMoved){
 			if(this.transformingObjectsMode){
 				this.continueTransformObjects(e);
+			} else if(this.shift && !this.marquee) {
+				this.beginMarquee(e);
+			} else if(this.marquee) {
+				this.continueMarquee(e);
 			} else if(this.mouseDownOnObject && this.mouseDownOnObject.selected){
 				this.beginTransformObjects(e);
 			}
 		}
 	},
+
+/* ------------------- ------------------- ------------------- ------------------- ------------------- Marquee selection */
+
+	beginMarquee:function(e){
+		if(this.controls.busy()){
+			this.controls.cancel();
+			this.controls.rotateEnabled = this.controls.zoomEnabled = this.controls.panEnabled = false;
+		}
+	
+		this.marquee = $('<div id="marquee"/>');
+		$(document.body).append(this.marquee);
+		this.marqueeBox = { x: e.clientX, y: e.clientY, x1: e.clientX, y1: e.clientY };
+		this.continueMarquee(e);
+	},
+
+	continueMarquee:function(e){
+		var mb = this.marqueeBox;
+		mb.x1 = e.clientX;
+		mb.y1 = e.clientY;
+	
+		this.marquee.offset({ left: Math.min(mb.x, mb.x1), top: Math.min(mb.y, mb.y1) });
+		this.marquee.css({ width: Math.abs(mb.x - mb.x1), height: Math.abs(mb.y - mb.y1) });
+	},
+
+	finishMarquee:function(e){
+		this.controls.rotateEnabled = this.controls.zoomEnabled = this.controls.panEnabled = true;
+	
+		var mb = this.marqueeBox, temp;
+		if(mb.x1 < mb.x) { temp = mb.x; mb.x = mb.x1; mb.x1 = temp; }
+		if(mb.y1 < mb.y) { temp = mb.y; mb.y = mb.y1; mb.y1 = temp; }
+	
+		var ctrlWasDown = e.ctrlKey;
+	
+		// construct a frustum from selected volume
+	
+		// points and rays
+		var p0 = new THREE.Vector3(2 * (mb.x / window.innerWidth) - 1, 1 - 2 * ( mb.y / window.innerHeight ), 0);
+		p0.unproject(this.camera);
+		var d0 = p0.clone().sub(this.camera.position).normalize();
+
+		var p1 = new THREE.Vector3(2 * (mb.x1 / window.innerWidth) - 1, 1 - 2 * ( mb.y / window.innerHeight ), 0);
+		p1.unproject(this.camera);
+		var d1 = p1.clone().sub(this.camera.position).normalize();
+
+		var p2 = new THREE.Vector3(2 * (mb.x1 / window.innerWidth) - 1, 1 - 2 * ( mb.y1 / window.innerHeight ), 0);
+		p2.unproject(this.camera);
+		var d2 = p2.clone().sub(this.camera.position).normalize();
+
+		var p3 = new THREE.Vector3(2 * (mb.x / window.innerWidth) - 1, 1 - 2 * ( mb.y1 / window.innerHeight ), 0);
+		p3.unproject(this.camera);
+		var d3 = p3.clone().sub(this.camera.position).normalize();
+	
+		// near plane
+		var nearPlane = new THREE.Plane();
+		var forward = this.camera.localToWorld( new THREE.Vector3(0, 0, -this.camera.near) );
+		var normal = forward.clone().sub(this.camera.position).normalize();
+		nearPlane.setFromNormalAndCoplanarPoint(normal, forward);
+
+		// far plane
+		var farPlane = new THREE.Plane();
+		forward = this.camera.localToWorld( new THREE.Vector3(0, 0, -this.camera.far) );
+		normal = this.camera.position.clone().sub(forward).normalize();
+		farPlane.setFromNormalAndCoplanarPoint(normal, forward);
+		
+		// left
+		var leftPlane = new THREE.Plane();
+		var p = p0.clone().add(d0);
+		leftPlane.setFromCoplanarPoints(p, p0, p3);
+		
+		// right
+		var rightPlane = new THREE.Plane();
+		p = p1.clone().add(d1);
+		rightPlane.setFromCoplanarPoints(p2, p1, p);
+	
+		// top
+		var topPlane = new THREE.Plane();
+		topPlane.setFromCoplanarPoints(p, p1, p0);
+
+		// bottom
+		var bottomPlane = new THREE.Plane();
+		p = p2.clone().add(d2);
+		bottomPlane.setFromCoplanarPoints(p3, p2, p);
+		
+		var frustum = new THREE.Frustum(nearPlane, farPlane, leftPlane, rightPlane, topPlane, bottomPlane);
+		var transformedFrustum = new THREE.Frustum();
+
+		this.deselectAll();
+		this.container.traverseVisible(function(obj){
+			var found = null;
+			if(obj == editScene.container) return;
+			if(obj instanceof THREE.PixelBox || obj instanceof THREE.Mesh){
+				obj.geometry.computeBoundingBox();
+				
+				// transform frustum into object space
+				var inverseMatrix = new THREE.Matrix4();
+				inverseMatrix.getInverse(obj.matrixWorld);
+
+				transformedFrustum.copy(frustum);
+				transformedFrustum.planes[0].applyMatrix4(inverseMatrix);
+				transformedFrustum.planes[1].applyMatrix4(inverseMatrix);
+				transformedFrustum.planes[2].applyMatrix4(inverseMatrix);
+				transformedFrustum.planes[3].applyMatrix4(inverseMatrix);
+				transformedFrustum.planes[4].applyMatrix4(inverseMatrix);
+				transformedFrustum.planes[5].applyMatrix4(inverseMatrix);
+				
+				// test if object bounding box intersect this frustum
+				if(ctrlWasDown){
+					if(transformedFrustum.containsBox(obj.geometry.boundingBox)){
+						found = obj;
+					}					
+				} else if(transformedFrustum.intersectsBox(obj.geometry.boundingBox)){
+					found = obj;
+				}
+			} else {
+				var wp = obj.parent.localToWorld(obj.position.clone());
+				// test if wp is in camera frustum
+				if(frustum.containsPoint(wp)){
+					found = obj;
+				}
+			}
+			
+			if(found){
+				var parentInstance = obj.parentInstance();
+				if(parentInstance) editScene.selectObject(parentInstance, true);
+				else editScene.selectObject(obj, true);
+			}
+		});
+		
+	
+		this.marquee.remove();
+		this.marquee = null;
+	},
+
 
 /* ------------------- ------------------- ------------------- ------------------- ------------------- Mouse transform */
 
@@ -6100,9 +6239,11 @@ EditSceneScene.prototype = {
 			<em>Ctrl + E</em> export scene data<br/>\
 			<br/>\
 			<h2>Selection</h2>\
-			<em>LMB</em> select object<br/>\
-			<em>Shift + LMB</em> add objects to selection<br/>\
-			<em>Alt + LMB</em> remove objects from selection<br/>\
+			<em>Left Click</em> select object<br/>\
+			<em>Shift + Drag</em> selection marquee<br/>\
+			<em>Shift + Drag, Ctrl</em> selection marquee, contained only<br/>\
+			<em>Shift + Click</em> add objects to selection<br/>\
+			<em>Alt + Click</em> remove objects from selection<br/>\
 			<em>Esc</em> deselect all<br/>\
 			<br/>\
 			<em><span class="ctrl"/>C</em> copy selection<br/>\
@@ -6856,6 +6997,46 @@ function documentReady(){
 	});	
 	
 }
+
+/* frustum ext */
+
+THREE.Frustum.prototype.containsBox = function () {
+
+	var p1 = new THREE.Vector3(),
+		p2 = new THREE.Vector3();
+
+	return function ( box ) {
+
+		var planes = this.planes;
+
+		for ( var i = 0; i < 6 ; i ++ ) {
+
+			var plane = planes[ i ];
+
+			p1.x = plane.normal.x > 0 ? box.min.x : box.max.x;
+			p2.x = plane.normal.x > 0 ? box.max.x : box.min.x;
+			p1.y = plane.normal.y > 0 ? box.min.y : box.max.y;
+			p2.y = plane.normal.y > 0 ? box.max.y : box.min.y;
+			p1.z = plane.normal.z > 0 ? box.min.z : box.max.z;
+			p2.z = plane.normal.z > 0 ? box.max.z : box.min.z;
+
+			var d1 = plane.distanceToPoint( p1 );
+			var d2 = plane.distanceToPoint( p2 );
+
+			// if either outside plane, no intersection
+
+			if ( d1 < 0 || d2 < 0 ) {
+
+				return false;
+
+			}
+		}
+
+		return true;
+	};
+
+}();
+
 
 /* global helper functions */
 function localStorage_init(onReady) {
