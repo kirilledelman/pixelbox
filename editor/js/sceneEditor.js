@@ -1,16 +1,19 @@
 /*
+	NEXT
+	
+	Marquee selection
+	
+	[Swap Asset / Instance]
 
+	Curve objects - define nice camera and object paths
+
+
+	
 
 	LATER:
 
-	Windows / ANGLE compilation
-
 	for moveTool - convert chosen axis to object parent space (same as mouse move), so the move is in the same space as camera
 	
-	Curve objects - define nice camera and object paths
-
-	[Swap Asset / Instance]
-
 */
 
 function EditSceneScene(){

@@ -1011,13 +1011,9 @@ THREE.PixelBox = function(data){
 		// set offset/length
 		// regular frame
 		if(fd.s != undefined){
-			//this.vertexBufferStart = fd.s;
-			//this.vertexBufferLength = fd.l;
 			geom.offsets = [ { index: fd.s, count: fd.l } ];
 		// no offsets stored, use full range (editor)
 		} else if(fd.o){
-			//this.vertexBufferStart = 0;
-			//this.vertexBufferLength = fd.o.array.length;
 			geom.offsets = [];
 		}
 		
@@ -2160,11 +2156,9 @@ THREE.PixelBox.prototype.raycast = ( function () {
 
 		inverseMatrix.getInverse( this.matrixWorld );
 		ray.copy( raycaster.ray ).applyMatrix4( inverseMatrix );
+		
+		geometry.computeBoundingBox();
 
-		if(!geometry.boundingBox) {
-			geometry.boundingBox = new THREE.Box3(new THREE.Vector3(-geometry.data.width * 0.5, -geometry.data.height * 0.5, -geometry.data.depth * 0.5),
-												new THREE.Vector3(geometry.data.width * 0.5, geometry.data.height * 0.5, geometry.data.depth * 0.5));
-		}
 		if(ray.isIntersectionBox( geometry.boundingBox ) === false ) {
 			return;
 		}
@@ -2196,16 +2190,19 @@ THREE.PixelBox.prototype.raycast = ( function () {
 				} );
 
 			}
-
 		};
 
 		var attributes = geometry.attributes;
 		var positions = attributes.position.array;
 
-		var start = this.vertexBufferStart;
-		var len = start + this.vertexBufferLength;
+		var start = 0, end = 0;
 		
-		for ( var i = start; i < len; i ++ ) {
+		if(geometry.offsets.length){
+			start = geometry.offsets[0].index;
+			end = start + geometry.offsets[0].count;
+		}
+		
+		for ( var i = start; i < end; i ++ ) {
 
 			position.set(
 				positions[ 3 * i ],
