@@ -48,6 +48,11 @@ Project source also contains above examples, as well as the Scene Editor as Goog
 * Scene transitions using textures or blends are adopted from three.js examples.
 * Built-in downsampling of resolution rendering.
 
+## LinePath class
+* Moves objects along a path in space using tweens.
+* Integrated into Scene Editor.
+
+
 ## Contact
 
 You can contact the developer by [email](mailto:kirill.edelman@gmail.com)
