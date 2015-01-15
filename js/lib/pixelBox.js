@@ -1043,10 +1043,6 @@ THREE.PixelBox = function(data){
 		}),
 	});	
 	
-	// precompute
-	//this.geometry.computeBoundingSphere();
-	//this.geometry.computeBoundingBox();
-
 	// set frame / anim params
 	this.vertexBufferStart = 0;
 	this.vertexBufferLength = 0;
@@ -1101,14 +1097,8 @@ THREE.PixelBox = function(data){
 	
 	// pre-bind
 	this.advanceAnimationFrame = THREE.PixelBox.prototype.advanceAnimationFrame.bind(this);
-	// this.advanceTweenFrame = THREE.PixelBox.prototype.advanceTweenFrame.bind(this);
-
-	// this.tweenFps = 20;
-	// this._tweens = [];
-	// this._tweenInterval = 0;
 	
 	this.addEventListener('removed', this.stopAnim);
-	// this.addEventListener('removed', this.stopTweens);
 	
 	// add shorthand accessors
 	Object.defineProperty(this, 'asset', {
@@ -1188,7 +1178,7 @@ THREE.PixelBox.prototype.constructor = THREE.PixelBox;
 	
 */
 
-function applyTween(tweenObj){
+THREE.Object3D.prototype.applyTween = function(tweenObj){
 	if(tweenObj.target instanceof THREE.Color){
 		tweenObj.target.r = tweenObj.easing(tweenObj.time, tweenObj.from.r, tweenObj.to.r - tweenObj.from.r, tweenObj.duration);
 		tweenObj.target.g = tweenObj.easing(tweenObj.time, tweenObj.from.g, tweenObj.to.g - tweenObj.from.g, tweenObj.duration);
@@ -1221,32 +1211,28 @@ THREE.Object3D.prototype.advanceTweenFrame = function(){
 		this._tweenInterval = 0;
 		for(var i = this._tweens.length - 1; i >= 0; i--){
 			var tweenObj = this._tweens[i];
-			// advance time, and validate props
-			if(tweenObj.time === undefined) tweenObj.time = 0;
-			else tweenObj.time = Math.min(tweenObj.time + nextFrameIn, tweenObj.duration);
 			
-			if(tweenObj.duration === undefined) tweenObj.duration = 1.0;
+			tweenObj.time = Math.min(tweenObj.time + nextFrameIn, tweenObj.duration);
 			
-			if(tweenObj.target === undefined) tweenObj.target = this;
-			
-			if(tweenObj.easing === undefined) tweenObj.easing = Math.linearTween;
-			
-			if(tweenObj.from === undefined) {
-				if(tweenObj.target instanceof THREE.Color || tweenObj.target instanceof THREE.Vector3 || tweenObj.target instanceof THREE.Euler){
-					tweenObj.from = tweenObj.target.clone();
-				} else if(tweenObj.prop && tweenObj.target[tweenObj.prop]){
-					tweenObj.from = _.deepClone(tweenObj.target[tweenObj.prop]);
-				} else {
-					console.error("Failed to set \"from\" for tween:", tweenObj);
-					continue;
-				}
-			}
-			
-			applyTween(tweenObj);
+			this.applyTween(tweenObj);
 			
 			if(tweenObj.time >= tweenObj.duration){
-				if(tweenObj.done !== undefined) tweenObj.done.call(this, tweenObj);
-				this._tweens.splice(i, 1);	
+				// loop
+				if(tweenObj.numLoops > 0){
+					tweenObj.numLoops--;
+					if(tweenObj.autoReverse){
+						var temp = tweenObj.to;
+						tweenObj.to = tweenObj.from;
+						tweenObj.from = temp;
+					}
+					if(tweenObj.loop !== undefined) tweenObj.loop.call(this, tweenObj);
+					tweenObj.time = 0;
+					
+				// finish tween
+				} else {
+					if(tweenObj.done !== undefined) tweenObj.done.call(this, tweenObj);
+					this._tweens.splice(i, 1);	
+				}
 			}			
 		}
 		keepGoing = this._tweens.length > 0;
@@ -1259,17 +1245,52 @@ THREE.Object3D.prototype.advanceTweenFrame = function(){
 };
 
 THREE.Object3D.prototype.tween = function(obj){
-	if(!_.isArray(obj)) obj = [obj];
+	var objs;
+	if(!_.isArray(obj)) objs = [obj];
+	else objs = obj;
+	
 	// first time
 	if(!this.hasOwnProperty('advanceTweenFrame')){
 		this._tweens = [];
 		this.advanceTweenFrame = this.advanceTweenFrame.bind(this);
+		this.tweenFps = (this.tweenFps !== undefined ? this.tweenFps : 30);
 	}
-	this.tweenFps = Math.floor(Math.max(1, (obj.fps ? obj.fps : (this.tweenFps !== undefined ? this.tweenFps : 30))));
-	this._tweens = this._tweens.concat(obj);
-	if(!this._tweenInterval) setTimeout(this.advanceTweenFrame, 1000 / this.tweenFps);
 	
-	return obj;
+	for(var i = objs.length - 1; i >= 0; i--){
+		var tweenObj = objs[i];
+		tweenObj.time = 0;
+		
+		// validate
+		if(tweenObj.duration === undefined) tweenObj.duration = 1.0;
+		
+		if(tweenObj.target === undefined) tweenObj.target = this;
+		
+		if(tweenObj.easing === undefined) tweenObj.easing = Math.linearTween;
+		
+		if(tweenObj.numLoops === undefined) tweenObj.numLoops = 0;
+		
+		if(tweenObj.from === undefined) {
+			if(tweenObj.target instanceof THREE.Color || tweenObj.target instanceof THREE.Vector3 || tweenObj.target instanceof THREE.Euler){
+				tweenObj.from = tweenObj.target.clone();
+			} else if(tweenObj.prop && tweenObj.target[tweenObj.prop]){
+				tweenObj.from = _.deepClone(tweenObj.target[tweenObj.prop]);
+			} else {
+				tweenObj.from = 0;
+			}
+		}
+		
+		if(tweenObj.to === undefined) {
+			console.log("tween object \'to\' parameter is missing: ", tweenObj);
+			objs.splice(i, 1);
+			continue;
+		}
+	}
+	
+	this._tweens = this._tweens.concat(objs);
+	
+	if(!this._tweenInterval && this._tweens.length) setTimeout(this.advanceTweenFrame, 1000 / this.tweenFps);
+	
+	return objs;
 };
 
 /* stops all tweens */
@@ -1279,7 +1300,7 @@ THREE.Object3D.prototype.stopTweens = function(snapToFinish, callDone){
 		for(var i = 0, l = this._tweens.length; i < l; i++){
 			var tweenObj = this._tweens[i];
 			tweenObj.time = tweenObj.duration;
-			applyTween(tweenObj);
+			this.applyTween(tweenObj);
 			if(callDone && tweenObj.done !== undefined) tweenObj.done.call(this, tweenObj); 
 		}
 	}
@@ -1298,7 +1319,7 @@ THREE.Object3D.prototype.stopTween = function(obj, snapToFinish, callDone){
 		if(snapToFinish){
 			var tweenObj = this._tweens[index];
 			tweenObj.time = tweenObj.duration;
-			applyTween(tweenObj);
+			this.applyTween(tweenObj);
 			if(callDone && tweenObj.done !== undefined) tweenObj.done.call(this, tweenObj);
 		}	
 		this._tweens.splice(index, 1);

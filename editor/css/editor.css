@@ -6,7 +6,7 @@
 	z-index: 1000100; 
 	overflow-y: auto;
 	overflow-x: hidden;
-	max-height: 350px;
+	max-height: 360px;
 	min-width: 100px;
 	border-bottom: 1px solid #333;
 }
@@ -31,10 +31,29 @@
 	z-index: 2000000;
 }
 
+.point-row div.from,.point-row div.to {
+	width: 72px;
+	font-weight: bold;
+	color: #999;
+	display: inline-block;
+}
+.point-row div.from { text-align: right; }
+
+.point-row div.curve { 
+	text-align: center; 
+	display: inline-block;
+	width: 190px;
+}
+
+.point-row { padding: 5px; }
+.point-row:nth-child(even) {
+	background-color: rgba(255,255,255,0.1);
+}
+
 #editor-toolbar {
 	position: absolute;
 	text-align: right;
-	padding: 5px;
+	padding: 4px;
 	width: 590px;
 	height: 94px;
 }
@@ -153,7 +172,7 @@ label.object-label.droppable.active {
 
 #editor-props .panel .sub {
 	margin: 5px 0 0 0;
-	padding:5px;
+	padding:1px;
 	font-size: 12px;
 }
 

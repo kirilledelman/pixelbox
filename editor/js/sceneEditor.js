@@ -1,13 +1,30 @@
 /*
-	NEXT
+	LinePath
 	
-	Marquee selection
+	
+	
+	
+	Add meta field to points -> dispatch events on tween target	
+	
+	
+
+	Add to docs
+	
+	Working with LinePaths in editor
+	
+	LinePath class
+
+	Shift + click on target field to select linked object.
+
+	NEXT	
+
+	Filter textbox for Scene and Assets
+	
+	Grid for mouse and Shift + move?
 	
 	[Swap Asset / Instance]
 
 	Curve objects - define nice camera and object paths
-
-
 	
 
 	LATER:
@@ -30,6 +47,8 @@ function EditSceneScene(){
 		
 	this.canvasInteractionsEnabled = true;
 	this.disableCanvasInteractionsOnRelease = false;
+	
+	this.populateObjectCallback = this.populateObjectCallback.bind(this);
 	
 }
 
@@ -87,7 +106,11 @@ EditSceneScene.prototype = {
 	joinUndoActions: function(n){
 		var newItem = [];
 		for(var i = this._undo.length - n; i < this._undo.length; i++){
-			newItem.push(this._undo[i]);
+			if(_.isArray(this._undo[i])){
+				newItem = newItem.concat(this._undo[i]);
+			} else {
+				newItem.push(this._undo[i]);
+			}
 		}
 		this._undo.splice(this._undo.length - n, n);
 		this._undo.push(newItem);
@@ -218,6 +241,14 @@ EditSceneScene.prototype = {
 		// ignore right button
 		if(e.button === 2 || !this.canvasInteractionsEnabled) return;
 		
+		if(this.insertingPoint){
+			this.endInsertPoint(true);
+			e.stopPropagation();
+			e.preventDefault();
+			e.stopImmediatePropagation();
+			return;
+		}
+		
 		this.lazyMouse = new THREE.Vector2(e.pageX, e.pageY);
 		this.mouseMoved = false;
 		this.isMouseDown = true;
@@ -290,6 +321,11 @@ EditSceneScene.prototype = {
 		if(!this.canvasInteractionsEnabled) return;
 		
 		this.mouseCoord.set(e.pageX, e.pageY);
+		
+		if(this.insertingPoint){
+			this.continueInsertPoint(e);
+			return;
+		}
 		
 		if(this.lazyMouse){
 			var lazyMouse = new THREE.Vector2(e.pageX, e.pageY);
@@ -477,6 +513,21 @@ EditSceneScene.prototype = {
 			var obj = this.selectedObjects[i];
 			if(obj.isAnchor || obj.isDescendantOf(this.selectedObjects)) continue;
 			
+			if(obj instanceof THREE.LinePathHandle && obj.isControlPoint && obj.parent.lockTangents){
+				// skip, if both handles are selected
+				if(obj.parent.preHandle.selected && obj.parent.postHandle.selected) continue;
+
+				obj.origDistance = obj.position.length();
+
+				// store other's info
+				var other = (obj.parent.preHandle == obj) ? obj.parent.postHandle : obj.parent.preHandle;
+				other.origPosition = other.position.clone();
+				other.origDistance = other.position.length();
+				other.origQuaternion = other.quaternion.clone();
+				other.origRotation = other.rotation.clone();
+				other.origScale = other.scale.clone();
+			}
+			
 			obj.origPosition = obj.position.clone();
 			obj.origQuaternion = obj.quaternion.clone();
 			obj.origRotation = obj.rotation.clone();
@@ -540,6 +591,8 @@ EditSceneScene.prototype = {
 		
 		var rq = new THREE.Quaternion();
 		
+		var containsCurvePoints = {};
+		
 		for(var i = 0, l = this.transformingObjects.length; i < l; i++){
 			var obj = this.transformingObjects[i];
 			// move
@@ -556,8 +609,18 @@ EditSceneScene.prototype = {
 					temp.copy(obj.transformUp).multiplyScalar(-offset.y);
 					obj.position.add(temp);
 				}
+				if(obj instanceof THREE.LinePathHandle) { 
+					containsCurvePoints[obj.parent.uuid] = obj.isControlPoint ? obj.parent.parent : obj.parent;
+					// move opposite handle
+					if(obj.isControlPoint && obj.parent.lockTangents){
+						var other = (obj.parent.preHandle == obj) ? obj.parent.postHandle : obj.parent.preHandle;
+						var distanceRatio = fake0(obj.position.length()) / obj.origDistance;
+						other.position.copy(obj.position).normalize().multiplyScalar(-other.origDistance * distanceRatio);						
+					}
+				}
 			// rotate
 			} else if(this.transformingObjectsMode == 2){
+				if(obj instanceof THREE.LinePathHandle) continue;
 				obj.quaternion.copy(obj.origQuaternion);
 				rq.setFromAxisAngle(this.shift ? obj.transformAlignedUp : obj.transformUp, offset.x * 0.01);
 				rq.multiply(obj.quaternion);
@@ -569,6 +632,7 @@ EditSceneScene.prototype = {
 				obj.rotation.setFromQuaternion(obj.quaternion);
 			// scale
 			} else {
+				if(obj instanceof THREE.LinePathHandle) continue;
 				var sc = (Math.abs(offset.x) > Math.abs(offset.y) ? offset.x : offset.y);
 				obj.scale.copy(obj.origScale);
 				obj.scale.x += sc; obj.scale.z += sc; obj.scale.y += sc;
@@ -577,6 +641,10 @@ EditSceneScene.prototype = {
 				obj.updateMatrixWorld(true);
 				obj.helper.update();
 			}
+		}
+		
+		for(var pid in containsCurvePoints){
+			containsCurvePoints[pid].update();
 		}
 	},
 
@@ -594,6 +662,11 @@ EditSceneScene.prototype = {
 		if(this.transformingObjectsMode == 1){
 			for(var i = 0, l = this.transformingObjects.length; i < l; i++){
 				var obj = this.transformingObjects[i];
+				if(obj instanceof THREE.LinePathHandle && obj.isControlPoint && obj.parent.lockTangents) {
+					var other = (obj.parent.preHandle == obj) ? obj.parent.postHandle : obj.parent.preHandle;
+					doArr.push([other, other.position.clone() ]);
+					undoArr.push([other, other.origPosition.clone() ]);
+				}
 				doArr.push([obj, obj.position.clone() ]);
 				undoArr.push([obj, obj.origPosition.clone() ]);
 				this.touchTemplate(obj);
@@ -636,7 +709,7 @@ EditSceneScene.prototype = {
 	moveTool:function(dx, dy){
 		// scale
 		if(this.alt && this.ctrl){
-			var s = 0.25 * (dx ? dx : dy);
+			var s = 0.1 * (dx ? dx : dy);
 			this.scaleSelectionBy(new THREE.Vector3(s, s, s));
 		// regular rotate
 		} else if(this.alt){
@@ -768,7 +841,11 @@ EditSceneScene.prototype = {
 			this.touchTemplate(obj);
 			if(obj.selected) this.selectObject(obj, false);
 			this.objectDeletedRecusive(obj);
-			obj.parent.remove(objs[i]);
+			if(obj instanceof THREE.LinePathHandle){
+				this.deletePoint(obj.parent, obj, obj.curveIndex);
+			} else {
+				obj.parent.remove(objs[i]);
+			}
 		}
 		this.updateLights = true;
 		this.refreshScene();
@@ -780,10 +857,14 @@ EditSceneScene.prototype = {
 		for(var i = 0; i < objParArr.length; i++){
 			var obj = objParArr[i][0];
 			var p = objParArr[i][1];
-			p.add(obj);
+			if(obj instanceof THREE.LinePathHandle){
+				this.addPoint(p, obj, obj.curveIndex);
+			} else {
+				p.add(obj);
+			}
 			this.objectAddedRecusive(obj);
 			this.touchTemplate(obj);
-			if(obj instanceof THREE.PixelBox) this.pixelboxApplyAnimationParams(obj);
+			if(obj instanceof THREE.PixelBox && !(obj instanceof THREE.LinePathHandle)) this.pixelboxApplyAnimationParams(obj);
 		}
 		this.updateTextLabels(this.container, 0);
 		this.refreshScene();
@@ -797,10 +878,37 @@ EditSceneScene.prototype = {
 		var toDelete = this.selectedObjects.concat([]);
 		var templates = [];
 		
-		// find templates that will be deleted
+		var doClearTargets = [];
+		var undoClearTargets = [];
+		var doClearProps = [];
+		var undoClearProps = [];
+		
 		editScene.container.traverse(function(obj){
-			if(obj.isTemplate && (obj.selected || obj.isDescendantOf(toDelete))){
+			var objWillBeRemoved = (obj.selected || obj.isDescendantOf(toDelete));
+			// find templates that will be deleted
+			if(obj.isTemplate && objWillBeRemoved){
 				templates.push(obj.name);
+			}
+			// remove references to deleted objects from targets
+			if(!objWillBeRemoved){
+				// clear targets
+				if(obj instanceof THREE.DirectionalLight || obj instanceof THREE.SpotLight){
+					if(toDelete.indexOf(obj.target) >= 0){
+						var newTarget = new THREE.Object3D();
+						doClearTargets.push([obj, newTarget]);
+						undoClearTargets.push([obj, obj.target]);
+					}
+				}
+				// clear props
+				if(obj.props) {
+					for(var i = 0; i < obj.props.length; i++){
+						var prop = obj.props[i];
+						if(prop.type == 'Object3D' && toDelete.indexOf(prop.value) >= 0){
+							doClearProps.push([prop, null]);
+							undoClearProps.push([prop, prop.value]);
+						}
+					}
+				}
 			}
 		});
 		// add instances of these to the list
@@ -811,6 +919,7 @@ EditSceneScene.prototype = {
 		for(var i = 0; i < toDelete.length; i++){
 			var obj = toDelete[i];
 			if(obj.isAnchor) continue;
+			if(obj instanceof THREE.LinePathHandle && (obj.isControlPoint || obj.parent.path.curves.length < 2)) continue;				
 			undoArr.push([obj, obj.parent]);
 			doArr.push(obj);
 		}
@@ -819,6 +928,21 @@ EditSceneScene.prototype = {
 			this.addUndo({name:"delete", redo:[this.deleteObjects, doArr], undo:[this.addObjects, undoArr] });
 			this.deselectAll();
 			this.deleteObjects(doArr);
+			
+			if(doClearTargets.length){
+				editScene.addUndo({name:"clearTarget", undo:[editScene.setObjectProperty, undoClearTargets, 'target'],
+											redo:[editScene.setObjectProperty, doClearTargets, 'target']});
+				editScene.setObjectProperty(doClearTargets, 'target');
+				editScene.joinUndoActions(2);
+			}
+			
+			if(doClearProps.length){
+				editScene.addUndo({name:"propertyValue", redo:[editScene.setPropertyProp, doClearProps, 'value'],
+											undo:[editScene.setPropertyProp, undoClearProps, 'value']});
+				editScene.setPropertyProp(doClearProps, 'value');
+				editScene.joinUndoActions(2);
+			}
+
 		}
 	},
 	
@@ -827,7 +951,7 @@ EditSceneScene.prototype = {
 		var copiedAssets = {};
 		for(var i = 0; i < this.selectedObjects.length; i++){
 			var obj = this.selectedObjects[i];
-			if(obj.isAnchor) continue;
+			if(obj.isAnchor || obj instanceof THREE.LinePathHandle) continue;
 			toCopy.push(obj);
 		}
 		// check hierarchy
@@ -845,7 +969,7 @@ EditSceneScene.prototype = {
 		if(!toCopy.length) return;
 		// copy assets
 		function addAssetsRecursive(obj){
-			if(obj.pixelBox){
+			if(obj.pixelBox && !(obj instanceof THREE.LinePathHandle)){
 				if(!copiedAssets[obj.asset.name]){
 					copiedAssets[obj.asset.name] = obj.asset.importedAsset;
 				}
@@ -881,7 +1005,12 @@ EditSceneScene.prototype = {
 		if(e.shiftKey || (e.target && e.target.id == 'edit-paste-into')) pasteTarget = this.selectedObjects.length ? this.selectedObjects[0] : this.container;
 		else pasteTarget = this.selectedObjects.length ? this.selectedObjects[0].parent : this.container;
 		
+		if(pasteTarget instanceof THREE.LinePathHandle) pasteTarget = pasteTarget.parent.parent;
+		else if(pasteTarget instanceof THREE.LinePath) pasteTarget = pasteTarget.parent;
+
 		this.deselectAll();
+		
+		if(!this.sceneCopyItem) return;
 		
 		// import assets
 		var importedAssetsUndoItem = [];
@@ -895,7 +1024,7 @@ EditSceneScene.prototype = {
 			}
 		}
 		
-		var addedObjects = this.populateObject(pasteTarget, this.sceneCopyItem.objects, { helpers: true, keepSceneCamera:true, noNameReferences:true, wrapTemplates: true, templates: this.doc.serializedTemplates, skipProps: true });
+		var addedObjects = this.populateObject(pasteTarget, this.sceneCopyItem.objects, { helpers: true, keepSceneCamera:true, noNameReferences:true, wrapTemplates: true, templates: this.doc.serializedTemplates, skipProps: true, initObject: this.populateObjectCallback });
 		this.updateLights = true;
 		var doAdd = [];
 		var undoAdd = [];
@@ -1411,7 +1540,7 @@ EditSceneScene.prototype = {
 		}
 		
 		// populate
-		var opts = { helpers: true, keepSceneCamera:true, noNameReferences: true, wrapTemplates: true, templates: dataObject.templates, skipProps: true };
+		var opts = { helpers: true, keepSceneCamera:true, noNameReferences: true, wrapTemplates: true, templates: dataObject.templates, skipProps: true, initObject: this.populateObjectCallback };
 		var addedObjects = this.populateObject(this.container, dataObject.layers ? dataObject.layers : [], opts);
 		if(dataObject.containsTemplates){
 			for(var ti = 0; ti < dataObject.containsTemplates.length; ti++){
@@ -1498,6 +1627,10 @@ EditSceneScene.prototype = {
 		this.refreshScene();
 		this.refreshAssets();
 		this.refreshProps();
+		
+		// start collapsed
+		var rows = $('#scene div.row:has(div.row)');
+		rows.addClass('collapsed').find('a.toggle:first').text('+');
 		
 		this.showMessage(this.doc.name+' loaded');
 		
@@ -2005,7 +2138,13 @@ EditSceneScene.prototype = {
 			obj3d.children.sort(editScene.sceneSortFunc);
 			
 			// create a new row			
-			var type = (obj3d.isAnchor ? 'Anchor' : (obj3d.pixelBox ? obj3d.geometry.data.name : obj3d.def.asset));
+			
+			var type = '';
+			if(obj3d.isAnchor) type = 'Anchor';
+			else if(obj3d instanceof THREE.LinePathHandle) type = obj3d.isControlPoint ? 'ControlPoint' : 'Point';
+			else if(obj3d.pixelBox) type = obj3d.geometry.data.name;
+			else type = obj3d.def.asset;
+			
 			if(obj3d.isInstance) type = '['+obj3d.def.template+']';
 			if(!obj3d.htmlRow) {
 				var color = editScene.automaticColorForIndex(obj3d.id, 1.0);
@@ -2023,7 +2162,7 @@ EditSceneScene.prototype = {
 				obj3d.htmlRow.click(editScene.objectRowClicked).dblclick(editScene.objectRowDoubleClicked);
 				
 				// draggable
-				if(!obj3d.isAnchor) { 
+				if(!obj3d.isAnchor && !(obj3d instanceof THREE.LinePathHandle)) { 
 					var h = $('<div class="row helper" alt="'+obj3d.uuid+'"></div>');
 					obj3d.htmlRow.children('label:first').addClass('draggable').draggable({
 						//axis:'y',
@@ -2128,7 +2267,7 @@ EditSceneScene.prototype = {
 			var invalid = false;
 			for(var i = 0; i < draggedObjects.length; i++){
 				// no parenting to dragged objects themselves, or instances
-				if(obj == draggedObjects[i] || obj.isDescendantOf(draggedObjects[i]) || obj.isInstance || obj.omit){
+				if(obj == draggedObjects[i] || obj.isDescendantOf(draggedObjects[i]) || obj.isInstance || obj.omit || obj instanceof THREE.LinePathHandle || obj instanceof THREE.LinePath){
 					invalid = true;
 					break;
 				}
@@ -2349,18 +2488,27 @@ EditSceneScene.prototype = {
 				if(object == this.container) return;
 			}
 		
+			// expand the scene tree
+			var collapsedParents = object.htmlRow.parents('div.row.collapsed');
+			collapsedParents.removeClass('collapsed').find('a.toggle:first').text('-');
+			
+			// select
 			if(this.shift) this.selectObject(object, true);
 			else if(this.ctrl) this.selectObject(object, !object.selected);
 			else if(this.alt) this.selectObject(object, false);
 			else {
 				this.deselectAll();
 				this.selectObject(object, true);
-			}
+			}		
+			
 		} else this.deselectAll();
 		editScene.selectionChanged();
 	},
 
 	deselectAll:function(){
+		// inserting point
+		if(this.insertingPoint) this.endInsertPoint();
+	
 		if(!this.container || this.objectPickMode) return;
 		this.selectedObjects.length = 0;
 		this.container.traverse(function(obj){ 
@@ -2374,6 +2522,12 @@ EditSceneScene.prototype = {
 	},
 	
 	selectObject:function(obj, select){
+		// inserting point
+		if(this.insertingPoint) {
+			this.endInsertPoint();
+			return;
+		}
+	
 		// pick object mode
 		if(this.objectPickMode){
 			this.objectPickMode(obj);
@@ -2502,7 +2656,7 @@ EditSceneScene.prototype = {
 			if(obj3d.isPlaceholder){	
 				if(!allAssets[obj3d.def.asset]) allAssets[obj3d.def.asset] = { used: 1, name:obj3d.def.asset, missing:true };
 				else allAssets[obj3d.def.asset].used++;
-			} else if(obj3d.pixelBox){
+			} else if(obj3d.pixelBox && !(obj3d instanceof THREE.LinePathHandle)){
 				assets.cache.files[obj3d.geometry.data.name].used++;
 			}
 		});
@@ -2969,7 +3123,7 @@ EditSceneScene.prototype = {
 		// scene-wide validate/rename
 		this.container.traverse(function(obj3d){
 			// instances' children are left alone
-			if(obj3d.isInstance || obj3d.parentInstance()) return;
+			if(obj3d.isInstance || obj3d.parentInstance() || obj3d instanceof THREE.LinePathHandle) return;
 			
 			if(obj3d.isTemplate) allTemplates.push(obj3d);
 			
@@ -3026,14 +3180,46 @@ EditSceneScene.prototype = {
 	},
 
 	moveObjects:function(objPosArr){
+		var containsCurvePoints = {};
 		for(var i = 0; i < objPosArr.length; i++){
 			var obj = objPosArr[i][0];
+			if(obj instanceof THREE.LinePathHandle) {
+				containsCurvePoints[obj.parent.uuid] = obj.isControlPoint ? obj.parent.parent : obj.parent;
+			}
 			obj.position.copy(objPosArr[i][1]);
 			if(obj.helper) {
 				obj.updateMatrixWorld(true);
 				obj.helper.update();
 			}
+
 			editScene.touchTemplate(obj);
+		}
+		// refresh curves
+		for(var pid in containsCurvePoints){
+			containsCurvePoints[pid].update();
+		}
+	},
+	
+	transformObjects:function(objMatrixArr){
+		var containsCurvePoints = {};
+		for(var i = 0; i < objMatrixArr.length; i++){
+			var obj = objMatrixArr[i][0];
+			if(obj instanceof THREE.LinePathHandle) {
+				containsCurvePoints[obj.parent.uuid] = obj.isControlPoint ? obj.parent.parent : obj.parent;
+			}
+			obj.matrix.copy(objMatrixArr[i][1]);
+			obj.matrix.decompose(obj.position, obj.quaternion, obj.scale);
+			obj.rotation.setFromQuaternion(obj.quaternion);
+			if(obj.helper) {
+				obj.updateMatrixWorld(true);
+				obj.helper.update();
+			}
+
+			editScene.touchTemplate(obj);
+		}
+		// refresh curves
+		for(var pid in containsCurvePoints){
+			containsCurvePoints[pid].update();
 		}
 	},
 
@@ -3063,6 +3249,10 @@ EditSceneScene.prototype = {
 		for(var i = 0; i < this.selectedObjects.length; i++){
 			var obj = this.selectedObjects[i];
 			if(obj.isAnchor) continue;
+			if(obj instanceof THREE.LinePathHandle && obj.isControlPoint && obj.parent.lockTangents){
+				// skip, if both handles are selected
+				if(obj.parent.preHandle.selected && obj.parent.postHandle.selected) continue;
+			}			
 			undoPosArr.push([obj, obj.position.clone() ]);
 			objPosArr.push([obj,
 				new THREE.Vector3(	obj.position.x + (pos.x === null ? 0 : pos.x),
@@ -3076,6 +3266,7 @@ EditSceneScene.prototype = {
 	},
 
 	rotateObjects:function(objRotArr){
+		var containsCurvePoints = {};
 		for(var i = 0; i < objRotArr.length; i++){
 			var obj = objRotArr[i][0];
 			var rot = objRotArr[i][1];
@@ -3089,6 +3280,9 @@ EditSceneScene.prototype = {
 					obj.target.position.copy(rot);
 				}
 			} else {
+				if(obj instanceof THREE.LinePathHandle) {
+					containsCurvePoints[obj.parent.uuid] = obj.isControlPoint ? obj.parent.parent : obj.parent;
+				}
 				obj.rotation.copy(rot);
 			}
 			if(obj.helper) {
@@ -3096,6 +3290,10 @@ EditSceneScene.prototype = {
 				obj.helper.update();
 			}
 			editScene.touchTemplate(obj);
+		}
+		// refresh curves
+		for(var pid in containsCurvePoints){
+			containsCurvePoints[pid].update();
 		}
 	},
 
@@ -3105,7 +3303,7 @@ EditSceneScene.prototype = {
 		var degToRad = Math.PI / 180;
 		for(var i = 0; i < this.selectedObjects.length; i++){
 			var obj = this.selectedObjects[i];
-			if(obj.isAnchor) continue;
+			if(obj.isAnchor || obj instanceof THREE.LinePathHandle) continue;
 			undoRotArr.push([obj, obj.rotation.clone() ]);
 			objRotArr.push([obj,
 				new THREE.Euler(	(rot.x === null ? obj.rotation.x : (rot.x * degToRad)),
@@ -3123,9 +3321,10 @@ EditSceneScene.prototype = {
 		var objRotArr = [];
 		var undoRotArr = [];
 		var degToRad = Math.PI / 180;
+		
 		for(var i = 0; i < this.selectedObjects.length; i++){
 			var obj = this.selectedObjects[i];
-			if(obj.isAnchor) continue;
+			if(obj.isAnchor || obj instanceof THREE.LinePathHandle) continue;
 			undoRotArr.push([obj, obj.rotation.clone() ]);
 			objRotArr.push([obj,
 				new THREE.Euler(	obj.rotation.x + (rot.x === null ? 0 : (rot.x * degToRad)),
@@ -3152,7 +3351,7 @@ EditSceneScene.prototype = {
 		var undoScaleArr = [];
 		for(var i = 0; i < this.selectedObjects.length; i++){
 			var obj = this.selectedObjects[i];
-			if(obj.isAnchor) continue;
+			if(obj.isAnchor || obj instanceof THREE.LinePathHandle) continue;
 			undoScaleArr.push([obj, obj.scale.clone() ]);
 			objScaleArr.push([obj,
 				new THREE.Vector3(	(scale.x === null ? obj.scale.x : scale.x),
@@ -3172,7 +3371,7 @@ EditSceneScene.prototype = {
 		var undoScaleArr = [];
 		for(var i = 0; i < this.selectedObjects.length; i++){
 			var obj = this.selectedObjects[i];
-			if(obj.isAnchor) continue;
+			if(obj.isAnchor || obj instanceof THREE.LinePathHandle) continue;
 			undoScaleArr.push([obj, obj.scale.clone() ]);
 			objScaleArr.push([obj,
 				new THREE.Vector3(	obj.scale.x + (scale.x === null ? 0 : scale.x),
@@ -3202,10 +3401,18 @@ EditSceneScene.prototype = {
 			var obj = this.selectedObjects[i];
 			if(obj.isAnchor) continue;
 			if(obj instanceof THREE.DirectionalLight || obj instanceof THREE.SpotLight){
-				// if(targ.isAnchor && (targ.parent == obj.parent || (obj.parent.isAnchor && obj.parent.parent == targ.parent))){
-				undoRotArr.push([obj, obj.target ]);
-				obj.target = targ;
-				objRotArr.push([obj, targ]);
+				var targetable = !(targ instanceof THREE.LinePathHandle) && (obj.nearestTemplate() == targ.nearestTemplate());
+				if(targetable){
+					undoRotArr.push([obj, obj.target ]);
+					obj.target = targ;
+					objRotArr.push([obj, targ]);
+				} else {
+					if(obj.target.parent){
+						obj.target = new THREE.Object3D();
+					}
+					obj.target.position.copy(targ.position);
+					targ.parent.localToWorld(obj.target.position);
+				}
 			} else {
 				undoRotArr.push([obj, obj.rotation.clone() ]);
 				obj.updateMatrixWorld(true);
@@ -3222,6 +3429,15 @@ EditSceneScene.prototype = {
 	
 	lookAtClicked:function(e){
 		if($(e.target).attr('disabled')) return;
+		
+		if(e.target.id == 'light-target' && e.shiftKey){
+			if(e.target.value.length){
+				var anyObj = editScene.selectedObjects[0];
+				editScene.deselectAll();
+				if(anyObj.target && anyObj.target.parent) editScene.objectClicked(anyObj.target);
+			}
+			return;
+		}
 		
 		e.target.blur();
 		
@@ -3650,7 +3866,7 @@ EditSceneScene.prototype = {
 			}
 		});
 		if(numRebuilt){
-			var opts = { helpers: false, keepSceneCamera:true, noNameReferences:true, wrapTemplates: false, templates: this.doc.serializedTemplates, skipProps: true };
+			var opts = { helpers: false, keepSceneCamera:true, noNameReferences:true, wrapTemplates: false, templates: this.doc.serializedTemplates, skipProps: true, initObject: this.populateObjectCallback };
 			for(var uuid in replacements){
 				var obj = replacements[uuid];
 				var def = obj.serialize(null);
@@ -4598,7 +4814,19 @@ EditSceneScene.prototype = {
 		var propRow = $(e.target).closest('.prop-row');
 		var propName = propRow.attr('alt');
 		var type = $('select', propRow).val();
+		
 		if(type == 'Object3D'){
+
+			if(e.shiftKey && e.target.value.length){
+				var anyObj = editScene.selectedObjects[0];
+				var prop = anyObj.propByName(propName);
+				if(prop.value){
+					editScene.deselectAll();
+					editScene.objectClicked(prop.value);
+				}
+				return;
+			}
+
 			e.target.blur();
 			if(editScene.objectPickMode){
 				editScene.objectPickMode(undefined); // undefined
@@ -4607,12 +4835,15 @@ EditSceneScene.prototype = {
 			$(e.target).addClass('active');
 			$('canvas,.object-label,#scene-list div.row:not(.selected),#scene-list div.row:not(.selected) > label').css('cursor','cell');
 			editScene.objectPickMode = function(picked){
-				if(picked !== undefined){
+				if(picked !== undefined && !(picked instanceof THREE.LinePathHandle)){
 					var doArr = [];
 					var undoArr = [];
+					var pickedTemplate = picked.nearestTemplate();
 					for(var i = 0; i < editScene.selectedObjects.length; i++){
 						var obj = editScene.selectedObjects[i];
 						if(obj.isAnchor) continue;
+						var targetable = (obj.nearestTemplate() == pickedTemplate);
+						if(!targetable) continue;
 						var prop = obj.propByName(propName);
 						doArr.push([prop, picked]);
 						undoArr.push([prop, prop.value]);
@@ -4627,6 +4858,453 @@ EditSceneScene.prototype = {
 				$('canvas,.object-label,#scene-list div.row:not(.selected),#scene-list div.row:not(.selected) > label').css('cursor','');
 			};
 			
+		}
+	},
+	
+/* ------------------- ------------------- ------------------- ------------------- ------------------- LinePath curves */
+
+	_createHandle:function(positionInPath, isControlPoint, name){ // isControlPoint is point's "parent" or null
+		var handle = new THREE.LinePathHandle(isControlPoint ? 0xFFFF00 : 0xFF3300);
+		handle.isControlPoint = !!isControlPoint;
+		handle.position.copy(positionInPath);
+		if(isControlPoint){
+			isControlPoint.add(handle);
+			handle.position.sub(isControlPoint.position);
+		}
+		handle.name = name;
+		handle.selected = false;
+		THREE.PixelBoxUtil.updateViewPortUniform(this.camera);
+		return handle;
+	},
+
+	addPoint:function(linePath, handle, index){
+		// renumber existing children
+		for(var i = 0, nc = linePath.children.length; i < nc; i++){
+			var h = linePath.children[i];
+			if(h.curveIndex >= index){
+				h.curveIndex++;
+				h.preHandle.curveIndex++;
+				h.postHandle.curveIndex++;
+			}
+		}
+		// set index
+		if(i == 0){
+			handle.curveIndex = 0;
+			handle.pointIndex = 0;
+			handle.preHandle.curveIndex = -1;
+			handle.postHandle.curveIndex = 0;
+		} else {
+			handle.curveIndex = index;
+			handle.pointIndex = 0;
+			handle.preHandle.curveIndex = index - 1;
+			handle.postHandle.curveIndex = index;
+		}
+		
+		// add handle
+		linePath.add(handle);
+		
+		// rename
+		this.updatePointNames(linePath);
+		
+		// rebuild
+		linePath.rebuild(true);
+		
+		this.refreshScene();
+	},
+	
+	updatePointNames:function(linePath){
+		// rename
+		for(var i = 0, nc = linePath.children.length; i < nc; i++){
+			var h = linePath.children[i];
+			h.name = 'P'+(h.curveIndex);
+			if(h.htmlLabel) h.htmlLabel.text(h.name);
+			if(h.htmlRow) h.htmlRow.find('label:first').text(h.name);
+			
+			h.preHandle.name = 'CP_'+h.preHandle.curveIndex+'_'+h.preHandle.pointIndex;
+			if(h.preHandle.htmlLabel) h.preHandle.htmlLabel.text(h.preHandle.name);
+			if(h.preHandle.htmlRow) h.preHandle.htmlRow.find('label:first').text(h.preHandle.name);
+
+			h.postHandle.name = 'CP_'+h.postHandle.curveIndex+'_'+h.postHandle.pointIndex;
+			if(h.postHandle.htmlLabel) h.postHandle.htmlLabel.text(h.postHandle.name);
+			if(h.postHandle.htmlRow) h.postHandle.htmlRow.find('label:first').text(h.postHandle.name);
+		}
+	},
+	
+	deletePoint:function(linePath, handle, index){
+		// renumber existing children
+		for(var i = 0, nc = linePath.children.length; i < nc; i++){
+			var h = linePath.children[i];
+			if(h.curveIndex > index){
+				h.curveIndex--;
+				h.preHandle.curveIndex--;
+				h.postHandle.curveIndex--;
+			}
+		}
+		
+		// remove handle
+		linePath.remove(handle);
+		if(handle.htmlLabel){
+			handle.htmlLabel.remove();
+			handle.htmlLabel = null;
+		}
+		if(handle.preHandle.htmlLabel){
+			handle.preHandle.htmlLabel.remove();
+			handle.preHandle.htmlLabel = null;
+		}
+		if(handle.postHandle.htmlLabel){
+			handle.postHandle.htmlLabel.remove();
+			handle.postHandle.htmlLabel = null;		
+		}
+		// rename
+		this.updatePointNames(linePath);
+		
+		// rebuild
+		linePath.rebuild(true);
+		
+		this.refreshScene();
+	},
+	
+	splitCurve:function(lp, index, t){
+		// untransform prev and next points
+		/*function untransform(h){
+			var mx = h.matrix.clone();
+			var preHandleWorldPos = h.localToWorld(h.preHandle.position.clone());
+			var preHandleMx = h.preHandle.matrix.clone();
+			var postHandleWorldPos = h.localToWorld(h.postHandle.position.clone());
+			var postHandleMx = h.postHandle.matrix.clone();
+			h.rotation.set(0,0,0);
+			h.scale.set(1,1,1);
+			h.updateMatrix();
+			h.preHandle.position.copy(preHandleWorldPos);
+			h.worldToLocal(h.preHandle.position);
+			h.postHandle.position.copy(postHandleWorldPos);
+			h.worldToLocal(h.postHandle.position);
+			h.preHandle.updateMatrix();
+			h.postHandle.updateMatrix();
+			editScene.addUndo({ name: 'transformObject', 
+				undo:[ editScene.transformObjects, [ [h, mx], [h.preHandle, preHandleMx], [h.postHandle, postHandleMx ] ] ],
+				redo:[ editScene.transformObjects, [ [h, h.matrix.clone()], [h.preHandle, h.preHandle.matrix.clone()], [h.postHandle, h.postHandle.matrix.clone() ] ] ]
+			});
+			
+			editScene.joinUndoActions(2);
+		}
+		
+		untransform(prevPoint);
+		untransform(nextPoint);*/
+		
+		// split
+		var curve = lp.path.curves[index];
+		var splitPos = curve.getPoint(t);
+		
+		var p0 = curve.v0.clone(), p1 = curve.v1.clone(), p2 = curve.v2.clone(), p3 = curve.v3.clone();
+	    var p4 = p0.clone().lerp(p1, t);
+	    var p5 = p1.clone().lerp(p2, t);
+	    var p6 = p2.clone().lerp(p3, t);
+	    var p7 = p4.clone().lerp(p5, t);
+	    var p8 = p5.clone().lerp(p6, t);
+	    var p9 = p7.clone().lerp(p8, t);
+	    
+	    var firsthalf = [p0, p4, p7, p9];
+	    var secondhalf =  [p9, p8, p6, p3];
+	    
+	    // add point
+	    handle = this._createHandle(p9, false, 'P');
+	    handle.lockTangents = true;
+		var cpHandle = this._createHandle(p7, handle, 'CP');
+		cpHandle.pointIndex = 2;
+		handle.preHandle = cpHandle;
+		var cpHandle = this._createHandle(p8, handle, 'CP');
+		cpHandle.pointIndex = 1;
+		handle.postHandle = cpHandle;
+		
+		this.addUndo({ name: 'addPoint', undo:[this.deletePoint, lp, handle, index + 1], redo:[this.addPoint, lp, handle, index + 1]});
+		this.addPoint(lp, handle, index + 1);
+		
+		// transformObjects
+		// adjust neighbors
+		var prevPoint = lp.getObjectByName('P'+(index));
+		var nextPoint = lp.getObjectByName('P'+(index+2));
+
+		p4.sub(prevPoint.position);
+		p6.sub(nextPoint.position);
+		this.addUndo({ name: 'moveObject', undo:[this.moveObjects, [
+													[ prevPoint.postHandle, prevPoint.postHandle.position.clone() ],
+													[ nextPoint.preHandle, nextPoint.preHandle.position.clone() ]
+												] ], 
+										   redo:[this.moveObjects, [
+										   			[ prevPoint.postHandle, p4 ],
+										   			[ nextPoint.preHandle, p6 ]
+										   		] ] });
+		this.moveObjects([[ prevPoint.postHandle, p4 ],[ nextPoint.preHandle, p6 ]]);
+		this.joinUndoActions(2);
+		
+		this.undoChanged();	
+		this.refreshProps();
+		this.touchTemplate(lp);
+	},
+	
+	
+	// P1 - split - P2 clicked
+	pathSplitCurve:function(e){
+		var lp = this.selectedObjects[0];
+		var curveIndex = $(e.target).closest('.point-row').attr('alt');
+		this.splitCurve(lp, parseInt(curveIndex), 0.5);
+	},
+	
+	pathJoinEnds:function(e){
+		var startToEnd = e.target.id == 'point-join-se';
+		var lp = this.selectedObjects[0];
+		var point = startToEnd ? lp.getObjectByName('P0') : lp.getObjectByName('P'+lp.path.curves.length);
+		var destination = startToEnd ? lp.getObjectByName('P'+lp.path.curves.length) : lp.getObjectByName('P0');
+		
+		var doArr = [
+			[ point, destination.position.clone() ],
+			[ point.preHandle, destination.preHandle.position.clone() ],
+			[ point.postHandle, destination.postHandle.position.clone() ]
+		];
+		var undoArr = [
+			[ point, point.position.clone() ],
+			[ point.preHandle, point.preHandle.position.clone() ],
+			[ point.postHandle, point.postHandle.position.clone() ]
+		];
+		this.addUndo({ name:"joinPathEnds", redo:[ this.moveObjects, doArr ], undo:[this.moveObjects, undoArr] });
+		this.moveObjects(doArr);
+	},
+	
+	// + extend start | extend end + clicked
+	pathAddSegment:function(e){
+		var lp = this.selectedObjects[0];
+		var newPosition;
+		var index = e.target.id == 'point-add-left' ? 0 : lp.path.curves.length + 1;
+		
+		// prepend
+		if(index == 0){
+			var p0 = lp.getObjectByName('P0');
+			var p1 = lp.getObjectByName('P1');
+			var distance = p0.position.distanceTo(p1.position);
+			p1 = lp.worldToLocal(p0.localToWorld(p0.preHandle.position.clone()));
+			p0 = p0.position.clone();
+			var dir = p1.clone().sub(p0).normalize();
+			handle = this._createHandle(p0.add(dir.clone().multiplyScalar(distance)), false, 'P');
+			handle.lockTangents = true;
+			
+			dir.multiplyScalar(0.25 * distance);
+			var cpHandle = this._createHandle(handle.position.clone().add(dir), handle, 'CP');
+			cpHandle.pointIndex = 2;
+			handle.preHandle = cpHandle;
+			var cpHandle = this._createHandle(handle.position.clone().sub(dir), handle, 'CP');
+			cpHandle.pointIndex = 1;
+			handle.postHandle = cpHandle;
+			
+		// append
+		} else {
+			var p0 = lp.getObjectByName('P'+(lp.path.curves.length - 1));
+			var p1 = lp.getObjectByName('P'+(lp.path.curves.length));
+			var distance = p0.position.distanceTo(p1.position);
+			p0 = p1.position.clone();
+			p1 = lp.worldToLocal(p1.localToWorld(p1.postHandle.position.clone()));
+			var dir = p1.sub(p0).normalize();
+			handle = this._createHandle(p0.add(dir.clone().multiplyScalar(distance)), false, 'P');
+			handle.lockTangents = true;
+			
+			dir.multiplyScalar(0.25 * distance);
+			var cpHandle = this._createHandle(handle.position.clone().sub(dir), handle, 'CP');
+			cpHandle.pointIndex = 2;
+			handle.preHandle = cpHandle;
+			var cpHandle = this._createHandle(handle.position.clone().add(dir), handle, 'CP');
+			cpHandle.pointIndex = 1;		
+			handle.postHandle = cpHandle;
+		}
+		
+		this.addUndo({ name: 'addPoint', undo:[this.deletePoint, lp, handle, index], redo:[this.addPoint, lp, handle, index]});
+		this.addPoint(lp, handle, index);
+		
+		lp.update();
+		
+		//setTimeout(function(){  }, 100);
+		
+		this.refreshProps();
+		
+		this.touchTemplate(lp);
+	},
+	
+	pointMetaChanged:function(val){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'meta';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj[prop]]);
+		}
+		editScene.addUndo({name:'pointMeta', mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
+											redo:[editScene.setObjectProperty, doArr, prop]});
+		editScene.setObjectProperty(doArr, prop);
+		editScene.refreshProps();	
+	},
+	
+	pointLockTangentsChanged:function(e){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'lockTangents';
+		var val = e.target.checked;
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, !!obj[prop]]);
+		}
+		editScene.addUndo({name:prop, undo:[editScene.setObjectProperty, undoArr, prop],
+											redo:[editScene.setObjectProperty, doArr, prop]});
+		editScene.setObjectProperty(doArr, prop);
+	},
+	
+	beginInsertPoint:function(){
+		this.insertingPoint = true;
+	    this.controls.panEnabled = this.controls.rotateEnabled = this.controls.zoomEnabled = false;
+	    if(!this.insertingPointHandle){
+	    	this.insertingPointHandle = new THREE.LinePathHandle(0x00FF66);
+	    }
+	    this.scene.add(this.insertingPointHandle);
+	    this.insertingPointHandle.visible = false;
+	    $('canvas').css({ cursor: 'crosshair' });
+	},
+	
+	endInsertPoint:function(confirm){
+	    this.controls.panEnabled = this.controls.rotateEnabled = this.controls.zoomEnabled = true;
+	    $('canvas').css({ cursor: 'default' });
+	    
+	    var found = false;
+	    if(confirm && this.insertingPoint !== true){
+			// find segment to split
+			var lp = this.selectedObjects[0];
+			var curve = null;
+			var curveIndex = -1;
+			var curveT = 0;
+			var curvePoint = null;
+			var localInsertPoint = lp.worldToLocal(this.insertingPoint.point);
+			for(var i = 0; i < lp.path.curves.length; i++){
+				curve = lp.path.curves[i];
+				var step = 2.0 / curve.getLength();
+				for(var t = 0; t <= 1; t+= step){
+					curvePoint = curve.getPoint(t);
+					if(curvePoint.distanceToSquared(localInsertPoint) <= 4){
+						found = true;
+						curveIndex = i;
+						curveT = t;
+						break;
+					}
+				} 
+				if(found) break;    
+			}
+			// now we have the segment to split
+			if(found) {
+				this.splitCurve(lp, curveIndex, curveT);					
+				this.mouseDownOnObject = lp;
+			}
+	    }	    
+	    
+	    this.scene.remove(this.insertingPointHandle);
+	    
+		this.insertingPoint = false;
+	},
+	
+	continueInsertPoint:function(e){
+		var lp = this.selectedObjects[0];
+		if(!lp || !(lp instanceof THREE.LinePath)){
+			this.endInsertPoint();
+			return;
+		}
+		
+		var p = new THREE.Vector3(2 * (e.clientX / window.innerWidth) - 1, 1 - 2 * ( e.clientY / window.innerHeight ), 0);
+		p.unproject(this.camera);
+		this.raycaster.set(this.camera.position, p.sub(this.camera.position).normalize());
+		var intersects = this.raycaster.intersectObject(lp, false);
+		if(intersects.length){
+			this.insertingPoint = intersects[0];
+			this.insertingPointHandle.position.copy(this.insertingPoint.point);
+			this.insertingPointHandle.visible = true;
+			$('canvas').css({ cursor: 'cell' });
+		} else {
+			$('canvas').css({ cursor: 'crosshair' });
+			this.insertingPointHandle.visible = false;
+			this.insertingPoint = true;
+		}
+	},
+	
+	/* callback after object creation */
+	populateObjectCallback:function(obj, objDef){
+	
+		// custom LinePath initialization
+		if(obj instanceof THREE.LinePath){
+		
+			// selection highlight
+			obj._selected = false;
+			if(obj.selected === undefined){
+				Object.defineProperty(obj, 'selected',{
+					get:function(){ return this._selected; },
+					set:function(s){ this._selected = s; this.material = s ? THREE.LinePath.prototype.sharedSelectedMaterial : THREE.LinePath.prototype.sharedMaterial; }
+				});
+			}
+			
+			var parentInstance = obj.isInstance || obj.parentInstance();
+			
+			if(!parentInstance){
+				// create handles
+				var lastHandle = null, handle, cpHandle;
+				for(var i = 0; i < obj.path.curves.length; i++){
+					var curve = obj.path.curves[i];
+					// first handle
+					if(i == 0){
+						handle = this._createHandle(curve.v0, null, 'P'+i);
+						handle.lockTangents = curve.v0.lockTangents;
+						handle.curveIndex = i;
+						handle.pointIndex = 0;
+						handle.meta = curve.v0.meta;
+						obj.add(handle);
+						lastHandle = handle;
+						
+						// create pre handle
+						cpHandle = this._createHandle(curve.v0.clone().sub(curve.v1).add(curve.v0), handle, 'CP_0_0');
+						cpHandle.curveIndex = -1;
+						cpHandle.pointIndex = 2;
+						//cpHandle.visible = false;
+						handle.preHandle = cpHandle;
+					}
+					
+					// add second handle
+					handle = this._createHandle(curve.v3, null, 'P'+(i+1));
+					handle.lockTangents = curve.v3.lockTangents;
+					handle.curveIndex = i + 1;
+					handle.pointIndex = 0;
+					handle.meta = curve.v3.meta;
+					obj.add(handle);
+					
+					// add control point 1
+					cpHandle = this._createHandle(curve.v1, lastHandle, 'CP'+i+'_1');
+					cpHandle.curveIndex = i;
+					cpHandle.pointIndex = 1;
+					lastHandle.postHandle = cpHandle;
+					
+					// add control point 2
+					cpHandle = this._createHandle(curve.v2, handle, 'CP'+(i+1)+'_0');
+					cpHandle.curveIndex = i;
+					cpHandle.pointIndex = 2;
+					handle.preHandle = cpHandle;
+					
+					lastHandle = handle;
+					
+					// last point, add post handle
+					if(i + 1 == obj.path.curves.length){
+						cpHandle = this._createHandle(curve.v3.clone().sub(curve.v2).add(curve.v3), handle, 'CP_'+(i+1)+'_1');
+						cpHandle.curveIndex = i + 1;
+						cpHandle.pointIndex = 1;
+						//cpHandle.visible = false;					
+						handle.postHandle = cpHandle;
+					}
+				}
+			}
+			// create line geometry, don't recreate curves
+			obj.rebuild(false);
 		}
 	},
 	
@@ -4691,10 +5369,12 @@ EditSceneScene.prototype = {
 		var containsDirLights = false;
 		var containsHemiLights = false;
 		var containsPointLights = false;
+		var containsPoints = false;
+		var containsPaths = false;
 		var radToDeg = 180 / Math.PI;
 		var commonType = null;
 			
-		function getType(o){
+		function getType(o, pbt){
 			if(o.def){
 				switch(o.def.asset){
 				case 'Camera':
@@ -4702,15 +5382,17 @@ EditSceneScene.prototype = {
 					return 'Camera';
 				default:
 					if(o.isInstance) return '['+o.def.template+']';						
-					return (o.pixelBox) ? 'PixelBox' : o.def.asset;
+					return (o.pixelBox && !pbt) ? 'PixelBox' : o.def.asset;
 				}
 			} else if(o.isAnchor){
 				return 'Anchor';
+			} else if(o instanceof THREE.LinePathHandle){
+				return o.isControlPoint ? 'ControlPoint' : 'Point';
 			}
 			return null;
 		}	
 			
-		for(var i = 0; i < this.selectedObjects.length; i++){
+		for(var i = 0, numSel = this.selectedObjects.length; i < numSel; i++){
 			var obj = this.selectedObjects[i];
 			// name
 			if(prevObj && prevObj.name != obj.name){
@@ -4731,6 +5413,8 @@ EditSceneScene.prototype = {
 			containsDirLights = containsDirLights | (obj instanceof THREE.DirectionalLight);
 			containsHemiLights = containsHemiLights | (obj instanceof THREE.HemisphereLight);
 			containsPointLights = containsPointLights | (obj instanceof THREE.PointLight);
+			containsPoints = containsPoints | (obj instanceof THREE.LinePathHandle);
+			containsPaths = containsPaths | (obj instanceof THREE.LinePath);
 			
 			// type
 			var type = getType(obj);
@@ -4741,10 +5425,7 @@ EditSceneScene.prototype = {
 				mults['type'] = true;
 				commonType = null;
 			} else if(!mults['type']){
-				$('#prop-object-type').text(this.selectedObjects.length > 1 ? type : 
-												(obj.isAnchor ? 'Anchor' : 
-													((obj.pixelBox) ? 'PixelBox' : 
-														(obj.isInstance ? obj.def.template : obj.def.asset))));
+				$('#prop-object-type').text(this.selectedObjects.length > 1 ? type : getType(obj, true));
 				commonType = type;
 			} 
 			
@@ -4879,7 +5560,7 @@ EditSceneScene.prototype = {
 				}
 
 			} else 
-			
+						
 			// lights
 			if(obj instanceof THREE.Light){
 				if(prevObj && prevObj.color && prevObj.color.getHex() != obj.color.getHex()){
@@ -4968,6 +5649,8 @@ EditSceneScene.prototype = {
 					$('#light-target').attr('placeholder','').val(newVal).data('prevVal', newVal);
 				}
 			} else 
+			
+			// Geometry
 			if(commonType == 'Geometry'){
 				if(prevObj && prevObj.material.stipple != obj.material.stipple){
 					$('#geometry-stipple').attr('placeholder','M').val('').data('prevVal',''); mults['geometry-stipple'] = true;
@@ -5043,6 +5726,8 @@ EditSceneScene.prototype = {
 					
 				}				
 			} else 
+			
+			// PixelBox
 			if(commonType == 'PixelBox'){
 				if(prevObj && prevObj.pointSize != obj.pointSize){
 					$('#pixelbox-pointSize').attr('placeholder','M').val('').data('prevVal',''); mults['pointSize'] = true;
@@ -5121,6 +5806,44 @@ EditSceneScene.prototype = {
 				} else if(!mults['pixelbox-add']){
 					$('#pixelbox-add').css({backgroundColor:'#'+obj.addColor.getHexString()});
 				}
+			} else 
+			
+			// LinePath
+			if(commonType == 'LinePath'){
+				if(prevObj) { // multiple
+					$('#point-add').attr('disabled', 'disabled');
+					$('#path-container').empty().append('<span class="info">multiple selection</span>');
+				} else if(numSel == 1){
+					$('#point-add').removeAttr('disabled');
+					var cont = $('#path-container').empty();
+					for(var s = 0, sl = obj.path.curves.length; s < sl; s++){
+						var curve = obj.path.curves[s];
+						var row = $('<div class="point-row" id="curve-'+s+'" alt="'+s+'">\
+						<div class="from">P'+(s)+'</div>\
+						<div class="curve center"><a>split</a>\
+						</div>\
+						<div class="to">P'+(s+1)+'</div></div>');
+						row.find('a:first').click(this.pathSplitCurve.bind(this));
+						cont.append(row);
+					}
+				}
+			} else
+			
+			// Point
+			if(commonType == 'Point'){
+				if(prevObj && prevObj.lockTangents != obj.lockTangents){
+					$('#point-locked').addClass('multiple')[0].checked = false;
+					mults['lockTangents'] = true;
+				} else if(!mults['lockTangents']){
+					$('#point-locked')[0].checked = obj.lockTangents;
+				}
+				
+				if(prevObj && prevObj.meta != obj.meta){
+					$('#point-meta').attr('placeholder','Multiple').val('').data('prevVal',''); mults['point-meta'] = true;
+				} else if(!mults['point-meta']){
+					var newVal = obj.meta ? obj.meta : '';
+					$('#point-meta:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}
 			}
 			
 			// custom properties
@@ -5175,6 +5898,8 @@ EditSceneScene.prototype = {
 			prevObj = obj;
 		}
 		
+		
+		// common type
 		if(commonType == 'Camera'){
 			$('#panel-camera').show();
 			if(this.selectedObjects.length != 1) {
@@ -5182,21 +5907,21 @@ EditSceneScene.prototype = {
 			} else {
 				$('#cam-default,#cam-default~label:first').removeAttr('disabled').removeClass('multiple');
 			}			
-		}
-		
-		if(commonType == 'Geometry'){
+		} else if(commonType == 'Geometry'){
 			$('#panel-geometry').show();
-		}
-		
-		if(commonType == 'PixelBox'){
+		} else if(commonType == 'PixelBox'){
 			$('#panel-pixelbox').show();
 			if(mults['animName']){
 				$('#pixelbox-animName').prepend('<option value="" selected="selected">- multiple -</option>');
 			}
+		} else if(commonType == 'LinePath'){
+			$('#panel-path').show();			
+		} else if(commonType == 'Point'){		
+			$('#panel-point').show();
 		}
 		
 		if((containsDirLights || containsHemiLights || containsPointLights || containsSpotLights) &&
-			!(containsAnchors || containsCameras || containsContainers || containsInstances || containsGeometry || containsPointClouds)){
+			!(containsAnchors || containsCameras || containsContainers || containsInstances || containsGeometry || containsPointClouds || containsPoints)){
 			$('#panel-light').show();
 			
 			$('#light-distance,#light-exponent,#light-angle').spinner('enable');
@@ -5221,11 +5946,19 @@ EditSceneScene.prototype = {
 			$('#panel-move input[type=text]').attr('disabled','disabled').spinner('disable');
 			$('#panel-move input[type=checkbox]').attr('disabled','disabled');
 			$('#look-at,#prop-name,#obj-from-cam').attr('disabled','disabled');
+		} else if(containsPoints){
+			$('#panel-move input[type=text].rotation,#panel-move input[type=text].scale').attr('disabled','disabled').spinner('disable');
+			$('#panel-move input[type=checkbox]').attr('disabled','disabled');
+			$('#look-at,#prop-name,#obj-from-cam').attr('disabled','disabled');
 		} else {
 			$('#panel-move input[type=text]').removeAttr('disabled').spinner('enable');
 			$('#panel-move input[type=checkbox]').removeAttr('disabled');
 			$('#look-at,#prop-name,#obj-from-cam').removeAttr('disabled');
 			$('#panel-custom').show();
+		}
+		
+		if(containsPaths){
+			$('#prop-cast-shadow,#prop-receive-shadow').attr('disabled','disabled');
 		}
 		
 		if(containsInstances){
@@ -5416,6 +6149,17 @@ EditSceneScene.prototype = {
 				if(targ.val().toString() === prevVal) return;
 				var newVal = parseFloat(targ.spinner('value'));
 				if(isNaN(newVal)) newVal = 0;
+				setValueFunc.call(editScene, newVal, e);
+				targ.data('prevVal', targ.val());
+			}	
+		};
+		function textFieldValueChanged(setValueFunc){
+			return function(e){
+				var targ = $(e.target);
+				// check if value actually changed
+				var prevVal = targ.data('prevVal').toString();
+				if(targ.val().toString() === prevVal) return;
+				var newVal = targ.val();
 				setValueFunc.call(editScene, newVal, e);
 				targ.data('prevVal', targ.val());
 			}	
@@ -5881,6 +6625,28 @@ EditSceneScene.prototype = {
 			}
 		});
 
+// LinePath props panel
+		$('#editor-props .panels').append('<div id="panel-path" class="panel"><h4>LinePath</h4>\
+		<div class="sub center"><a id="point-add-left">&#8612; prepend</a> <span class="separator-left"/> \
+		<a id="point-join-se">start = end</a> <span class="separator-left"/> \
+		<a id="point-join-es">end = start</a> <span class="separator-left"/> \
+		<a id="point-add-right"> extend &#8614;</a></div><hr/>\
+		<div id="path-container"/>\
+		</div>');
+		
+		$('#point-add-left,#point-add-right').click(this.pathAddSegment.bind(this));
+		$('#point-join-se,#point-join-es').click(this.pathJoinEnds.bind(this));
+
+// Point props panel
+		$('#editor-props .panels').append('<div id="panel-point" class="panel"><h4>Point</h4>\
+		<input tabindex="0" type="checkbox" id="point-locked"/><label for="point-locked" class="w3">Lock Tangents</label><br/>\
+		<label for="point-meta" class="w2 right-align">Meta</label> <input type="text" size="25" id="point-meta"/>\
+		</div>');
+		
+		$('#point-locked').change(this.pointLockTangentsChanged.bind(this));
+		vc = textFieldValueChanged(this.pointMetaChanged.bind(this));
+		$('#point-meta').change(vc).keydown(function(e){ $(e.target).attr('placeholder',''); if(e.which == 13) $(e.target).data('prevVal',Math.random()).trigger('change').blur(); });
+
 // Custom props panel
 		$('#editor-props .panels').append('<div id="panel-custom" class="panel"><h4>Custom Properties</h4>\
 		<div class="sub right-align"><a id="prop-add">+ Add Property</a></div>\
@@ -5946,7 +6712,8 @@ EditSceneScene.prototype = {
 			<li id="scene-add-spot">Spot Light</li>\
 			<li id="scene-add-point">Point Light</li><hr/>\
 			<li id="scene-add-camera">Perspective Camera</li>\
-			<li id="scene-add-ortho-camera">Orthographic Camera</li>\
+			<li id="scene-add-ortho-camera">Orthographic Camera</li><hr/>\
+			<li id="scene-add-path">Line Path</li>\
   		</ul>\
 		</ul>');
 		$('#scene-add').button({icons:{secondary:'ui-icon-triangle-1-n'}}).click(function(){
@@ -6074,6 +6841,9 @@ EditSceneScene.prototype = {
 			addTarget = firstSelectedNonInstance ? firstSelectedNonInstance.parent : this.container;
 			if(this.selectedObjects.length) addPos.copy(addTarget.position);
 		}
+		if(addTarget instanceof THREE.LinePathHandle) addTarget = addTarget.parent.parent;
+		else if(addTarget instanceof THREE.LinePath) addTarget = addTarget.parent;
+		
 		var addWorldPos = addTarget.parent.localToWorld(addPos.clone());
 		
 		switch(e.target.id){
@@ -6163,6 +6933,10 @@ EditSceneScene.prototype = {
 			objDef = { asset: 'OrthographicCamera', name:'camera', fov:60, near:1, far:500 };
 			break;
 		
+		case 'scene-add-path':
+			objDef = { asset: 'LinePath', name:'path', segments: [ { v0:[0,0,0,1],v1:[0,0,10],v2:[0,0,90],v3:[0,0,100,1] } ] };
+			break;
+		
 		default:
 			if(asset){
 				var anims = assets.cache.files[asset].anims;
@@ -6200,7 +6974,7 @@ EditSceneScene.prototype = {
 			
 			var addedObject;
 			var addedObjects = this.populateObject(addTarget, [ objDef ], 
-								{ helpers: true, keepSceneCamera:true, noNameReferences:true, wrapTemplates: true, templates: this.doc.serializedTemplates, skipProps: true });
+								{ helpers: true, keepSceneCamera:true, noNameReferences:true, wrapTemplates: true, templates: this.doc.serializedTemplates, skipProps: true, initObject: this.populateObjectCallback });
 			addedObject = addTarget.children[addTarget.children.length - 1];
 			
 			var doAdd = [ [addedObject, addTarget] ];
@@ -6217,8 +6991,12 @@ EditSceneScene.prototype = {
 			this.updateTextLabels(this.container, 0);
 			this.selectObject(addedObject, true);
 			
-			//this.camera.lookAt(addWorldPos);
-			//this.controls.center.copy(addWorldPos);
+			// create collapsed
+			if(addedObject.children.length) addedObject.htmlRow.find('a.toggle').trigger('click');
+			
+			if(this.validateAllObjectNames()){
+				this.mergeUndo(true);
+			}
 			
 			this.selectionChanged();
 			this.refreshProps();
@@ -6360,6 +7138,7 @@ EditSceneScene.prototype = {
 			break;
 		case 17:
 			editScene.ctrl = false;
+			if(editScene.insertingPoint) editScene.endInsertPoint();
 			break;
 		case 18:
 			editScene.alt = false;
@@ -6418,6 +7197,11 @@ EditSceneScene.prototype = {
 			break;
 		case 17:
 			editScene.ctrl = true;
+			
+			if(!editScene.insertingPoint && editScene.selectedObjects.length == 1 && editScene.selectedObjects[0] instanceof THREE.LinePath){
+				editScene.beginInsertPoint();
+			}
+			
 			break;
 		case 18:
 			editScene.alt = true;
@@ -6502,6 +7286,7 @@ EditSceneScene.prototype = {
    		// projector & mouse picker
 		//this.projector = new THREE.Projector();
 		this.raycaster = new THREE.Raycaster( new THREE.Vector3(), new THREE.Vector3(), 0.01, this.camera.far ) ;
+		this.raycaster.linePrecision = 3;
 		//this.projectorPlane = new THREE.Plane(new THREE.Vector3(0,1,0), 0);
 
 		// create render target
@@ -6834,14 +7619,31 @@ THREE.Object3D.prototype.serialize = function(templates){
 		if(this.def.animName != undefined) def.animName = this.def.animName;
 		if(this.def.animOption != undefined) def.animOption = this.def.animOption;
 		if(this.def.animFrame != undefined) def.animFrame = this.def.animFrame;
+	
+	// paths
+	} else if(this instanceof THREE.LinePath){
 		
+		def.asset = 'LinePath';
+		def.segments = [];
+		for(var i = 0; i < this.path.curves.length; i++){
+			var curve = this.path.curves[i];
+			var o = { v0: curve.v0.toArray(), v1: curve.v1.toArray(), v2: curve.v2.toArray(), v3: curve.v3.toArray() };
+			var p = this.getObjectByName('P'+i);
+			if(p.lockTangents) o.v0.push(1);
+			if(p.meta && p.meta.length) o.metaStart = p.meta;
+			p = this.getObjectByName('P'+(i+1));
+			if(p.lockTangents) o.v3.push(1);
+			if(p.meta && p.meta.length) o.metaEnd = p.meta;
+			def.segments.push(o);
+		}
+	
 	} else {
 		//console.log("Serializing an unknown type", this);
 		def.asset = 'Object3D';
 	}
 	
 	// process children
-	if(!this.isInstance){
+	if(!this.isInstance && !(this instanceof THREE.LinePath)){
 		for(var i = 0; i < this.children.length; i++){
 			// skip anchors
 			var child = this.children[i];
@@ -6901,6 +7703,250 @@ THREE.Object3D.prototype.serialize = function(templates){
 	this.def = def;
 	return def;
 };
+
+/* Line path additions */
+
+/* cutomized raycast - adjust linePrecision with object scale */
+THREE.LinePath.prototype.raycast = function ( raycaster, intersects ) {
+	var geometry = this.geometry;
+
+	if ( geometry.boundingSphere === null ) geometry.computeBoundingSphere();
+
+	// Checking boundingSphere distance to ray
+	var sphere = new THREE.Sphere();
+	sphere.copy( geometry.boundingSphere );
+	sphere.applyMatrix4( this.matrixWorld );
+
+	if ( raycaster.ray.isIntersectionSphere( sphere ) === false ) {
+		return;
+	}
+
+	var inverseMatrix = new THREE.Matrix4();
+	inverseMatrix.getInverse( this.matrixWorld );
+	var ray = new THREE.Ray();
+	ray.copy( raycaster.ray ).applyMatrix4( inverseMatrix );
+	
+	var pscale = new THREE.Vector3();
+	pscale.setFromMatrixScale(inverseMatrix);
+	
+	var precision = raycaster.linePrecision * Math.min(pscale.x, pscale.y, pscale.z);
+	var precisionSq = precision * precision;
+
+	var vStart = new THREE.Vector3();
+	var vEnd = new THREE.Vector3();
+	var interSegment = new THREE.Vector3();
+	var interRay = new THREE.Vector3();
+	var step = this.mode === THREE.LineStrip ? 1 : 2;
+
+	var vertices = geometry.vertices;
+	var nbVertices = vertices.length;
+
+	for ( var i = 0; i < nbVertices - 1; i += step ) {
+		var distSq = ray.distanceSqToSegment( vertices[ i ], vertices[ i + 1 ], interRay, interSegment );
+		if ( distSq > precisionSq ) continue;
+		var distance = ray.origin.distanceTo( interRay );
+		if ( distance < raycaster.near || distance > raycaster.far ) continue;
+
+		intersects.push( {
+			distance: distance,
+			point: interSegment.clone().applyMatrix4( this.matrixWorld ),
+			face: null,
+			faceIndex: null,
+			object: this
+		} );
+	}		
+};
+
+
+/* 
+	Called when control points have moved (no structural change needed)
+	refreshes geometry vertices, and updates path length
+*/
+THREE.LinePath.prototype.update = function(){
+	this.updateMatrixWorld(true);
+	
+	// update curves points from handles
+	for(var i = 0, nc = this.children.length; i < nc; i++){
+		// point
+		var handle = this.children[i];
+		var curve = (handle.curveIndex < this.path.curves.length) ? this.path.curves[handle.curveIndex] : null;
+		var prevCurve = (handle.curveIndex > 0) ? this.path.curves[handle.curveIndex - 1] : null;
+		if(curve) curve.v0.copy(handle.position);
+		if(prevCurve) prevCurve.v3.copy(handle.position);
+		
+		// control point 1
+		var cpHandle = handle.preHandle;
+		if(cpHandle.curveIndex >= 0 && cpHandle.curveIndex < this.path.curves.length){
+			curve = this.path.curves[cpHandle.curveIndex];
+			var pos = cpHandle.position.clone();
+			handle.localToWorld(pos);
+			this.worldToLocal(pos);
+			if(cpHandle.pointIndex == 1) curve.v1.copy(pos);
+			else curve.v2.copy(pos);
+		}
+		
+		// control point 2
+		var cpHandle = handle.postHandle;
+		if(cpHandle.curveIndex >= 0 && cpHandle.curveIndex < this.path.curves.length){
+			curve = this.path.curves[cpHandle.curveIndex];
+			var pos = cpHandle.position.clone();
+			handle.localToWorld(pos);
+			this.worldToLocal(pos);
+			if(cpHandle.pointIndex == 1) curve.v1.copy(pos);
+			else curve.v2.copy(pos);
+		}
+	}	
+	
+	// update curves and geometry
+	for(var i = 0; i < this.path.curves.length; i++){
+		var curve = this.path.curves[i];
+		curve.updateArcLengths();
+		var points = curve.getPoints(9), ppi = 0;
+		for(var pi = i * 10, pic = pi + 10; pi < pic; pi++){
+			this.geometry.vertices[pi].copy(points[ppi]);
+			ppi++;
+		}
+	}
+	
+	// force path to refresh
+	if(this.path.cacheLengths) this.path.cacheLengths.length = 0;
+	// force geometry to refresh
+	this.geometry.verticesNeedUpdate = true;
+	this.geometry.boundingSphere = null;
+};
+
+/*  called after structural change to the path
+
+	recreates curves to match control points
+	recreates geometry to match curves 
+*/
+
+THREE.LinePath.prototype.rebuild = function(recreateCurves){
+	// remake geometry
+	this.geometry.dispose();
+	this.geometry = new THREE.Geometry();
+	
+	var p = this.parent;
+	if(p){
+		this.parent.remove(this);
+		p.add(this);
+	}
+	
+	if(recreateCurves){
+		// sort points
+		var sortedChildren = this.children.sort(function(a, b){
+			if(a.curveIndex < b.curveIndex) return -1;
+			if(a.curveIndex > b.curveIndex) return 1;
+			if(a.pointIndex < b.pointIndex) return -1;
+			if(a.pointIndex > b.pointIndex) return 1;
+			return 0;
+		});
+		
+		this.path.curves.length = 0;
+		if(this.path.cacheLengths) this.path.cacheLengths.length = 0;
+		
+		for(var i = 0, nc = sortedChildren.length - 1; i < nc; i++){
+			var p0 = sortedChildren[i];
+			var p3 = sortedChildren[i+1];
+			
+			var curve = new THREE.CubicBezierCurve3();
+			curve.v0 = p0.position.clone();
+			curve.v3 = p3.position.clone();
+			
+			var pos = p0.localToWorld(p0.postHandle.position.clone());
+			curve.v1 = this.worldToLocal(pos);
+			pos = p3.localToWorld(p3.preHandle.position.clone());
+			curve.v2 = this.worldToLocal(pos);
+			this.path.add(curve);
+		}
+		
+	}
+	
+	// recreate verts
+	for(var i = 0, nc = this.path.curves.length; i < nc; i++){
+		var curve = this.path.curves[i];
+		var points = curve.getPoints(9);
+		//if(i > 0) points.splice(0, 1); // skip first vertex on i > 0
+		this.geometry.vertices = this.geometry.vertices.concat(points);
+	}
+}
+
+/* LinePath point handle in editor */
+
+THREE.LinePathHandle = function (color){
+
+	THREE.PixelBox.call(this, THREE.LinePathHandle.prototype.pbPoint);
+
+	this.origColor = color;
+	this.tint.setHex(color);
+	this.castShadow = false;
+	this._selected = false;
+	this._lockTangents = false;
+	this.cullBack = false;
+	
+	Object.defineProperty(this, 'selected',{
+		get:function(){ return this._selected; },
+		set:function(s){ 
+			this._selected = s; 
+			this.tint.setHex(s ? 0xFFFFFF : (this.parent && this.parent.lockTangents ? 0x006699 : this.origColor));
+		}
+	});
+	Object.defineProperty(this, 'lockTangents',{
+		get:function(){ return this._lockTangents; },
+		set:function(s){ 
+			this._lockTangents = s; 
+			for(var i = 0; i < this.children.length; i++){
+				this.children[i].selected = this.children[i]._selected;//refresh tint
+			}
+		}
+	});
+		
+	return this;
+};
+
+THREE.LinePathHandle.prototype = Object.create(THREE.PixelBox.prototype);
+THREE.LinePathHandle.prototype.constructor = THREE.PixelBox;
+
+/* fix sprite raycast to use sprite scale */
+THREE.LinePathHandle.prototype.raycast = ( function () {
+
+	var matrixPosition = new THREE.Vector3();
+	var matrixScale = new THREE.Vector3();
+
+	return function ( raycaster, intersects ) {
+
+		matrixPosition.setFromMatrixPosition( this.matrixWorld );
+		matrixScale.setFromMatrixScale( this.matrixWorld );
+
+		var distance = raycaster.ray.distanceToPoint( matrixPosition );
+
+		if ( distance > Math.min(matrixScale.x, matrixScale.y, matrixScale.z) * this.pointSize) {
+			return;
+		}
+
+		intersects.push( {
+			distance: distance,
+			point: matrixPosition.clone(),
+			face: null,
+			object: this
+		} );
+	};
+
+}() );
+
+THREE.LinePathHandle.prototype.updateMatrix = function(){
+	var pscale = new THREE.Vector3();
+	return function(){
+		this.matrix.compose( this.position, this.quaternion, this.scale );
+		this.matrixWorldNeedsUpdate = true;
+		pscale.setFromMatrixScale(this.matrixWorld);
+		this.pointSize = 4 / Math.max(pscale.x, pscale.y, pscale.z);
+	};
+}();
+
+THREE.LinePathHandle.prototype.pbPoint = {width:1,height:1,depth:1,frames:["ffffffff"],pointSize:4,anchors:{},anims:[],meta:0};
+THREE.LinePath.prototype.sharedMaterial = new THREE.LineBasicMaterial( { color: 0x999999, fog: true } );
+THREE.LinePath.prototype.sharedSelectedMaterial = new THREE.LineBasicMaterial( { color: 0xffffff, fog: false, linewidth: 2 } );
 
 /* helper for parented lights fixes */
 

@@ -665,9 +665,9 @@ EditScene.prototype = {
 		if(editScene.pasteMode) editScene.cancelPaste();
 		var pixels = [];
 		// center
-		var cx = this.maskPosition.x + this.maskSize.x * 0.5;
-		var cy = this.maskPosition.y + this.maskSize.y * 0.5;
-		var cz = this.maskPosition.z + this.maskSize.z * 0.5;
+		var cx = Math.ceil(this.maskPosition.x + this.maskSize.x * 0.5);
+		var cy = Math.ceil(this.maskPosition.y + this.maskSize.y * 0.5);
+		var cz = Math.ceil(this.maskPosition.z + this.maskSize.z * 0.5);
 
 		// far position
 		var ww = Math.min(this.doc.width, this.maskPosition.x + this.maskSize.x);
@@ -678,13 +678,14 @@ EditScene.prototype = {
 			ry = this.maskSize.y * 0.5,
 			rz = this.maskSize.z * 0.5;
 		var r, dx, dy, dz;
+		var cylinder = (e.target.id == 'edit-cylinder');
 		var tint = this.strokeColor.clone();
 		for(var x = this.maskPosition.x; x < ww; x++){
 		for(var y = this.maskPosition.y; y < hh; y++){
 		for(var z = this.maskPosition.z; z < dd; z++){
 			dx = Math.abs(x - cx);
-			dy = Math.abs(y - cy);
-			dz = Math.abs(z - cz);			
+			dy = cylinder ? 0 : Math.abs(y - cy);
+			dz = Math.abs(z - cz);
 			r = Math.pow(dx, 2) / Math.pow(rx, 2) +
 				Math.pow(dy, 2) / Math.pow(ry, 2) +
 				Math.pow(dz, 2) / Math.pow(rz, 2);
@@ -3467,9 +3468,9 @@ EditScene.prototype = {
 	resizeDoc:function(e, preX, preY, preZ, addX, addY, addZ){
 		if(e){
 			$('body').append('<div id="resize-doc" class="center no-close">\
-			<label for="res-pre-x" class="w2 right-align">Pre X</label><input id="res-pre-x" size="1"/><label for="res-post-x" class="w2 right-align">Post X</label><input id="res-post-x" size="1"/><br/>\
-			<label for="res-pre-y" class="w2 right-align">Pre Y</label><input id="res-pre-y" size="1"/><label for="res-post-y" class="w2 right-align">Post Y</label><input id="res-post-y" size="1"/><br/>\
-			<label for="res-pre-z" class="w2 right-align">Pre Z</label><input id="res-pre-z" size="1"/><label for="res-post-z" class="w2 right-align">Post Z</label><input id="res-post-z" size="1"/><br/>\
+			<label for="res-pre-x" class="w2 right-align">Pre X</label><input id="res-pre-x" size="1"/><label for="res-post-x" class="w2 right-align">Post X</label><input id="res-post-x" size="1"/> = <label class="w3">Width</label> <input type="text" readonly="readonly" id="res-width" size="1"/><br/>\
+			<label for="res-pre-y" class="w2 right-align">Pre Y</label><input id="res-pre-y" size="1"/><label for="res-post-y" class="w2 right-align">Post Y</label><input id="res-post-y" size="1"/> = <label class="w3">Height</label> <input type="text" readonly="readonly" id="res-height" size="1"/><br/>\
+			<label for="res-pre-z" class="w2 right-align">Pre Z</label><input id="res-pre-z" size="1"/><label for="res-post-z" class="w2 right-align">Post Z</label><input id="res-post-z" size="1"/> = <label class="w3">Depth</label> <input type="text" readonly="readonly" id="res-depth" size="1"/><br/>\
 			<span class="info">This operation is not undo-able<br/>PRE X,Y,Z pad pixels from origin<br/>POST X,Y,Z add pixels to the outside<br/>Final size is Pre + origsize + Post</span>\
 			</div>');
 			$('#res-pre-x').val(-this.maskPosition.x);
@@ -3477,17 +3478,26 @@ EditScene.prototype = {
 			$('#res-pre-z').val(-this.maskPosition.z);
 			$('#res-post-x').val((this.maskPosition.x + this.maskSize.x) - this.doc.width);
 			$('#res-post-y').val((this.maskPosition.y + this.maskSize.y) - this.doc.height);
-			$('#res-post-z').val((this.maskPosition.z + this.maskSize.z) - this.doc.depth);			
-		    $('#resize-doc input').spinner({min: -128, max: 128, step: 1 });
+			$('#res-post-z').val((this.maskPosition.z + this.maskSize.z) - this.doc.depth);
+		    
+		    function refresh(){
+    			$('#res-width').val(editScene.doc.width + $('#res-pre-x').spinner('value') + $('#res-post-x').spinner('value'));
+				$('#res-height').val(editScene.doc.height + $('#res-pre-y').spinner('value') + $('#res-post-y').spinner('value'));
+				$('#res-depth').val(editScene.doc.depth + $('#res-pre-z').spinner('value') + $('#res-post-z').spinner('value'));
+		    }
+		    $('#resize-doc input:not(input[readonly])').spinner({min: -128, max: 128, step: 1, change: refresh, stop: refresh });
+		    refresh();
+		    
 	      	editScene.disableCanvasInteractions(true);
 			$('#resize-doc').dialog({
-			      resizable: false, width: 350, height:380, modal: true, dialogClass:'no-close', title:"Resize",
+			      resizable: false, width: 460, height:320, modal: true, dialogClass:'no-close', title:"Resize",
 			      buttons: {
 			        "Resize": function() {
 			          editScene.resizeDoc(null, 
 			          	$('#res-pre-x').spinner('value'),$('#res-pre-y').spinner('value'),$('#res-pre-z').spinner('value'),
 			          	$('#res-post-x').spinner('value'),$('#res-post-y').spinner('value'),$('#res-post-z').spinner('value'));
 			          $(this).dialog("close");
+			          editScene.maskReset();
 			        },
 			        Cancel: function() {
 			          $(this).dialog("close");
@@ -4099,6 +4109,7 @@ EditScene.prototype = {
 			<li id="edit-clear">Clear selection <em>Delete</em></li>\
 			<hr/>\
 			<li id="edit-ball">Add sphere</li>\
+			<li id="edit-cylinder">Add cylinder</li>\
 		</ul>\
 		<ul class="editor absolute-pos submenu" id="view-submenu">\
 			<li id="bg-floor"><input type="checkbox" id="bg-show-floor" '+(editScene.shadowPreviewPlane.visible ? 'checked="checked"':'')+'>Show floor plane</li>\
@@ -4143,7 +4154,7 @@ EditScene.prototype = {
 		});
 		$('#edit-submenu').menu().hide();
 		$('#edit-fill').click(editScene.fillBox.bind(editScene));
-		$('#edit-ball').click(editScene.fillBall.bind(editScene));
+		$('#edit-ball,#edit-cylinder').click(editScene.fillBall.bind(editScene));
 		$('#edit-clear').click(editScene.fillBox.bind(editScene));
 		$('#edit-copy').click(editScene.copySelection.bind(editScene));
 		$('#edit-cut').click(editScene.cutSelection.bind(editScene));
@@ -4651,13 +4662,13 @@ EditScene.prototype = {
 		$("#anchor-dupe").button().click(editScene.anchorDupe.bind(editScene));
 		$("#anchor-list").click(editScene.anchorSelect.bind(editScene));
 		var ap = editScene.anchorParamChanged.bind(editScene);
-		$("#anchor-x").spinner({min:-10, max:100, step:1, change: ap, stop: ap });
+		$("#anchor-x").spinner({min:-10, max:100, step:0.5, change: ap, stop: ap });
 		$("#anchor-rx").spinner({min:-180, max:180, step:15, change: ap, stop: ap });
 		$("#anchor-sx").spinner({min:-5, max:5, step:0.1, change: ap, stop: ap });
-		$("#anchor-y").spinner({min:-10, max:100, step:1, change: ap, stop: ap });
+		$("#anchor-y").spinner({min:-10, max:100, step:0.5, change: ap, stop: ap });
 		$("#anchor-ry").spinner({min:-180, max:180, step:15, change: ap, stop: ap });
 		$("#anchor-sy").spinner({min:-5, max:5, step:0.1, change: ap, stop: ap });
-		$("#anchor-z").spinner({min:-10, max:100, step:1, change: ap, stop: ap });
+		$("#anchor-z").spinner({min:-10, max:100, step:0.5, change: ap, stop: ap });
 		$("#anchor-rz").spinner({min:-180, max:180, step:15, change: ap, stop: ap });
 		$("#anchor-sz").spinner({min:-5, max:5, step:0.1, change: ap, stop: ap });
 		$("#anchor-delete").button().click(editScene.anchorDelete.bind(editScene));

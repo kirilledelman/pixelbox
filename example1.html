@@ -6,39 +6,8 @@
 		<meta content="yes" name="apple-mobile-web-app-capable" />		
 		<meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1"/>
 		
-		<!-- 
-			
-			The father of it all. Three.js. All hail mrdoob.
-			
-			Note that three.js r.69 used here is modified for PixelBox
-			
-			Either use this modified version, or get the source (uncompressed) three.js
-			and make PixelBox modification yourself. Modification is in renderBufferDirect function.
-			It adds a if() case for PixelBox rendering:
-			
-				/* begin PixelBox */ 
-				
-				else if ( object instanceof THREE.PixelBox ) {
-	
-					if ( updateBuffers ) {
-		
-						setupVertexAttributes( material, program, geometry, 0 );
-		
-					}
-		
-					var position = geometry.attributes.position;
-		
-					_gl.drawArrays( _gl.POINTS, object.vertexBufferStart, object.vertexBufferLength);
-					_this.info.render.points += object.vertexBufferLength;
-					
-					_this.info.render.calls ++;			
-		
-				} /* end PixelBox */ 
-			
-			See https://github.com/kirilledelman/pixelbox for more info.
-			
-		-->
-		<script src="js/lib/three.js"></script>
+		<!-- THREE base includes -->
+		<script src="js/lib/three.min.js"></script>
 		<script src="js/lib/stats.min.js"></script>
 		
 		<!-- jQuery, underscore and lz-string are used throughout PixelBox lib -->
