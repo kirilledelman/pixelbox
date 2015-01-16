@@ -6,31 +6,27 @@
 		<meta content="yes" name="apple-mobile-web-app-capable" />		
 		<meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1"/>
 
+		<!-- PixelBox uses jQuery -->
+		<script src="js/jquery-2.1.1.min.js"></script>
+		
 		<!-- THREE base includes -->
-		<script src="js/lib/three.min.js"></script>
-		<script src="js/lib/stats.min.js"></script>
+		<script src="js/three.min.js"></script>
+		<script src="js/stats.min.js"></script>
+		
+		<!-- PixelBox include -->
+		<script src="js/pixelbox.min.js"></script>
 		
 		<!-- This example uses EffectComposer -->
-		<script src="js/lib/postprocessing/shaders/CopyShader.js"></script>
-		<script src="js/lib/postprocessing/EffectComposer.js"></script>
-		<script src="js/lib/postprocessing/RenderPass.js"></script>
-		<script src="js/lib/postprocessing/ShaderPass.js"></script>
-		<script src="js/lib/postprocessing/MaskPass.js"></script>
-		<script src="js/lib/screenShader.js"></script>
+		<script src="js/postprocessing/CopyShader.js"></script>
+		<script src="js/postprocessing/EffectComposer.js"></script>
+		<script src="js/postprocessing/RenderPass.js"></script>
+		<script src="js/postprocessing/ShaderPass.js"></script>
+		<script src="js/postprocessing/MaskPass.js"></script>
+		<script src="js/postprocessing/ScreenShader.js"></script>
 		
-		<!-- jQuery, underscore and lz-string are used throughout PixelBox lib -->
-		<script src="js/lib/jquery-2.1.1.min.js"></script>
-		<script src="js/lib/lz-string.js"></script>
-		<script src="js/lib/underscore.js"></script>
+		<!-- OrbitControls from THREE's examples  -->
+		<script src="js/OrbitControls.js"></script>
 		
-		<!-- PixelBox base includes -->
-		<script src="js/lib/pixelBox.js"></script>
-		<script src="js/lib/render.js"></script>
-		<script src="js/lib/assets.js"></script>
-		<script src="js/lib/scene.js"></script>
-		
-		<!-- Page's source files -->
-		<script src="js/lib/OrbitControls.js"></script>
 	</head>
 	
 	<body>

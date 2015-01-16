@@ -365,7 +365,7 @@ EditScene.prototype = {
 		
 		// create stroke set
 		this.strokeSet = {};
-		this.strokeOrigFrame = _.deepClone(this.doc.frames[this._currentFrame], 1);
+		this.strokeOrigFrame = _deepClone(this.doc.frames[this._currentFrame], 1);
 		this.strokeMode = this._fillMode ? -1 : ((this.shift && this.alt) ? 3 : (this.shift ? 2 : (this.alt ? 1 : 0)));
 		$('body').css('cursor', this.strokeMode == 3 ? 'crosshair' : 'cell');
 		
@@ -1054,7 +1054,7 @@ EditScene.prototype = {
 			if(pos.x >= 0 && pos.x < ps.x && pos.y >= 0 && pos.y < ps.y && pos.z >= 0 && pos.z < ps.z){
 				pixel = this.pasteObject[pos.x * ps.z * ps.y + pos.y * ps.z + pos.z];
 				if(pixel && pixel.a > 0 && (pixel.c != existingPixel.c || pixel.a != existingPixel.a || pixel.b != existingPixel.b)){
-					pixel = _.deepClone(pixel);
+					pixel = _deepClone(pixel);
 					pixel.x = x; pixel.y = y; pixel.z = z;
 					pixels.push([addr, pixel]);
 					addrset[addr] = pixel;
@@ -1085,7 +1085,7 @@ EditScene.prototype = {
 					if(addrset[addr]) continue; // already placed
 					if(!existingPixel) existingPixel = emptyObj;
 					if(pixel.c != existingPixel.c || pixel.a != existingPixel.a || pixel.b != existingPixel.b){
-						pixel = _.deepClone(pixel);
+						pixel = _deepClone(pixel);
 						pixel.x = pos.x; pixel.y = pos.y; pixel.z = pos.z;
 						pixels.push([addr, pixel]);
 					}
@@ -1126,7 +1126,7 @@ EditScene.prototype = {
 			addr = x * this.doc.depth * this.doc.height + y * this.doc.depth + z;
 			var p = this.doc.frames[this._currentFrame][addr];
 			if(p){
-				p = _.deepClone(p);
+				p = _deepClone(p);
 				delete p.x; delete p.y; delete p.z;
 			}
 			copyObject.frames[0].push(p);			
@@ -1387,7 +1387,7 @@ EditScene.prototype = {
 			this.paste.position.add(posInc);
 			this.updatePasteSpinnersFromPaste();			
 		} else if(anchor && anchor.on){
-			var updatedAnchor = _.deepClone(anchor);
+			var updatedAnchor = _deepClone(anchor);
 			var anchorIndex = parseInt(selectedAnchor.attr('id').substr(11));
 			
 			updatedAnchor.x += posInc.x; updatedAnchor.y += posInc.y; updatedAnchor.z += posInc.z;
@@ -2501,7 +2501,7 @@ EditScene.prototype = {
 		
 		selAnim = this.doc.anims[index];
 		
-		var newAnim = _.deepClone(selAnim);
+		var newAnim = _deepClone(selAnim);
 		
 		newAnim.start = Math.min(newAnim.start, this.doc.frames.length - 1);
 		newAnim.length = Math.min(newAnim.length, this.doc.frames.length - newAnim.start);
@@ -2553,7 +2553,7 @@ EditScene.prototype = {
 			index = parseInt(selRow.attr('id').substr(9));
 		} else return;
 		if(e.type == 'spinchange'){
-			var anim = _.deepClone(this.doc.anims[index]);
+			var anim = _deepClone(this.doc.anims[index]);
 			anim.fps = $('#anim-fps').spinner('value');
 				this.updateAnimation(index, anim);
 		}
@@ -2566,7 +2566,7 @@ EditScene.prototype = {
 		if(selRow.length){
 			index = parseInt(selRow.attr('id').substr(9));
 		} else return;
-		var anim = _.deepClone(this.doc.anims[index]);
+		var anim = _deepClone(this.doc.anims[index]);
 		anim.name = e.target.value;
 		this.updateAnimation(index, anim);
 	},
@@ -2581,7 +2581,7 @@ EditScene.prototype = {
 		var value = $('#anim-start').spinner('value') - 1;
 		$('#anim-len').spinner('option', { max: this.doc.frames.length - value});
 		if(e.type == 'spinchange'){
-			var anim = _.deepClone(this.doc.anims[index]);
+			var anim = _deepClone(this.doc.anims[index]);
 			anim.start = value;
 			if(value + anim.length > this.doc.frames.length){
 				anim.length = this.doc.frames.length - value;
@@ -2603,7 +2603,7 @@ EditScene.prototype = {
 		var value = $('#anim-len').spinner('value');
 		if(e.type == 'spinchange'){
 			// valudate length
-			var anim = _.deepClone(this.doc.anims[index]);
+			var anim = _deepClone(this.doc.anims[index]);
 			anim.length = value;
 			this.updateAnimation(index, anim);
 		}
@@ -2616,7 +2616,7 @@ EditScene.prototype = {
 		if(selRow.length){
 			index = parseInt(selRow.attr('id').substr(9));
 		} else return;
-		var anim = _.deepClone(this.doc.anims[index]);
+		var anim = _deepClone(this.doc.anims[index]);
 		anim.meta = e.target.value;
 		this.updateAnimation(index, anim);
 	},
@@ -2627,10 +2627,10 @@ EditScene.prototype = {
 			index = parseInt(selRow.attr('id').substr(9));
 		} else return;
 		
-		var anim = _.deepClone(this.doc.anims[index]);
+		var anim = _deepClone(this.doc.anims[index]);
 		var values = $('#frame-range-slider').slider('values');
 		if((values[0]-1) != anim.start || (values[1] - values[0]+1) != anim.length){
-			anim = _.deepClone(anim);
+			anim = _deepClone(anim);
 			anim.start = values[0] - 1;
 			anim.length = values[1] - values[0] + 1;
 			this.updateAnimation(index, anim);
@@ -2762,7 +2762,7 @@ EditScene.prototype = {
 		var selRow = $(e.target).closest('.anchor-row');
 		var index = parseInt(selRow.attr('id').substr(11));
 		
-		var anchor = _.deepClone(this.doc.frames[this._currentFrame].anchors[index]);
+		var anchor = _deepClone(this.doc.frames[this._currentFrame].anchors[index]);
 		anchor.on = e.target.checked ? 1 : 0;
 		this.updateAnchor(this._currentFrame, index, anchor);		
 	},
@@ -2810,7 +2810,7 @@ EditScene.prototype = {
 			meta: ''
 		};
 		var objArray = [];
-		for(var i = 0; i < this.doc.frames.length; i++){ objArray.push(_.deepClone(anchor)); }
+		for(var i = 0; i < this.doc.frames.length; i++){ objArray.push(_deepClone(anchor)); }
 		this.anchorInsert(this.doc.frames[this._currentFrame].anchors ? this.doc.frames[this._currentFrame].anchors.length : 0, objArray);
 		
 		$('#anchor-row-'+(this.doc.frames[this._currentFrame].anchors.length-1)).trigger('click');
@@ -2828,7 +2828,7 @@ EditScene.prototype = {
 		var objArray = [];
 		var newId = THREE.Math.generateUUID();
 		for(var i = 0; i < this.doc.frames.length; i++){ 
-			var newObj = _.deepClone(this.doc.frames[i].anchors[index]);
+			var newObj = _deepClone(this.doc.frames[i].anchors[index]);
 			newObj.id = newId;
 			objArray.push(newObj); 
 		}
@@ -2894,7 +2894,7 @@ EditScene.prototype = {
 			return;
 		}
 		
-		var updatedAnchor = _.deepClone(this.doc.frames[this._currentFrame].anchors[index]);
+		var updatedAnchor = _deepClone(this.doc.frames[this._currentFrame].anchors[index]);
 		for(var p in obj){
 			updatedAnchor[p] = obj[p];
 		}		
@@ -2916,7 +2916,7 @@ EditScene.prototype = {
 		
 		var curValue = this.doc.frames[this._currentFrame].anchors[index];
 		for(var i = 0; i < this.doc.frames.length; i++){
-			var newVal = _.deepClone(curValue);
+			var newVal = _deepClone(curValue);
 			var prevValue = this.doc.frames[i].anchors[index];
 			this.doc.frames[i].anchors[index] = newVal;
 			undoItem.push({undo:[this.updateAnchor, i, index, prevValue], redo:[this.updateAnchor, i, index, newVal]});
@@ -2935,7 +2935,7 @@ EditScene.prototype = {
 			return;
 		}
 		
-		var anchor = _.deepClone(this.doc.frames[this._currentFrame].anchors[index]);
+		var anchor = _deepClone(this.doc.frames[this._currentFrame].anchors[index]);
 		var fld = e.target.id.substr(7);
 		if((e.type == 'spinchange' || fld == 'meta') && anchor[fld] != e.target.value){
 			anchor[fld] = parseFloat(e.target.value);
@@ -3017,7 +3017,7 @@ EditScene.prototype = {
 		var frameObject = this.doc.frames[loc];
 		
 		// duplicate frame
-		var nfo = _.deepClone(frameObject, 1);
+		var nfo = _deepClone(frameObject, 1);
 				
 		this.frameRangePaste(null, loc, [ nfo ] );
 	},
@@ -3044,12 +3044,12 @@ EditScene.prototype = {
 				var anim = this.doc.anims[i];
 				// frame inside this anim
 				if(anim.start <= loc && anim.start + anim.length > loc){
-					var updatedAnim = _.deepClone(anim);
+					var updatedAnim = _deepClone(anim);
 					updatedAnim.length = Math.max(1, anim.length - 1);
 					undoItem.push({redo:[this.updateAnimation, i, updatedAnim], undo:[this.updateAnimation, i, anim] });
 					this.doc.anims[i] = updatedAnim;
 				} else if(anim.start > loc){
-					var updatedAnim = _.deepClone(anim);
+					var updatedAnim = _deepClone(anim);
 					updatedAnim.start = Math.max(0, anim.start - 1);
 					undoItem.push({redo:[this.updateAnimation, i, updatedAnim], undo:[this.updateAnimation, i, anim] });
 					this.doc.anims[i] = updatedAnim;
@@ -3059,12 +3059,12 @@ EditScene.prototype = {
 				var anim = this.doc.anims[i];
 				// frame inside this anim
 				if(anim.start <= newLoc - 1 && anim.start + anim.length > newLoc - 1){
-					var updatedAnim = _.deepClone(anim);
+					var updatedAnim = _deepClone(anim);
 					updatedAnim.length++;
 					undoItem.push({redo:[this.updateAnimation, i, updatedAnim], undo:[this.updateAnimation, i, anim] });
 					this.doc.anims[i] = updatedAnim;
 				} else if(anim.start > newLoc - 1){
-					var updatedAnim = _.deepClone(anim);
+					var updatedAnim = _deepClone(anim);
 					updatedAnim.start++;
 					undoItem.push({redo:[this.updateAnimation, i, updatedAnim], undo:[this.updateAnimation, i, anim] });
 					this.doc.anims[i] = updatedAnim;
@@ -3278,7 +3278,7 @@ EditScene.prototype = {
 			var frameAnchors = frame.anchors;
 			
 			// normalize anchors in frame
-			frame.anchors = _.deepClone(currentAnchors);
+			frame.anchors = _deepClone(currentAnchors);
 			for(var a = 0; a < currentAnchors.length; a++){
 				// find anchor in frame
 				for(var ai = 0; ai < frameAnchors.length; ai++){
@@ -3302,7 +3302,7 @@ EditScene.prototype = {
 			var anims = _.clone(this.doc.anims);
 			for(var i = 0; i < anims.length; i++){
 				var anim = anims[i];
-				var updatedAnim = _.deepClone(anim);
+				var updatedAnim = _deepClone(anim);
 				var origIndex = this.doc.anims.indexOf(anim);
 				var animEnd = anim.start + anim.length;
 				// startFrame is inside anim
@@ -3380,7 +3380,7 @@ EditScene.prototype = {
 			var rangeEnd = startFrame + length;
 			for(var i = 0; i < anims.length; i++){
 				var anim = anims[i];
-				var updatedAnim = _.deepClone(anim);
+				var updatedAnim = _deepClone(anim);
 				var animEnd = anim.start + anim.length;
 				var origIndex = this.doc.anims.indexOf(anim);
 				// start frame inside this anim
@@ -3516,7 +3516,7 @@ EditScene.prototype = {
 			// resize frames
 			for(var i = 0; i < this.doc.frames.length; i++){
 				var frame = this.doc.frames[i];
-				var newFrame = _.deepClone(frame, 10);
+				var newFrame = _deepClone(frame, 10);
 				
 				newFrame.length = 0; // truncate
 				newFrame.length = newWidth * newHeight * newDepth;
@@ -3855,7 +3855,7 @@ EditScene.prototype = {
 		for(var pname in dataObject){
 		// copy all props except frames
 			if(pname != 'frames'){
-				this.doc[pname] = _.deepClone(dataObject[pname]);
+				this.doc[pname] = _deepClone(dataObject[pname]);
 			}
 		}
 		
@@ -3974,7 +3974,7 @@ EditScene.prototype = {
 			for(var aname in anchors){
 				var anchorFrames = anchors[aname];
 				if(!anchorIds[aname]) anchorIds[aname] = THREE.Math.generateUUID();
-				var obj = _.deepClone(anchorFrames.length <= frameIndex ? anchorFrames[0] : anchorFrames[frameIndex]);
+				var obj = _deepClone(anchorFrames.length <= frameIndex ? anchorFrames[0] : anchorFrames[frameIndex]);
 				obj.name = aname;
 				obj.id = anchorIds[aname];
 				if(frameIndex){
@@ -5277,7 +5277,7 @@ function eraseCookie(name) {
 }
 
 /* deep clone */
-_.deepClone = function(obj, depth) {
+_deepClone = function(obj, depth) {
 	if (typeof obj !== 'object') return obj;
 	if (obj === null) return null;
 	if (_.isString(obj)) return obj.splice();
@@ -5294,7 +5294,7 @@ _.deepClone = function(obj, depth) {
 	}
 	if (!_.isUndefined(depth) && (depth > 0)) {
 	  for (var key in clone) {
-	    clone[key] = _.deepClone(clone[key], depth-1);
+	    clone[key] = _deepClone(clone[key], depth-1);
 	  }
 	}
 	return clone;

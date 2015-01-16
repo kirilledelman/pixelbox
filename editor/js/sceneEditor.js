@@ -1,20 +1,6 @@
 /*
 	LinePath
 	
-	
-	
-	
-	Add meta field to points -> dispatch events on tween target	
-	
-	
-
-	Add to docs
-	
-	Working with LinePaths in editor
-	
-	LinePath class
-
-	Shift + click on target field to select linked object.
 
 	NEXT	
 
@@ -1017,7 +1003,7 @@ EditSceneScene.prototype = {
 		for(var aname in this.sceneCopyItem.assets){
 			var asset = this.sceneCopyItem.assets[aname];
 			if(!assets.cache.files[aname]){
-				asset = _.deepClone(asset, 100);
+				asset = _deepClone(asset, 100);
 				importedAssetsUndoItem.push({name:"addAsset",undo:[editScene.deleteAsset, asset],
 											redo:[editScene.importSceneAsset, asset]});
 	      		editScene.importSceneAsset(asset);
@@ -1461,7 +1447,7 @@ EditSceneScene.prototype = {
 			this.deselectAll();
 			$('.object-label').remove();
 			this.createContainer();
-			this.newDocFromData(_.deepClone(this.defaultSceneDef,100));
+			this.newDocFromData(_deepClone(this.defaultSceneDef,100));
 			this.refreshAssets();
 			this.refreshProps();
 			this.refreshScene();
@@ -1530,7 +1516,7 @@ EditSceneScene.prototype = {
 			}
 			// add asset to cache if needed
 			if(!assets.cache.get(asset.name)){
-				asset.importedAsset = _.deepClone(asset, 100);
+				asset.importedAsset = _deepClone(asset, 100);
 				if(THREE.PixelBoxUtil.processPixelBoxFrames(asset)){
 					assets.cache.add(asset.name, asset);
 				} else {
@@ -1765,7 +1751,7 @@ EditSceneScene.prototype = {
 	importSceneAsset: function(newAsset){
 		if(!newAsset.importedAsset){
 			// just imported
-			newAsset.importedAsset = _.deepClone(newAsset, 100);
+			newAsset.importedAsset = _deepClone(newAsset, 100);
 			THREE.PixelBoxUtil.processPixelBoxFrames(newAsset);
      	}
 	
@@ -2038,7 +2024,7 @@ EditSceneScene.prototype = {
 		if(raw){
 			if(typeof(asset.frames[0]) == 'string'){
 				// frames need to be converted to raw
-				var pivotlessAsset = _.deepClone(asset,100);
+				var pivotlessAsset = _deepClone(asset,100);
 				pivotlessAsset.anchors = {};
 				var model = new THREE.PixelBox(pivotlessAsset);
 				
@@ -2617,7 +2603,7 @@ EditSceneScene.prototype = {
 			console.warn("Asset "+row.prop('asset')+" hasn't been loaded.\nTODO: prompt to create new.");
 			return;
 		}
-		var asset = _.deepClone(origAsset.importedAsset, 100);
+		var asset = _deepClone(origAsset.importedAsset, 100);
 		console.log("Editing ",asset);
 		if(window['chrome'] && chrome.storage){
 			chrome.app.window.create('editor/editor.html', { 
