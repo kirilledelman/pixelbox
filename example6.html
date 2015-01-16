@@ -6,15 +6,11 @@
 		<meta content="yes" name="apple-mobile-web-app-capable" />		
 		<meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1"/>
 		
-		<!-- PixelBox uses jQuery -->
-		<script src="js/jquery-2.1.1.min.js"></script>
-		
 		<!-- THREE base includes -->
 		<script src="js/three.min.js"></script>
-		<script src="js/stats.min.js"></script>
 		
 		<!-- PixelBox include -->
-		<script src="js/pixelbox.min.js"></script>
+		<script src="js/pixelbox.js"></script>
 		
 		<!-- OrbitControls from THREE's examples  -->
 		<script src="js/OrbitControls.js"></script>
@@ -36,28 +32,30 @@
 		
 		*/
 		
-		$(document).ready(function(){
-			// init PixelBoxRenderer instance
-			// which was auto-created in js/lib/render.js
+		document.addEventListener( 'DOMContentLoaded', function() {
+		
+			if( !renderer.init() ) {
 			
-			if(!renderer.init()){
 				var err = "Your browser doesn't support WebGL";
-				alert(err);
-				console.error(err);
+				alert( err );
+				console.error( err );
 				return;
+				
 			} else {
-				console.log("WebGL initialized");
+			
+				console.log( "WebGL initialized" );
+				
 			}
 			
 			// load scene definition using THREE.PixelBoxAssets
-			// assets is auto-created in js/lib/assets.js
 			
-			assets.loadAssets({ 
+			assets.loadAssets( {
+			
 				scenes: [ 'assets/example6.scene' ],
 				
 				// when done, display scene
 				
-				done:function(){
+				done: function() {
 				
 					// instantiate our ExampleScene
 					
@@ -65,12 +63,13 @@
 					
 					// set it as current for renderer
 					
-					renderer.setScene(exampleScene);
+					renderer.setScene( exampleScene );
 					
-				}// end done:function
-			});// end assets.loadAssets
-		});// end document.ready
-		
+				} // end done:function
+				
+			} ); // end assets.loadAssets
+			
+		} ); // end document on ready		
 		
 		/*
 			
@@ -78,96 +77,91 @@
 			
 		*/
 		
-		function ExampleScene(){
+		function ExampleScene() {
 		
 		 	// call superclass constructor
 		 	
-			THREE.PixelBoxScene.call(this);
+			THREE.PixelBoxScene.call( this );
 			
 			// get scene definition from assets cache
 			
-			var sceneDef = assets.cache.get('example6');
+			var sceneDef = assets.cache.get( 'example6' );
 			
 			// populate this scene with the definition
 			
-			this.populateWith(sceneDef);
+			this.populateWith( sceneDef );
 				
 			// add controls for easy preview
 			// various controls classes can be found in three.js examples/js/controls folder
 			
-			this.controls = new THREE.OrbitControls(this.camera);
+			this.controls = new THREE.OrbitControls( this.camera );
 			
 			// make controls look at a point a bit above the snowman
 			
-			this.controls.target.set(0, 12, 0);
+			this.controls.target.set( 0, 12, 0 );
 			this.controls.update();
 			
-			// create a PixelBox instance, with 100x1x100 = 10000 particles
+			// create a PixelBox instance, with 10000 particles
+			// width, depth, height are specified to create a boundingBox, so cameras can clip
+			// this object against the frustum
 			
-			this.snow = new THREE.PixelBox( { frames: null, width:100, height:1, depth:100 } );
+			this.snow = new THREE.PixelBox( { particles: 10000, width:100, height:50, depth:100 } );
 			this.snow.pointSize = 0.2;
 			this.snow.cullBack = false;
 			this.snow.castShadow = false;
 			
-			// add frame / set frame
-			
-			this.snow.addFrameAt(0); // this creates particles
-			this.snow.frame = 0; // this refreshes the buffers
-			
 			// set initial snow particle positions
 			// particle is { i: particleIndex, p: position, n: normal, c: color, a: alpha, o: occlusion, b: brightness }
 			
-			this.snow.updateFrameWithCallback(function(particle){
+			this.snow.updateFrameWithCallback( function( particle ) {
 				
 				// random 100x50x100 box
 				
-				particle.p.set(100 * Math.random() - 50, 50 * Math.random(), 100 * Math.random() - 50);
+				particle.p.set( 100 * Math.random() - 50, 50 * Math.random(), 100 * Math.random() - 50 );
 				
 			});
 			
 			// tick function will update snow each frame
 			
-			this.tick = function(deltaTime){
+			this.tick = function( deltaTime ) {
 			
 				// update particles with callback "updateSnow". Second parameter is also passed to callback function
 				
-				this.snow.updateFrameWithCallback(this.updateSnow, { timePassed: deltaTime });
+				this.snow.updateFrameWithCallback( this.updateSnow, { timePassed: deltaTime } );
 				
 			};
 			
 			// callback function for updating snow
 			
-			this.updateSnow = function(particle, extraParameters){
+			this.updateSnow = function( particle, extraParameters ) {
 				
 				// fall
 				
-				particle.p.y -= extraParameters.timePassed * 10 * Math.seededRandom(particle.i);
+				particle.p.y -= extraParameters.timePassed * 10 * Math.seededRandom( particle.i );
 				
 				
 				// move in x / z plane a bit
 				
-				particle.p.x += extraParameters.timePassed * 4 * (Math.seededRandom(particle.p.y * 0.1) - 0.5);
-				particle.p.z += extraParameters.timePassed * 4 * (Math.seededRandom(particle.p.x * 0.2) - 0.5);
+				particle.p.x += extraParameters.timePassed * 4 * (Math.seededRandom( particle.p.y * 0.1 ) - 0.5 );
+				particle.p.z += extraParameters.timePassed * 4 * (Math.seededRandom( particle.p.x * 0.2 ) - 0.5 );
 				
 				// when reached ground, start from top + randomize x / z coord
 				
-				if(particle.p.y <= 0){
-					particle.p.set(100 * Math.random() - 50, 50, 100 * Math.random() - 50);
+				if ( particle.p.y <= 0 ) {
+					particle.p.set( 100 * Math.random() - 50, 50, 100 * Math.random() - 50 );
 				}
 			};
 			
 			// add to scene
 			
-			this.add(this.snow);
+			this.add( this.snow );
 			
 		} // end ExampleScene constructor
 		
 		// ExampleScene subclasses THREE.PixelBoxScene
 		
-		ExampleScene.prototype = Object.create(THREE.PixelBoxScene.prototype);
-		ExampleScene.prototype.constructor = ExampleScene;
-		
-	
+		ExampleScene.prototype = Object.create( THREE.PixelBoxScene.prototype );
+		ExampleScene.prototype.constructor = ExampleScene;	
 		
 		</script>
 	</body>

@@ -6,12 +6,8 @@
 		<meta content="yes" name="apple-mobile-web-app-capable" />		
 		<meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1"/>
 		
-		<!-- PixelBox uses jQuery -->
-		<script src="js/jquery-2.1.1.min.js"></script>
-		
 		<!-- THREE base includes -->
 		<script src="js/three.min.js"></script>
-		<script src="js/stats.min.js"></script>
 		
 		<!-- PixelBox include -->
 		<script src="js/pixelbox.min.js"></script>
@@ -43,27 +39,30 @@
 		
 		*/
 		
-		$(document).ready(function(){
+		document.addEventListener( 'DOMContentLoaded', function() {
 		
-			// init PixelBoxRenderer instance
+			if( !renderer.init() ) {
 			
-			if(!renderer.init()){
 				var err = "Your browser doesn't support WebGL";
-				alert(err);
-				console.error(err);
+				alert( err );
+				console.error( err );
 				return;
+				
 			} else {
-				console.log("WebGL initialized");
+			
+				console.log( "WebGL initialized" );
+				
 			}
 			
-			// load scene definition using THREE.PixelBoxAssets,
+			// load scene definition using THREE.PixelBoxAssets
 			
-			assets.loadAssets({ 
+			assets.loadAssets( {
+			
 				scenes: [ 'assets/example3.scene' ],
 				
 				// when done, display scene
 				
-				done:function(){
+				done: function() {
 				
 					// instantiate our ExampleScene
 					
@@ -71,59 +70,62 @@
 					
 					// set it as current for renderer
 					
-					renderer.setScene(exampleScene);
+					renderer.setScene( exampleScene );
 					
 					// button1 will loop the animation 'awake'
 					
-					$('#button1').click(function(){
+					document.getElementById( 'button1' ).addEventListener( 'click', function() {
 						
-						exampleScene.robot.head.loopAnim('awake');
+						exampleScene.robot.head.loopAnim( 'awake' );
 						
-					});
+					} );
 
 					// button2 will loop the animation 'sleep'
 
-					$('#button2').click(function(){
+					document.getElementById( 'button2' ).addEventListener( 'click', function() {
 					
-						exampleScene.robot.head.loopAnim('sleep');
+						exampleScene.robot.head.loopAnim( 'sleep' );
 						
-					});
+					} );
 
 					// button2 will tween some properties
 
-					$('#button3').click(function(){
+					document.getElementById( 'button3' ).addEventListener( 'click', function() {
 					
 						// stop tweens if already running
 						// pass true to snap tweens to their finish values
 						
-						exampleScene.robot.stopTweens(true);
+						exampleScene.robot.stopTweens( true );
 					
 						// tween exampleScene.robot.left_arm.rotation
 					
 						var newRotation = exampleScene.robot.left_arm.rotation.clone();
 						newRotation.x -= Math.PI;
 					
-						exampleScene.robot.tween({ 
+						exampleScene.robot.tween( { 
 							target: exampleScene.robot.left_arm.rotation, 
 							to: newRotation,
-							duration: 0.5 });
+							duration: 0.5 
+						} );
 							
 						// tween exampleScene.robot.right_arm.rotation
 					
 						newRotation = exampleScene.robot.right_arm.rotation.clone();
 						newRotation.x -= Math.PI;
 					
-						exampleScene.robot.tween({ 
+						exampleScene.robot.tween( { 
 							target: exampleScene.robot.right_arm.rotation, 
 							to: newRotation,
-							duration: 0.5 });
+							duration: 0.5
+						} );
 							
-					});
+					} );
 
-
-				}// end done:function
-			});// end assets.loadAssets
-		});// end document.ready
+				} // end done:function
+				
+			} ); // end assets.loadAssets
+			
+		} ); // end document on load
 		
 		
 		/*
@@ -132,30 +134,30 @@
 			
 		*/
 		
-		function ExampleScene(){
+		function ExampleScene() {
 		
 		 	// call parent constructor
 		 	
-			THREE.PixelBoxScene.call(this);
+			THREE.PixelBoxScene.call( this );
 			
 			// get scene definition from assets cache
 			
-			var sceneDef = assets.cache.get('example3');
+			var sceneDef = assets.cache.get( 'example3' );
 			
 			// populate this scene with the definition
 			
-			this.populateWith(sceneDef);
+			this.populateWith( sceneDef );
 				
 			// add controls for easy preview
 			// various controls classes can be found in three.js examples/js/controls folder
 			
-			this.controls = new THREE.OrbitControls(this.camera);
+			this.controls = new THREE.OrbitControls( this.camera );
 			
 		}
 		
 		// ExampleScene subclasses THREE.PixelBoxScene
 		
-		ExampleScene.prototype = Object.create(THREE.PixelBoxScene.prototype);
+		ExampleScene.prototype = Object.create( THREE.PixelBoxScene.prototype );
 		ExampleScene.prototype.constructor = ExampleScene;
 				
 		</script>

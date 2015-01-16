@@ -2,8 +2,6 @@
 
 	Used in conjunction with THREE.PixelBox and THREE.PixelBoxScene
 
-	
-
 */
 
 THREE.PixelBoxRenderer = function(){
@@ -17,8 +15,9 @@ THREE.PixelBoxRenderer = function(){
 	this.init = function(scale, stats){
 		// check webgl support
 		var webgl = false;
+		var canvas;
 		try { 
-			var canvas = document.createElement('canvas'); 
+			canvas = document.createElement('canvas'); 
 			webgl = !! window.WebGLRenderingContext && ( canvas.getContext( 'webgl' ) || canvas.getContext( 'experimental-webgl' ) );
 		} catch(e) {}
 		if(!webgl) return false;
@@ -26,8 +25,9 @@ THREE.PixelBoxRenderer = function(){
 		this.scale = 1.0 / (scale != undefined ? scale : 1.0);
 		
 		// create renderer
-		this.webgl = webgl = new THREE.WebGLRenderer({devicePixelRatio:1.0, antialias: false, autoClear: false, alpha: false, maxLights:16, preserveDrawingBuffer: false, precision:'highp' });
-		$(document.body).prepend(webgl.domElement);
+		this.webgl = webgl = new THREE.WebGLRenderer( {	devicePixelRatio: 1.0, antialias: false, autoClear: false, 
+														alpha: false, maxLights: 16, preserveDrawingBuffer: false, precision: 'highp' });
+		document.body.insertBefore(webgl.domElement, document.body.firstChild);
 		webgl.updateStyle = false;
 		webgl.setSize(window.innerWidth * this.scale, window.innerHeight * this.scale);
 		
@@ -44,6 +44,7 @@ THREE.PixelBoxRenderer = function(){
 			useTexture: false
 		}
 		
+		// stats
 		if(stats){
 			var stats = this.stats = new Stats();
 			stats.domElement.style.position = 'absolute';
@@ -55,8 +56,9 @@ THREE.PixelBoxRenderer = function(){
 		}
 		
 		// window resized listener
-		$(window).on('resize.renderer',this._windowResized);
-		$('canvas').css({ width:window.innerWidth, height:window.innerHeight });
+		window.addEventListener('resize', this._windowResized);
+		canvas.style.width = window.innerWidth + 'px';
+		canvas.style.height = window.innerHeight + 'px';
 			
 		// start render loop
 		this._render();
@@ -154,7 +156,7 @@ THREE.PixelBoxRenderer = function(){
 			if(newScene['onAdded']) newScene.onAdded();
 		}
 		
-		$(window).trigger('resize');
+		window.dispatchEvent(new Event('resize'));
 	}
 
 	/* render */
@@ -177,8 +179,9 @@ THREE.PixelBoxRenderer = function(){
 		renderer.webgl.setSize(window.innerWidth * renderer.scale, window.innerHeight * renderer.scale);
 		
 		// fill screen
-		$('canvas').css({ width:window.innerWidth, height:window.innerHeight });
-		
+		renderer.webgl.domElement.style.width = window.innerWidth + 'px';
+		renderer.webgl.domElement.style.height = window.innerHeight + 'px';
+
 		// update PixelBox viewport uniform
 		THREE.PixelBoxUtil.updateViewPortUniform();
 	};

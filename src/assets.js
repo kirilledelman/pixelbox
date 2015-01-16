@@ -30,104 +30,136 @@ THREE.PixelBoxAssets = function(){
 		// textures
 		for(var i = 0; i < this.textures.length; i++){
 			var url = this.textures[i];
-			this.loadQueue.push(function(url) { return (function(){
-				this.cache.add(url, new THREE.ImageUtils.loadTexture(url, undefined, this.assetLoaded));
-			}).bind(assets); }(url));
+			var reqObj = function(url) { 
+				return function(){
+					assets.cache.add(url, new THREE.ImageUtils.loadTexture(url, undefined, assets.assetLoaded));
+				};
+			}(url);
+			this.loadQueue.push(reqObj);
 		}
 		
 		// scenes
 		for(var i = 0; i < this.scenedata.length; i++){
 			var url = this.scenedata[i];
-			this.loadQueue.push(function(url) { return (function(){
-				$.ajax(url).
-					done(function(data) {
-						// decompress if needed
-						var json;
-						if(data.substr(0,1) == '{' || data.substr(0,1) == '['){
-							json = data;
-						} else {
-							json = LZString.decompressFromBase64(data);
-						}
-						// parse
-						if(!json){
-							console.error("Failed to LZString decompressFromBase64 "+url);
-						} else {
-							try {
-								json = JSON.parse(json);
-							} catch(e){
-								console.error("Failed to parse JSON for "+url,e,json);
+			var reqObj = function(url) { 
+				return function(){
+					var request = new XMLHttpRequest();
+					request.open('GET', url, true);
+					request.onload = function() {
+						if (request.status >= 200 && request.status < 400) {
+							var data = request.responseText;
+							var json;
+							if(data.substr(0,1) == '{' || data.substr(0,1) == '['){
+								json = data;
+							} else {
+								json = LZString.decompressFromBase64(data); // decompress if needed
 							}
-							assets.cache.add(json.name, json);
-						}
-						assets.assetLoaded();
-					});
-			}).bind(assets); }(url));
+							// parse
+							if(!json){
+								console.error("Failed to LZString decompressFromBase64 "+url);
+							} else {
+								try {
+									json = JSON.parse(json);
+								} catch(e){
+									console.error("Failed to parse JSON for "+url,e,json);
+								}
+								assets.cache.add(json.name, json);
+							}
+							assets.assetLoaded();
+						} else console.error('Failed to load '+url);
+					};					
+					request.onerror = function() {
+						console.error('Connection error while loading '+url);
+					};
+					request.send();
+				};
+			}(url);
+			this.loadQueue.push(reqObj);
 		}
 		
 		// models
 		for(var i = 0; i < this.models.length; i++){
 			var url = this.models[i];
-			this.loadQueue.push(function(url) { return (function(){
-				$.ajax(url).
-					done(function(data) {
-						// decompress if needed
-						var time = new Date();
-						var json;
-						if(data.substr(0,1) == '{'){
-							json = data;
-						} else {
-							json = LZString.decompressFromBase64(data);
-						}
-						// parse
-						if(!json){
-							console.error("Failed to LZString decompressFromBase64 "+url);
-						} else {
-							try {
-								json = JSON.parse(json);
-							} catch(e){
-								console.error("Failed to parse JSON for "+url,e,json);
+			var reqObj = function(url) { 
+				return function(){
+					var request = new XMLHttpRequest();
+					request.open('GET', url, true);
+					request.onload = function() {
+						if (request.status >= 200 && request.status < 400) {
+							var time = new Date();
+							var json;
+							if(data.substr(0,1) == '{'){
+								json = data;
+							} else {
+								json = LZString.decompressFromBase64(data); // decompress if needed
 							}
-							console.log("["+json.name+"] decompress+parse time:"+((new Date()).getTime() - time));
-
-							// process
-							time = new Date();
-							THREE.PixelBoxUtil.processPixelBoxFrames(json);
-							assets.cache.add(json.name, json);
-							console.log("["+json.name+"] process time:"+((new Date()).getTime() - time));
-						}
-						assets.assetLoaded();
-					});
-			}).bind(assets); }(url));
+							// parse
+							if(!json){
+								console.error("Failed to LZString decompressFromBase64 "+url);
+							} else {
+								try {
+									json = JSON.parse(json);
+								} catch(e){
+									console.error("Failed to parse JSON for "+url,e,json);
+								}
+								console.log("["+json.name+"] decompress+parse time:"+((new Date()).getTime() - time));
+	
+								// process
+								time = new Date();
+								THREE.PixelBoxUtil.processPixelBoxFrames(json);
+								assets.cache.add(json.name, json);
+								console.log("["+json.name+"] process time:"+((new Date()).getTime() - time));
+							}
+							assets.assetLoaded();						
+						} else console.error('Failed to load '+url);
+					};					
+					request.onerror = function() {
+						console.error('Connection error while loading '+url);
+					};
+					request.send();					
+				};
+			}(url);
+			this.loadQueue.push(reqObj);
 		}
 		
 		// json
 		for(var i = 0; i < this.json.length; i++){
 			var url = this.json[i];
-			this.loadQueue.push(function(url) { return (function(){
-				$.ajax(url).
-					done(function(data) {
-						// decompress if needed
-						var json;
-						if(data.substr(0,1) == '{'){
-							json = data;
-						} else {
-							json = LZString.decompressFromBase64(data);
-						}
-						// parse
-						if(!json){
-							console.error("Failed to LZString decompressFromBase64 "+url);
-						} else {
-							try {
-								json = JSON.parse(json);
-							} catch(e){
-								console.error("Failed to parse JSON for "+url,e,json);
+			var reqObj = function(url) { 
+				return function(){
+					var request = new XMLHttpRequest();
+					request.open('GET', url, true);
+					request.onload = function() {
+						if (request.status >= 200 && request.status < 400) {
+							// decompress if needed
+							var json;
+							if(data.substr(0,1) == '{'){
+								json = data;
+							} else {
+								json = LZString.decompressFromBase64(data);
 							}
-							// process
-							assets.cache.add(url, json);
-						}
-						assets.assetLoaded();
-					});
-			}).bind(assets); }(url));
+							// parse
+							if(!json){
+								console.error("Failed to LZString decompressFromBase64 "+url);
+							} else {
+								try {
+									json = JSON.parse(json);
+								} catch(e){
+									console.error("Failed to parse JSON for "+url,e,json);
+								}
+								// process
+								assets.cache.add(url, json);
+							}
+							assets.assetLoaded();
+						} else console.error('Failed to load '+url);
+					};					
+					request.onerror = function() {
+						console.error('Connection error while loading '+url);
+					};
+					request.send();	
+				};
+			}(url);
+			this.loadQueue.push(reqObj);
 		}
 		
 		// start

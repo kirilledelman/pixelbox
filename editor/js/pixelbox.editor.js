@@ -119,7 +119,36 @@ THREE.PixelBox.prototype.encodeRawFrame = function(dataObject, frameNumber){
 	dataObject.frames[frameNumber] = obj;
 }
 
-
+/* adds a new frame at frameIndex, populated with solid box of particles width x height x depth */
+THREE.PixelBox.prototype.addFrameAt = function(frameIndex){
+	var geometry = this.geometry;
+	var data = geometry.data;
+	var pos = new Array();
+	var clr = new Array();
+	var nrm = new Array();
+	var occ = new Array();
+	var currentPivot = new THREE.Vector3();
+	if(data.offset){
+		currentPivot.set(Math.floor(data.width * 0.5), Math.floor(data.height * 0.5), Math.floor(data.depth * 0.5));
+	}
+	for(var x = 0; x < data.width; x++){
+	for(var y = 0; y < data.height; y++){
+	for(var z = 0; z < data.depth; z++){
+		pos.push(x - currentPivot.x,
+				 y - currentPivot.y,
+				 z - currentPivot.z);
+		clr.push(1,1,1,1);
+		nrm.push(0,1,0);
+		occ.push(0);
+	}}}
+	
+	data.frameData.splice(frameIndex, 0, { 	p: new THREE.BufferAttribute(new Float32Array(pos), 3),
+							c: new THREE.BufferAttribute(new Float32Array(clr), 4),
+							n: new THREE.BufferAttribute(new Float32Array(nrm), 3),
+							o: new THREE.BufferAttribute(new Float32Array(occ), 1) });
+							
+	geometry._frame = -1; // invalidate
+};
 
 
 /* swap frames, used by frame range reverse in editor */

@@ -1142,8 +1142,27 @@ THREE.PixelBox = function(data){
 	
 	this.fasterRaycast = true; // raycast just tests for an intersection (returns first match)
 	
-	// init viewPortScale value if not set
-	// if(!THREE.PixelBoxUtil.material.uniforms.viewPortScale.value) THREE.PixelBoxUtil.updateViewPortUniform();
+	// create particles
+	if(data.particles !== undefined){
+		var pos = new Array();
+		var clr = new Array();
+		var nrm = new Array();
+		var occ = new Array();
+		for(var i = 0; i < data.particles; i++ ){
+			pos.push(0, 0, 0);
+			clr.push(1,1,1,1);
+			nrm.push(0,1,0);
+			occ.push(0);
+		}		
+		data.frameData.push({ 	p: new THREE.BufferAttribute(new Float32Array(pos), 3),
+								c: new THREE.BufferAttribute(new Float32Array(clr), 4),
+								n: new THREE.BufferAttribute(new Float32Array(nrm), 3),
+								o: new THREE.BufferAttribute(new Float32Array(occ), 1) });
+								
+		this.geometry._frame = -1; // invalidate
+		this.frame = 0; // refresh
+		this.geometry.computeBoundingSphere();
+	}
 	
 	return this;
 }
@@ -1320,10 +1339,8 @@ THREE.PixelBox.prototype.stopAnim = function(){
 	this can be used to generate snow, rain, etc.
 	Example:
 	
-	snow = new THREE.PixelBox({ offset: false, frames: null, width:10, depth:10, height:10, pointSize: 0.3});
-	snow.addFrameAt(0);
-	snow.frame = 0;
-	snow.updateFrameWithCallback(this.updateSnow, {timePassed: timePassed });
+	snow = new THREE.PixelBox( { particles: 1000, width: 100, depth: 100, height: 100, pointSize: 0.3 } );
+	snow.updateFrameWithCallback(this.updateSnow, { timePassed: timePassed } );
 	
 */
 
@@ -1340,7 +1357,7 @@ THREE.PixelBox.prototype.updateFrameWithCallback = function(callBack, extraParam
 		b: 1.0, 
 		o: 0.0,
 	};
-	var numParticles = dataObject.width * dataObject.depth * dataObject.height;
+	var numParticles = dataObject.particles;
 	for(addr = 0; addr < numParticles; addr++){
 		pobj.i = addr;
 		pobj.p.set(frameBuffers.p.array[addr * 3], frameBuffers.p.array[addr * 3 + 1], frameBuffers.p.array[addr * 3 + 2]);
@@ -1456,7 +1473,8 @@ THREE.PixelBoxUtil.dispose = function(data){
 */
 
 THREE.PixelBoxUtil.processPixelBoxFrames = function(data){
-	if(data.frames === null){
+	if(data.frames === null || data.particles !== undefined){
+	
 		// special case for PixelBox editor or particle systems
 		data.frameData = [];
 		
@@ -1964,35 +1982,4 @@ THREE.PixelBoxUtil.encodeFrame = function(frameData, dataObject){
 	
 	dataObject.frames.push(combine.join(''));
 }
-
-/* adds a new frame at frameIndex, populated with solid box of particles width x height x depth */
-THREE.PixelBox.prototype.addFrameAt = function(frameIndex){
-	var geometry = this.geometry;
-	var data = geometry.data;
-	var pos = new Array();
-	var clr = new Array();
-	var nrm = new Array();
-	var occ = new Array();
-	var currentPivot = new THREE.Vector3();
-	if(data.offset){
-		currentPivot.set(Math.floor(data.width * 0.5), Math.floor(data.height * 0.5), Math.floor(data.depth * 0.5));
-	}
-	for(var x = 0; x < data.width; x++){
-	for(var y = 0; y < data.height; y++){
-	for(var z = 0; z < data.depth; z++){
-		pos.push(x - currentPivot.x,
-				 y - currentPivot.y,
-				 z - currentPivot.z);
-		clr.push(1,1,1,1);
-		nrm.push(0,1,0);
-		occ.push(0);
-	}}}
-	
-	data.frameData.splice(frameIndex, 0, { 	p: new THREE.BufferAttribute(new Float32Array(pos), 3),
-							c: new THREE.BufferAttribute(new Float32Array(clr), 4),
-							n: new THREE.BufferAttribute(new Float32Array(nrm), 3),
-							o: new THREE.BufferAttribute(new Float32Array(occ), 1) });
-							
-	geometry._frame = -1; // invalidate
-};
 

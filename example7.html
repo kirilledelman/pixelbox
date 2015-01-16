@@ -6,12 +6,8 @@
 		<meta content="yes" name="apple-mobile-web-app-capable" />		
 		<meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1"/>
 		
-		<!-- PixelBox uses jQuery -->
-		<script src="js/jquery-2.1.1.min.js"></script>
-		
 		<!-- THREE base includes -->
 		<script src="js/three.min.js"></script>
-		<script src="js/stats.min.js"></script>
 		
 		<!-- PixelBox include -->
 		<script src="js/pixelbox.min.js"></script>
@@ -36,28 +32,30 @@
 		
 		*/
 		
-		$(document).ready(function(){
-			// init PixelBoxRenderer instance
-			// which was auto-created in js/lib/render.js
+		document.addEventListener( 'DOMContentLoaded', function() {
+		
+			if( !renderer.init() ) {
 			
-			if(!renderer.init()){
 				var err = "Your browser doesn't support WebGL";
-				alert(err);
-				console.error(err);
+				alert( err );
+				console.error( err );
 				return;
+				
 			} else {
-				console.log("WebGL initialized");
+			
+				console.log( "WebGL initialized" );
+				
 			}
 			
 			// load scene definition using THREE.PixelBoxAssets
-			// assets is auto-created in js/lib/assets.js
 			
-			assets.loadAssets({ 
+			assets.loadAssets( {
+			
 				scenes: [ 'assets/example7.scene' ],
 				
 				// when done, display scene
 				
-				done:function(){
+				done: function() {
 				
 					// instantiate our ExampleScene
 					
@@ -65,12 +63,13 @@
 					
 					// set it as current for renderer
 					
-					renderer.setScene(exampleScene);
+					renderer.setScene( exampleScene );
 					
-				}// end done:function
-			});// end assets.loadAssets
-		});// end document.ready
-		
+				} // end done:function
+				
+			} ); // end assets.loadAssets
+			
+		} ); // end document on ready
 		
 		/*
 			
@@ -78,24 +77,24 @@
 			
 		*/
 		
-		function ExampleScene(){
+		function ExampleScene() {
 		
 		 	// call superclass constructor
 		 	
-			THREE.PixelBoxScene.call(this);
+			THREE.PixelBoxScene.call( this );
 			
 			// get scene definition from assets cache
 			
-			var sceneDef = assets.cache.get('example7');
+			var sceneDef = assets.cache.get( 'example7' );
 			
 			// populate this scene with the definition
 			
-			this.populateWith(sceneDef);
+			this.populateWith( sceneDef );
 				
 			// add controls for easy preview
 			// various controls classes can be found in three.js examples/js/controls folder
 			
-			this.controls = new THREE.OrbitControls(this.camera);
+			this.controls = new THREE.OrbitControls( this.camera );
 			
 			// scene definition contains THREE.PixelBox sprites named "cat1", "cat2"
 			// and a THREE.LinePath object named "cat_path"
@@ -103,7 +102,7 @@
 			
 			// we're going to animate cat1 along the path
 			
-			this.cat_path.tween({
+			this.cat_path.tween( {
 				target: this.cat1,		// cat is THREE.PixelBox instance, defined in example7.scene
 				from: 0.0, 				// starting point
 				to: 1.0, 				// ending point
@@ -111,11 +110,11 @@
 				duration: 15,			// time to reach end point
 				numLoops: Infinity,		// keep walking indefinitely
 				autoReverse: true		// automatically reverse direction each loop
-			});
+			} );
 
 			// and cat2 as well, but offset his position on the curve by half its length
 
-			this.cat_path.tween({
+			this.cat_path.tween( {
 				target: this.cat2,
 				from: 0.5, 				// start halfway
 				to: 1.5,				// finish 1 and a half way out
@@ -123,42 +122,39 @@
 				duration: 15,
 				numLoops: Infinity,
 				autoReverse: true
-			});
+			} );
 
 			// scene definition also contains THREE.PixelBox sprite named "bird"
 			// and a THREE.LinePath object named "bird_path"
 
 			// we'll animate the bird along the path
 
-			this.bird_path.tween({
+			this.bird_path.tween( {
 				target: this.bird,
 				from: 0,
 				to: 1,
 				orientToPath: true,		
 				duration: 20,
 				numLoops: Infinity
-			});
+			} );
 			
 			// tick function will update cats' heads each frame
 			
-			this.tick = function(deltaTime){
+			this.tick = function( deltaTime ) {
 			
 				// both cats will be looking at the bird
 			
-				this.cat1.head.lookAtObject(this.bird);
-				this.cat2.head.lookAtObject(this.bird);
+				this.cat1.head.lookAtObject( this.bird );
+				this.cat2.head.lookAtObject( this.bird );
 				
-			};
-			
+			};			
 			
 		} // end ExampleScene constructor
 		
 		// ExampleScene subclasses THREE.PixelBoxScene
 		
-		ExampleScene.prototype = Object.create(THREE.PixelBoxScene.prototype);
-		ExampleScene.prototype.constructor = ExampleScene;
-		
-	
+		ExampleScene.prototype = Object.create( THREE.PixelBoxScene.prototype );
+		ExampleScene.prototype.constructor = ExampleScene;	
 		
 		</script>
 	</body>

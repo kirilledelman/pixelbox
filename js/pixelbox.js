@@ -30,104 +30,136 @@ THREE.PixelBoxAssets = function(){
 		// textures
 		for(var i = 0; i < this.textures.length; i++){
 			var url = this.textures[i];
-			this.loadQueue.push(function(url) { return (function(){
-				this.cache.add(url, new THREE.ImageUtils.loadTexture(url, undefined, this.assetLoaded));
-			}).bind(assets); }(url));
+			var reqObj = function(url) { 
+				return function(){
+					assets.cache.add(url, new THREE.ImageUtils.loadTexture(url, undefined, assets.assetLoaded));
+				};
+			}(url);
+			this.loadQueue.push(reqObj);
 		}
 		
 		// scenes
 		for(var i = 0; i < this.scenedata.length; i++){
 			var url = this.scenedata[i];
-			this.loadQueue.push(function(url) { return (function(){
-				$.ajax(url).
-					done(function(data) {
-						// decompress if needed
-						var json;
-						if(data.substr(0,1) == '{' || data.substr(0,1) == '['){
-							json = data;
-						} else {
-							json = LZString.decompressFromBase64(data);
-						}
-						// parse
-						if(!json){
-							console.error("Failed to LZString decompressFromBase64 "+url);
-						} else {
-							try {
-								json = JSON.parse(json);
-							} catch(e){
-								console.error("Failed to parse JSON for "+url,e,json);
+			var reqObj = function(url) { 
+				return function(){
+					var request = new XMLHttpRequest();
+					request.open('GET', url, true);
+					request.onload = function() {
+						if (request.status >= 200 && request.status < 400) {
+							var data = request.responseText;
+							var json;
+							if(data.substr(0,1) == '{' || data.substr(0,1) == '['){
+								json = data;
+							} else {
+								json = LZString.decompressFromBase64(data); // decompress if needed
 							}
-							assets.cache.add(json.name, json);
-						}
-						assets.assetLoaded();
-					});
-			}).bind(assets); }(url));
+							// parse
+							if(!json){
+								console.error("Failed to LZString decompressFromBase64 "+url);
+							} else {
+								try {
+									json = JSON.parse(json);
+								} catch(e){
+									console.error("Failed to parse JSON for "+url,e,json);
+								}
+								assets.cache.add(json.name, json);
+							}
+							assets.assetLoaded();
+						} else console.error('Failed to load '+url);
+					};					
+					request.onerror = function() {
+						console.error('Connection error while loading '+url);
+					};
+					request.send();
+				};
+			}(url);
+			this.loadQueue.push(reqObj);
 		}
 		
 		// models
 		for(var i = 0; i < this.models.length; i++){
 			var url = this.models[i];
-			this.loadQueue.push(function(url) { return (function(){
-				$.ajax(url).
-					done(function(data) {
-						// decompress if needed
-						var time = new Date();
-						var json;
-						if(data.substr(0,1) == '{'){
-							json = data;
-						} else {
-							json = LZString.decompressFromBase64(data);
-						}
-						// parse
-						if(!json){
-							console.error("Failed to LZString decompressFromBase64 "+url);
-						} else {
-							try {
-								json = JSON.parse(json);
-							} catch(e){
-								console.error("Failed to parse JSON for "+url,e,json);
+			var reqObj = function(url) { 
+				return function(){
+					var request = new XMLHttpRequest();
+					request.open('GET', url, true);
+					request.onload = function() {
+						if (request.status >= 200 && request.status < 400) {
+							var time = new Date();
+							var json;
+							if(data.substr(0,1) == '{'){
+								json = data;
+							} else {
+								json = LZString.decompressFromBase64(data); // decompress if needed
 							}
-							console.log("["+json.name+"] decompress+parse time:"+((new Date()).getTime() - time));
-
-							// process
-							time = new Date();
-							THREE.PixelBoxUtil.processPixelBoxFrames(json);
-							assets.cache.add(json.name, json);
-							console.log("["+json.name+"] process time:"+((new Date()).getTime() - time));
-						}
-						assets.assetLoaded();
-					});
-			}).bind(assets); }(url));
+							// parse
+							if(!json){
+								console.error("Failed to LZString decompressFromBase64 "+url);
+							} else {
+								try {
+									json = JSON.parse(json);
+								} catch(e){
+									console.error("Failed to parse JSON for "+url,e,json);
+								}
+								console.log("["+json.name+"] decompress+parse time:"+((new Date()).getTime() - time));
+	
+								// process
+								time = new Date();
+								THREE.PixelBoxUtil.processPixelBoxFrames(json);
+								assets.cache.add(json.name, json);
+								console.log("["+json.name+"] process time:"+((new Date()).getTime() - time));
+							}
+							assets.assetLoaded();						
+						} else console.error('Failed to load '+url);
+					};					
+					request.onerror = function() {
+						console.error('Connection error while loading '+url);
+					};
+					request.send();					
+				};
+			}(url);
+			this.loadQueue.push(reqObj);
 		}
 		
 		// json
 		for(var i = 0; i < this.json.length; i++){
 			var url = this.json[i];
-			this.loadQueue.push(function(url) { return (function(){
-				$.ajax(url).
-					done(function(data) {
-						// decompress if needed
-						var json;
-						if(data.substr(0,1) == '{'){
-							json = data;
-						} else {
-							json = LZString.decompressFromBase64(data);
-						}
-						// parse
-						if(!json){
-							console.error("Failed to LZString decompressFromBase64 "+url);
-						} else {
-							try {
-								json = JSON.parse(json);
-							} catch(e){
-								console.error("Failed to parse JSON for "+url,e,json);
+			var reqObj = function(url) { 
+				return function(){
+					var request = new XMLHttpRequest();
+					request.open('GET', url, true);
+					request.onload = function() {
+						if (request.status >= 200 && request.status < 400) {
+							// decompress if needed
+							var json;
+							if(data.substr(0,1) == '{'){
+								json = data;
+							} else {
+								json = LZString.decompressFromBase64(data);
 							}
-							// process
-							assets.cache.add(url, json);
-						}
-						assets.assetLoaded();
-					});
-			}).bind(assets); }(url));
+							// parse
+							if(!json){
+								console.error("Failed to LZString decompressFromBase64 "+url);
+							} else {
+								try {
+									json = JSON.parse(json);
+								} catch(e){
+									console.error("Failed to parse JSON for "+url,e,json);
+								}
+								// process
+								assets.cache.add(url, json);
+							}
+							assets.assetLoaded();
+						} else console.error('Failed to load '+url);
+					};					
+					request.onerror = function() {
+						console.error('Connection error while loading '+url);
+					};
+					request.send();	
+				};
+			}(url);
+			this.loadQueue.push(reqObj);
 		}
 		
 		// start
@@ -2500,8 +2532,27 @@ THREE.PixelBox = function(data){
 	
 	this.fasterRaycast = true; // raycast just tests for an intersection (returns first match)
 	
-	// init viewPortScale value if not set
-	// if(!THREE.PixelBoxUtil.material.uniforms.viewPortScale.value) THREE.PixelBoxUtil.updateViewPortUniform();
+	// create particles
+	if(data.particles !== undefined){
+		var pos = new Array();
+		var clr = new Array();
+		var nrm = new Array();
+		var occ = new Array();
+		for(var i = 0; i < data.particles; i++ ){
+			pos.push(0, 0, 0);
+			clr.push(1,1,1,1);
+			nrm.push(0,1,0);
+			occ.push(0);
+		}		
+		data.frameData.push({ 	p: new THREE.BufferAttribute(new Float32Array(pos), 3),
+								c: new THREE.BufferAttribute(new Float32Array(clr), 4),
+								n: new THREE.BufferAttribute(new Float32Array(nrm), 3),
+								o: new THREE.BufferAttribute(new Float32Array(occ), 1) });
+								
+		this.geometry._frame = -1; // invalidate
+		this.frame = 0; // refresh
+		this.geometry.computeBoundingSphere();
+	}
 	
 	return this;
 }
@@ -2678,10 +2729,8 @@ THREE.PixelBox.prototype.stopAnim = function(){
 	this can be used to generate snow, rain, etc.
 	Example:
 	
-	snow = new THREE.PixelBox({ offset: false, frames: null, width:10, depth:10, height:10, pointSize: 0.3});
-	snow.addFrameAt(0);
-	snow.frame = 0;
-	snow.updateFrameWithCallback(this.updateSnow, {timePassed: timePassed });
+	snow = new THREE.PixelBox( { particles: 1000, width: 100, depth: 100, height: 100, pointSize: 0.3 } );
+	snow.updateFrameWithCallback(this.updateSnow, { timePassed: timePassed } );
 	
 */
 
@@ -2698,7 +2747,7 @@ THREE.PixelBox.prototype.updateFrameWithCallback = function(callBack, extraParam
 		b: 1.0, 
 		o: 0.0,
 	};
-	var numParticles = dataObject.width * dataObject.depth * dataObject.height;
+	var numParticles = dataObject.particles;
 	for(addr = 0; addr < numParticles; addr++){
 		pobj.i = addr;
 		pobj.p.set(frameBuffers.p.array[addr * 3], frameBuffers.p.array[addr * 3 + 1], frameBuffers.p.array[addr * 3 + 2]);
@@ -2814,7 +2863,8 @@ THREE.PixelBoxUtil.dispose = function(data){
 */
 
 THREE.PixelBoxUtil.processPixelBoxFrames = function(data){
-	if(data.frames === null){
+	if(data.frames === null || data.particles !== undefined){
+	
 		// special case for PixelBox editor or particle systems
 		data.frameData = [];
 		
@@ -3323,43 +3373,10 @@ THREE.PixelBoxUtil.encodeFrame = function(frameData, dataObject){
 	dataObject.frames.push(combine.join(''));
 }
 
-/* adds a new frame at frameIndex, populated with solid box of particles width x height x depth */
-THREE.PixelBox.prototype.addFrameAt = function(frameIndex){
-	var geometry = this.geometry;
-	var data = geometry.data;
-	var pos = new Array();
-	var clr = new Array();
-	var nrm = new Array();
-	var occ = new Array();
-	var currentPivot = new THREE.Vector3();
-	if(data.offset){
-		currentPivot.set(Math.floor(data.width * 0.5), Math.floor(data.height * 0.5), Math.floor(data.depth * 0.5));
-	}
-	for(var x = 0; x < data.width; x++){
-	for(var y = 0; y < data.height; y++){
-	for(var z = 0; z < data.depth; z++){
-		pos.push(x - currentPivot.x,
-				 y - currentPivot.y,
-				 z - currentPivot.z);
-		clr.push(1,1,1,1);
-		nrm.push(0,1,0);
-		occ.push(0);
-	}}}
-	
-	data.frameData.splice(frameIndex, 0, { 	p: new THREE.BufferAttribute(new Float32Array(pos), 3),
-							c: new THREE.BufferAttribute(new Float32Array(clr), 4),
-							n: new THREE.BufferAttribute(new Float32Array(nrm), 3),
-							o: new THREE.BufferAttribute(new Float32Array(occ), 1) });
-							
-	geometry._frame = -1; // invalidate
-};
-
 
 /*
 
 	Used in conjunction with THREE.PixelBox and THREE.PixelBoxScene
-
-	
 
 */
 
@@ -3374,8 +3391,9 @@ THREE.PixelBoxRenderer = function(){
 	this.init = function(scale, stats){
 		// check webgl support
 		var webgl = false;
+		var canvas;
 		try { 
-			var canvas = document.createElement('canvas'); 
+			canvas = document.createElement('canvas'); 
 			webgl = !! window.WebGLRenderingContext && ( canvas.getContext( 'webgl' ) || canvas.getContext( 'experimental-webgl' ) );
 		} catch(e) {}
 		if(!webgl) return false;
@@ -3383,8 +3401,9 @@ THREE.PixelBoxRenderer = function(){
 		this.scale = 1.0 / (scale != undefined ? scale : 1.0);
 		
 		// create renderer
-		this.webgl = webgl = new THREE.WebGLRenderer({devicePixelRatio:1.0, antialias: false, autoClear: false, alpha: false, maxLights:16, preserveDrawingBuffer: false, precision:'highp' });
-		$(document.body).prepend(webgl.domElement);
+		this.webgl = webgl = new THREE.WebGLRenderer( {	devicePixelRatio: 1.0, antialias: false, autoClear: false, 
+														alpha: false, maxLights: 16, preserveDrawingBuffer: false, precision: 'highp' });
+		document.body.insertBefore(webgl.domElement, document.body.firstChild);
 		webgl.updateStyle = false;
 		webgl.setSize(window.innerWidth * this.scale, window.innerHeight * this.scale);
 		
@@ -3401,6 +3420,7 @@ THREE.PixelBoxRenderer = function(){
 			useTexture: false
 		}
 		
+		// stats
 		if(stats){
 			var stats = this.stats = new Stats();
 			stats.domElement.style.position = 'absolute';
@@ -3412,8 +3432,9 @@ THREE.PixelBoxRenderer = function(){
 		}
 		
 		// window resized listener
-		$(window).on('resize.renderer',this._windowResized);
-		$('canvas').css({ width:window.innerWidth, height:window.innerHeight });
+		window.addEventListener('resize', this._windowResized);
+		canvas.style.width = window.innerWidth + 'px';
+		canvas.style.height = window.innerHeight + 'px';
 			
 		// start render loop
 		this._render();
@@ -3511,7 +3532,7 @@ THREE.PixelBoxRenderer = function(){
 			if(newScene['onAdded']) newScene.onAdded();
 		}
 		
-		$(window).trigger('resize');
+		window.dispatchEvent(new Event('resize'));
 	}
 
 	/* render */
@@ -3534,8 +3555,9 @@ THREE.PixelBoxRenderer = function(){
 		renderer.webgl.setSize(window.innerWidth * renderer.scale, window.innerHeight * renderer.scale);
 		
 		// fill screen
-		$('canvas').css({ width:window.innerWidth, height:window.innerHeight });
-		
+		renderer.webgl.domElement.style.width = window.innerWidth + 'px';
+		renderer.webgl.domElement.style.height = window.innerHeight + 'px';
+
 		// update PixelBox viewport uniform
 		THREE.PixelBoxUtil.updateViewPortUniform();
 	};
@@ -4701,11 +4723,13 @@ THREE.PixelBoxScene.prototype.dispose = function(unloadAssets){
 /* ================================================================================ THREE.PixelBoxRenderer callbacks */
 
 THREE.PixelBoxScene.prototype.addResizeListener = function(){
-	$(window).on('resize.'+(this.constructor.name ? this.constructor.name : "PixelBoxScene"), this.onResized.bind(this));
+	this._boundOnResized = this.onResized.bind(this);
+	window.addEventListener('resize', this._boundOnResized);
 };
 
 THREE.PixelBoxScene.prototype.removeResizeListener = function(){
-	$(window).off('resize.'+(this.constructor.name ? this.constructor.name : "PixelBoxScene"));
+	window.removeEventListener('resize', this._boundOnResized);
+	this._boundOnResized = null;
 };
 
 /* render callback */

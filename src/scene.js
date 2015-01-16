@@ -967,11 +967,13 @@ THREE.PixelBoxScene.prototype.dispose = function(unloadAssets){
 /* ================================================================================ THREE.PixelBoxRenderer callbacks */
 
 THREE.PixelBoxScene.prototype.addResizeListener = function(){
-	$(window).on('resize.'+(this.constructor.name ? this.constructor.name : "PixelBoxScene"), this.onResized.bind(this));
+	this._boundOnResized = this.onResized.bind(this);
+	window.addEventListener('resize', this._boundOnResized);
 };
 
 THREE.PixelBoxScene.prototype.removeResizeListener = function(){
-	$(window).off('resize.'+(this.constructor.name ? this.constructor.name : "PixelBoxScene"));
+	window.removeEventListener('resize', this._boundOnResized);
+	this._boundOnResized = null;
 };
 
 /* render callback */

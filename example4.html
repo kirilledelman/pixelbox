@@ -6,12 +6,8 @@
 		<meta content="yes" name="apple-mobile-web-app-capable" />		
 		<meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1"/>
 		
-		<!-- PixelBox uses jQuery -->
-		<script src="js/jquery-2.1.1.min.js"></script>
-		
 		<!-- THREE base includes -->
 		<script src="js/three.min.js"></script>
-		<script src="js/stats.min.js"></script>
 		
 		<!-- PixelBox include -->
 		<script src="js/pixelbox.min.js"></script>
@@ -41,27 +37,30 @@
 		
 		*/
 		
-		$(document).ready(function(){
+		document.addEventListener( 'DOMContentLoaded', function() {
 		
-			// init PixelBoxRenderer instance
+			if( !renderer.init() ) {
 			
-			if(!renderer.init()){
 				var err = "Your browser doesn't support WebGL";
-				alert(err);
-				console.error(err);
+				alert( err );
+				console.error( err );
 				return;
+				
 			} else {
-				console.log("WebGL initialized");
+			
+				console.log( "WebGL initialized" );
+				
 			}
 			
-			// load scene definition using THREE.PixelBoxAssets,
+			// load scene definition using THREE.PixelBoxAssets
 			
-			assets.loadAssets({ 
+			assets.loadAssets( {
+			
 				scenes: [ 'assets/example4.scene' ],
 				
 				// when done, display scene
 				
-				done:function(){
+				done: function() {
 				
 					// instantiate our ExampleScene
 					
@@ -69,110 +68,112 @@
 					
 					// set it as current for renderer
 					
-					renderer.setScene(exampleScene);
+					renderer.setScene( exampleScene );
 
 					// click will spawn an instance of a template
 							
-					$(document).on('click', function(){
+					document.getElementById( 'button1' ).addEventListener( 'click', function() {
 						
 						// create an instance of 'pew' template from sceneDef
 						
-						var pew = exampleScene.instantiate('pew');
+						var pew = exampleScene.instantiate( 'pew' );
 						
 						// set position to camera's position
 						
-						pew.position.copy(exampleScene.camera.position);
+						pew.position.copy( exampleScene.camera.position );
 						
 						// pick a random color
 						
 						var color = new THREE.Color();
-						color.setHSL(Math.random(), 0.5, 0.5);
+						color.setHSL( Math.random(), 0.5, 0.5 );
 						
 						// tint plasma ( part of 'pew' template )
 						
-						pew.plasma.tint.copy(color);
+						pew.plasma.tint.copy( color );
 						
 						// tint point light ( part of 'pew' template )
 						
-						pew.pointlight.color.copy(color);						
+						pew.pointlight.color.copy( color );						
 						
 						// add it to the scene
 						
-						exampleScene.add(pew);						
+						exampleScene.add( pew );						
 						
 						// get camera's forward direction -1000 units along Z
 						
-						var forward = exampleScene.camera.localToWorld(new THREE.Vector3(0, 0, -1000));
+						var forward = exampleScene.camera.localToWorld( new THREE.Vector3( 0, 0, -1000 ) );
 						
 						// tween pew's position to that point
 						
-						pew.tween({	target: pew.position,
-									to: forward,
-									duration: 3,
-									done: function(tweenObj){
-										
-										// when tween finishes recycle the template
-										
-										exampleScene.recycle(this); 
-										
-									}
-								  });
+						pew.tween( {	
+							target: pew.position,
+							to: forward,
+							duration: 3,
+							done: function( tweenObj ) {
+								
+								// when tween finishes recycle the template
+								
+								exampleScene.recycle( this ); 
+								
+							}
+						} );
 						
-					});
+					} ); // end onclick
 
-
-				}// end done:function
-			});// end assets.loadAssets
-		});// end document.ready
-		
+				} // end done:function
+				
+			} ); // end assets.loadAssets
+			
+		} ); // end document.ready
+				
 		/*
 			
 			ExampleScene
 			
 		*/
 		
-		function ExampleScene(){
+		function ExampleScene() {
 		
 		 	// call parent constructor
 		 	
-			THREE.PixelBoxScene.call(this);
+			THREE.PixelBoxScene.call( this );
 			
 			// get scene definition from assets cache
 			
-			var sceneDef = assets.cache.get('example4');
+			var sceneDef = assets.cache.get( 'example4' );
 			
 			// populate this scene with the definition
 			
-			this.populateWith(sceneDef);
+			this.populateWith( sceneDef );
 				
 			// add controls for easy preview
 			// various controls classes can be found in three.js examples/js/controls folder
 			
-			this.controls = new THREE.OrbitControls(this.camera);
+			this.controls = new THREE.OrbitControls( this.camera );
 			
 			// tick function will spin all asteroids
 			
-			this.tick = function(deltaTime){
+			this.tick = function( deltaTime ){
 				
 				// scene has a container object 'asteroids', loop over its children
 				
-				for(var i = 0, l = this.asteroids.children.length; i < l; i++){
+				for ( var i = 0, l = this.asteroids.children.length; i < l; i++ ){
 					
 					// spin each asteroid within
 					
-					this.asteroids.children[i].rotateY(deltaTime * 0.5);
+					this.asteroids.children[i].rotateY( deltaTime * 0.5 );
 
-					this.asteroids.children[i].rotateX(deltaTime * 0.1);
+					this.asteroids.children[i].rotateX( deltaTime * 0.1 );
 					
 				}
 					
-			};						
+			};
 			
 		}
 		
 		// ExampleScene subclasses THREE.PixelBoxScene
 		
-		ExampleScene.prototype = Object.create(THREE.PixelBoxScene.prototype);
+		ExampleScene.prototype = Object.create( THREE.PixelBoxScene.prototype );
 		ExampleScene.prototype.constructor = ExampleScene;
 				
 		</script>

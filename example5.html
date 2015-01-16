@@ -6,12 +6,8 @@
 		<meta content="yes" name="apple-mobile-web-app-capable" />		
 		<meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1"/>
 		
-		<!-- PixelBox uses jQuery -->
-		<script src="js/jquery-2.1.1.min.js"></script>
-		
 		<!-- THREE base includes -->
 		<script src="js/three.min.js"></script>
-		<script src="js/stats.min.js"></script>
 		
 		<!-- PixelBox include -->
 		<script src="js/pixelbox.min.js"></script>
@@ -47,27 +43,30 @@
 		
 		*/
 		
-		$(document).ready(function(){
+		document.addEventListener( 'DOMContentLoaded', function() {
 		
-			// init PixelBoxRenderer instance
+			if( !renderer.init() ) {
 			
-			if(!renderer.init()){
 				var err = "Your browser doesn't support WebGL";
-				alert(err);
-				console.error(err);
+				alert( err );
+				console.error( err );
 				return;
+				
 			} else {
-				console.log("WebGL initialized");
+			
+				console.log( "WebGL initialized" );
+				
 			}
 			
-			// load scene definition using THREE.PixelBoxAssets,
+			// load scene definition using THREE.PixelBoxAssets
 			
-			assets.loadAssets({ 
+			assets.loadAssets( {
+			 
 				scenes: [ 'assets/example5.scene' ],
 				
 				// when done, display scene
 				
-				done:function(){
+				done: function() {
 				
 					// instantiate our ExampleScene
 					
@@ -75,35 +74,35 @@
 					
 					// set it as current for renderer
 					
-					renderer.setScene(exampleScene);
+					renderer.setScene( exampleScene );
 
 					// playAnim button
 
-					$('#playAnim-button').click(function(){
+					document.getElementById( 'playAnim-button' ).addEventListener( 'click', function() {
 						
-						exampleScene.guy.playAnim('stand');
+						exampleScene.guy.playAnim( 'stand' );
 						
 					});
 
 					// loopAnimTwice button
-
-					$('#loopAnimTwice-button').click(function(){
+					
+					document.getElementById( 'loopAnimTwice-button' ).addEventListener( 'click', function() {
 						
-						exampleScene.guy.loopAnim('greet', 2);
+						exampleScene.guy.loopAnim( 'greet', 2 );
 						
 					});
 
 					// loopAnim button
 
-					$('#loopAnim-button').click(function(){
+					document.getElementById( 'loopAnim-button' ).addEventListener( 'click', function() {
 						
-						exampleScene.guy.loopAnim('run');
+						exampleScene.guy.loopAnim( 'run' );
 						
 					});
 					
 					// stopAnim button
 
-					$('#stopAnim-button').click(function(){
+					document.getElementById( 'stopAnim-button' ).addEventListener( 'click', function() {
 						
 						exampleScene.guy.stopAnim();
 						
@@ -111,15 +110,19 @@
 					
 					// clear log
 					
-					$('#clear-log').click(function(){
+					document.getElementById( 'clear-log' ).addEventListener( 'click', function() {
 					
-						$('#log').empty().css({ left: 0 });
-					
+						var log = document.getElementById( 'log' );
+						log.innerHTML = '';
+						log.style.left = '0px';
+						
 					});
 
-				}// end done:function
-			});// end assets.loadAssets
-		});// end document.ready
+				} // end done:function
+				
+			} ); // end assets.loadAssets
+			
+		} ); // end document.ready
 		
 		/*
 			
@@ -127,51 +130,54 @@
 			
 		*/
 		
-		function ExampleScene(){
+		function ExampleScene() {
 		
 		 	// call parent constructor
 		 	
-			THREE.PixelBoxScene.call(this);
+			THREE.PixelBoxScene.call( this );
 			
 			// get scene definition from assets cache
 			
-			var sceneDef = assets.cache.get('example5');
+			var sceneDef = assets.cache.get( 'example5' );
 			
 			// populate this scene with the definition
 			
-			this.populateWith(sceneDef);
+			this.populateWith( sceneDef );
 				
 			// add controls for easy preview
 			// various controls classes can be found in three.js examples/js/controls folder
 			
-			this.controls = new THREE.OrbitControls(this.camera);
+			this.controls = new THREE.OrbitControls( this.camera );
 			
 			// event handler function
 			
-			this.animationEventFunction = function(event){
+			this.animationEventFunction = function( event ) {
 				
 				// print event type 
-				
-				$('#log').append('<span>' + event.type + '</span>');
+				var log = document.getElementById( 'log' );
+				var chunk = document.createElement( 'span' );
+				chunk.textContent = event.type;
+				log.appendChild( chunk );
 				
 				// scroll to the end
 				
-				$('#log').animate({ left: Math.min(0, $('#log').parent().outerWidth() - $('#log').outerWidth()) });
+				log.style.left = Math.min( 0, log.parentNode.offsetWidth - log.offsetWidth ) + 'px';
+				
 			};
 			
 			// add event listeners for animation events
 			// "guy" is a PixelBox instance, part of example5 scene
 
-			this.guy.addEventListener('anim-start', this.animationEventFunction);
-			this.guy.addEventListener('anim-stop', this.animationEventFunction);
-			this.guy.addEventListener('anim-loop', this.animationEventFunction);
-			this.guy.addEventListener('anim-finish', this.animationEventFunction);			
+			this.guy.addEventListener( 'anim-start', this.animationEventFunction );
+			this.guy.addEventListener( 'anim-stop', this.animationEventFunction );
+			this.guy.addEventListener( 'anim-loop', this.animationEventFunction );
+			this.guy.addEventListener( 'anim-finish', this.animationEventFunction );			
 			
 		}
 		
 		// ExampleScene subclasses THREE.PixelBoxScene
 		
-		ExampleScene.prototype = Object.create(THREE.PixelBoxScene.prototype);
+		ExampleScene.prototype = Object.create( THREE.PixelBoxScene.prototype );
 		ExampleScene.prototype.constructor = ExampleScene;
 				
 		</script>
