@@ -1,7 +1,8 @@
 /*
-
-	Later TODO:
-		Find a way to share vertex buffers between different PixelBox data objects
+ * @author Kirill Edelman
+ * @source https://github.com/kirilledelman/pixelbox
+ * @documentation https://github.com/kirilledelman/pixelbox/wiki
+ * @license MIT
 */
 
 THREE.PixelBoxDepthShader = {
@@ -26,17 +27,17 @@ THREE.PixelBoxDepthShader = {
 		"	float pointScaleMult = max(length(vec3(modelMatrix[0][0],modelMatrix[1][0],modelMatrix[2][0] )),",
 		"		max(length(vec3(modelMatrix[0][1],modelMatrix[1][1],modelMatrix[2][1] )),",
 		"		length(vec3(modelMatrix[0][2],modelMatrix[1][2],modelMatrix[2][2] ))));",
-		"	if(projectionMatrix[3][3] == 0.0){",// perspective
+		"	if (projectionMatrix[3][3] == 0.0) {",// perspective
 		"		float fov = 2.0 * atan(1.0 / projectionMatrix[1][1]);",
 		"		gl_PointSize = pointScaleMult * pointSize * 600.0 * fov / pow(gl_Position.w, 1.0 + fov * 0.25);",
 		"	} else {", // ortho
 		"		gl_PointSize = pointScaleMult * pointSize * 6.0;",
 		"	} ",
-		"}"	].join("\n"),
+		"}"	].join( "\n" ),
 
 	fragmentShader: [
 		"varying vec4 vColor;",
-		"float rand(vec2 co){",
+		"float rand(vec2 co) {",
 		"	float a = 12.9898;",
 		"	float b = 78.233;",
 		"   float c = 43758.5453;",
@@ -52,14 +53,14 @@ THREE.PixelBoxDepthShader = {
 		"	return res;",
 		"}",
 		"void main() {",
-		"	if(vColor.a < 1.0){",
+		"	if (vColor.a < 1.0) {",
 		"		float a = rand(gl_FragCoord.xy);",
 		"		a = 1.0 - step(vColor.a, a);",
-		"		if(a == 0.0) discard;",
+		"		if (a == 0.0) discard;",
 		"	}",
 		"	gl_FragData[ 0 ] = pack_depth(gl_FragCoord.z);",
 		"}"
-	].join("\n")
+	].join( "\n" )
 
 };
 
@@ -71,16 +72,16 @@ THREE.PixelBoxShader = {
 		tintAlpha: 	{ type: "f", value: 1.0 },
 		
 		// point scale
-		pointSize: 	{ type: 'f', value: 1.0 },
+		pointSize: 	{ type: "f", value: 1.0 },
 		
 		// ambient occlusion effect
-		occlusion: 	{ type: 'f', value: 1.0 },
+		occlusion: 	{ type: "f", value: 1.0 },
 		
 		// back facing cull mode
-		cullBack: { type:'i', value: 1 },
+		cullBack: { type:"i", value: 1 },
 		
 		// fog color
-		fogColor:    { type: "c", value: new THREE.Color(0xFFFFFF) },
+		fogColor:    { type: "c", value: new THREE.Color( 0xFFFFFF ) },
 	    fogNear:     { type: "f", value: 100 },
 	    fogFar:      { type: "f", value: 1000 },
 	    
@@ -99,10 +100,10 @@ THREE.PixelBoxShader = {
 	},
 
 	attributes: {
-		color:		{	type: 'v4', value: null },
-		normal: 	{	type: 'v3', value: null },
-		occlude:	{	type: 'f', value: null },
-		position:	{	type: 'v3', value: null },
+		color:		{	type: "v4", value: null },
+		normal: 	{	type: "v3", value: null },
+		occlude:	{	type: "f", value: null },
+		position:	{	type: "v3", value: null },
 	},
 
 	vertexShader: [
@@ -144,7 +145,7 @@ THREE.PixelBoxShader = {
 		"		return depth;",
 		"	}",
 		
-		"	vec3 getShadowColor(int shIndex, vec4 mPosition){",
+		"	vec3 getShadowColor(int shIndex, vec4 mPosition) {",
 		"		float fDepth;",
 		"		vec3 shadowColor = vec3( 1.0 );",
 		
@@ -157,47 +158,47 @@ THREE.PixelBoxShader = {
 		
 		"		if ( frustumTest ) {",
 		"			vec4 rgbaDepth;",
-		"			if(shIndex == 0){",
+		"			if (shIndex == 0) {",
 		"				rgbaDepth = texture2D( shadowMap[ 0 ], shadowCoord.xy );",
 		"			}",
 		"#if MAX_SHADOWS >= 2",
-		"			else if(shIndex == 1){",
+		"			else if (shIndex == 1) {",
 		"				rgbaDepth = texture2D( shadowMap[ 1 ], shadowCoord.xy );",
 		"			}",
 		"#endif",
 		"#if MAX_SHADOWS >= 3",
-		"			else if(shIndex == 2){",
+		"			else if (shIndex == 2) {",
 		"				rgbaDepth = texture2D( shadowMap[ 2 ], shadowCoord.xy );",
 		"			}",
 		"#endif",
 		"#if MAX_SHADOWS >= 4",
-		"			else if(shIndex == 3){",
+		"			else if (shIndex == 3) {",
 		"				rgbaDepth = texture2D( shadowMap[ 3 ], shadowCoord.xy );",
 		"			}",
 		"#endif",
 		"#if MAX_SHADOWS >= 5",
-		"			else if(shIndex == 4){",
+		"			else if (shIndex == 4) {",
 		"				rgbaDepth = texture2D( shadowMap[ 4 ], shadowCoord.xy );",
 		"			}",
 		"#endif",
 		"#if MAX_SHADOWS >= 6",
-		"			else if(shIndex == 5){",
+		"			else if (shIndex == 5) {",
 		"				rgbaDepth = texture2D( shadowMap[ 5 ], shadowCoord.xy );",
 		"			}",
 		"#endif",
 		"#if MAX_SHADOWS >= 7",
-		"			else if(shIndex == 6){",
+		"			else if (shIndex == 6) {",
 		"				rgbaDepth = texture2D( shadowMap[ 6 ], shadowCoord.xy );",
 		"			}",
 		"#endif",
 		"#if MAX_SHADOWS >= 8",
-		"			else if(shIndex == 7){",
+		"			else if (shIndex == 7) {",
 		"				rgbaDepth = texture2D( shadowMap[ 7 ], shadowCoord.xy );",
 		"			}",
 		"#endif",
 		"			float fDepth = unpackDepth( rgbaDepth );",
 		"			shadowCoord.z += shadowBias[ shIndex ];",
-		"			if ( fDepth < shadowCoord.z ){",
+		"			if ( fDepth < shadowCoord.z ) {",
 		"				shadowColor = vec3(0.0);",
 		"			}",
 		
@@ -249,7 +250,7 @@ THREE.PixelBoxShader = {
 		"	float brightness = normalLength - 1.0;",
 		"	vec3 vertexNormal = normalize(normalMatrix * normal);",		
 		
-		"	if(cullBack != 0 && vertexNormal.z <= -0.5) { ",
+		"	if (cullBack != 0 && vertexNormal.z <= -0.5) { ",
 		"		vColor = vec4(0.0);",
 		"	} else { ",
 		
@@ -257,7 +258,7 @@ THREE.PixelBoxShader = {
 		"#if MAX_POINT_LIGHTS > 0",
 		"vec3 pointDiffuse = vec3( 0.0 );",
 		"for ( int i = 0; i < MAX_POINT_LIGHTS; i ++ ) {",	//
-		"	if(i < actualPointLights){",
+		"	if (i < actualPointLights) {",
 		"	vec4 lPosition = viewMatrix * vec4( pointLightPosition[ i ], 1.0 );",
 		"	vec3 lVector = lPosition.xyz - mvPosition.xyz;",
 		"	float lDistance = 1.0;",
@@ -265,7 +266,7 @@ THREE.PixelBoxShader = {
 		"		lDistance = 1.0 - min( ( length( lVector ) / pointLightDistance[ i ] ), 1.0 );",
 		"	lVector = normalize( lVector );",
 		"	float dotProduct = dot( vertexNormal, lVector );",
-		"	if(occlude < 0.0) dotProduct = (1.0 + max(dotProduct, 0.0) + occlude) * 0.5;",
+		"	if (occlude < 0.0) dotProduct = (1.0 + max(dotProduct, 0.0) + occlude) * 0.5;",
 		"	#ifdef WRAP_AROUND",
 		"		float pointDiffuseWeightFull = max( dotProduct, 0.0 );",
 		"		float pointDiffuseWeightHalf = max( 0.5 * dotProduct + 0.5, 0.0 );",
@@ -287,12 +288,12 @@ THREE.PixelBoxShader = {
 		"#if MAX_DIR_LIGHTS > 0",
 		"vec3 dirDiffuse = vec3( 0.0 );",
 	
-		"for( int i = 0; i < MAX_DIR_LIGHTS; i ++ ) {", //
-		"	if(i < actualDirLights){",		
+		"for ( int i = 0; i < MAX_DIR_LIGHTS; i ++ ) {", //
+		"	if (i < actualDirLights) {",		
 		"	vec4 lDirection = viewMatrix * vec4( directionalLightDirection[ i ], 0.0 );",
 		"	vec3 dirVector = normalize( lDirection.xyz);",
 		"	float dotProduct = dot(vertexNormal, dirVector);",
-		"	if(occlude < 0.0) dotProduct = (1.0 + max(dotProduct, 0.0) + occlude) * 0.5;",
+		"	if (occlude < 0.0) dotProduct = (1.0 + max(dotProduct, 0.0) + occlude) * 0.5;",
 		"	#ifdef WRAP_AROUND",
 		"		float dirDiffuseWeightFull = max( dotProduct, 0.0 );",
 		"		float dirDiffuseWeightHalf = max( 0.5 * dotProduct + 0.5, 0.0 );",
@@ -303,7 +304,7 @@ THREE.PixelBoxShader = {
 		"	thisLight = diffuse * directionalLightColor[ i ] * dirDiffuseWeight;",
 		"#ifdef USE_SHADOWMAP",
 		"	shadowMapIndex = directionalLightShadowMap[ i ];",
-		"	if(shadowMapIndex != 0) {",
+		"	if (shadowMapIndex != 0) {",
 		"		thisLight = thisLight * getShadowColor(shadowMapIndex - 1, mPosition);",
 		"	}",
 		"#endif",
@@ -316,7 +317,7 @@ THREE.PixelBoxShader = {
 		"#if MAX_SPOT_LIGHTS > 0",
 		"vec3 spotDiffuse = vec3( 0.0 );",
 		"for ( int i = 0; i < MAX_SPOT_LIGHTS; i ++ ) {", //
-		"	if(i < actualSpotLights){",		
+		"	if (i < actualSpotLights) {",		
 		"	vec4 lPosition = viewMatrix * vec4( spotLightPosition[ i ], 1.0 );",
 		"	vec3 lVector = lPosition.xyz - mvPosition.xyz;//lPosition.xyz + vViewPosition.xyz;",
 		"	float lDistance = 1.0;",
@@ -328,7 +329,7 @@ THREE.PixelBoxShader = {
 		"		spotEffect = max( pow( max( spotEffect, 0.0 ), spotLightExponent[ i ] * 0.25 ), 0.0 );",
 				// diffuse
 		"		float dotProduct = dot( vertexNormal, lVector );",
-		"		if(occlude < 0.0) dotProduct = (1.0 + max(dotProduct, 0.0) + occlude) * 0.5;",
+		"		if (occlude < 0.0) dotProduct = (1.0 + max(dotProduct, 0.0) + occlude) * 0.5;",
 		"		#ifdef WRAP_AROUND",
 		"			float spotDiffuseWeightFull = max( dotProduct, 0.0 );",
 		"			float spotDiffuseWeightHalf = max( 0.5 * dotProduct + 0.5, 0.0 );",
@@ -339,7 +340,7 @@ THREE.PixelBoxShader = {
 		"		thisLight = diffuse * spotLightColor[ i ] * spotDiffuseWeight * lDistance * spotEffect;",
 		"#ifdef USE_SHADOWMAP",
 		"		shadowMapIndex = spotLightShadowMap[ i ];",
-		"		if(shadowMapIndex != 0) {",
+		"		if (shadowMapIndex != 0) {",
 		"			thisLight = thisLight * getShadowColor(shadowMapIndex - 1, mPosition);",
 		"		}",			
 		"#endif",
@@ -353,12 +354,12 @@ THREE.PixelBoxShader = {
 		// hemi
 		"#if MAX_HEMI_LIGHTS > 0",
 		"vec3 hemiDiffuse = vec3( 0.0 );",
-		"for( int i = 0; i < MAX_HEMI_LIGHTS; i ++ ) {", //
-		"	if(i < actualHemiLights){",		
+		"for ( int i = 0; i < MAX_HEMI_LIGHTS; i ++ ) {", //
+		"	if (i < actualHemiLights) {",		
 		"	vec4 lDirection = viewMatrix * vec4( hemisphereLightDirection[ i ], 0.0 );",
 		"	vec3 lVector = normalize( lDirection.xyz );",
 		"	float dotProduct = dot( vertexNormal, lVector );",
-		"	if(occlude < 0.0) dotProduct = (1.0 + max(dotProduct, 0.0) + occlude) * 0.5;",
+		"	if (occlude < 0.0) dotProduct = (1.0 + max(dotProduct, 0.0) + occlude) * 0.5;",
 		"	float hemiDiffuseWeight = 0.5 * dotProduct + 0.5;",
 		"	vec3 hemiColor = mix( hemisphereLightGroundColor[ i ], hemisphereLightSkyColor[ i ], hemiDiffuseWeight );",
 		"	hemiDiffuse += diffuse * hemiColor;",
@@ -381,17 +382,13 @@ THREE.PixelBoxShader = {
 		"		max(length(vec3(modelMatrix[0][1],modelMatrix[1][1],modelMatrix[2][1] )),",
 		"		length(vec3(modelMatrix[0][2],modelMatrix[1][2],modelMatrix[2][2] ))));",
 		"	gl_PointSize = pointScaleMult * viewPortScale * pointSize / gl_Position.w;",
-		"}"	].join("\n"),
-/*
-var sx = length(vec3( modelMatrix[ 0 ], modelMatrix[ 1 ], modelMatrix[ 2 ] ));
-		var sy = this.set( m.elements[ 4 ], m.elements[ 5 ], m.elements[  6 ] ).length();
-		var sz = this.set( m.elements[ 8 ], m.elements[ 9 ], m.elements[ 10 ] ).length();*/
+		"}"	].join( "\n" ),
 		
 	fragmentShader: [
 		"varying vec4 vColor;",
 		"uniform float stipple;",
 		
-		"float rand(vec2 co){",
+		"float rand(vec2 co) {",
 		"	float a = 12.9898;",
 		"	float b = 78.233;",
 		"   float c = 43758.5453;",
@@ -401,19 +398,19 @@ var sx = length(vec3( modelMatrix[ 0 ], modelMatrix[ 1 ], modelMatrix[ 2 ] ));
 		"}",
 		"void main() {",
 		"	float s = 1.0; ",
-		"	if(stipple != 0.0){ ",
+		"	if (stipple != 0.0) { ",
 		"		vec2 stip = fract( vec2(gl_FragCoord.x + stipple, gl_FragCoord.y) * 0.5);",
 		"		s = step(0.25,abs(stip.x-stip.y));",
 		"	}",
-		"	if(vColor.a == 0.0 || s == 0.0) discard;",
-		"	else if(vColor.a < 1.0){",
+		"	if (vColor.a == 0.0 || s == 0.0) discard;",
+		"	else if (vColor.a < 1.0) {",
 		"		float a = rand(gl_FragCoord.xy);",
 		"		a = s * (1.0 - step(vColor.a, a));",
-		"		if(a == 0.0) discard;",
+		"		if (a == 0.0) discard;",
 		"	}",		
 		"	gl_FragColor = vec4(vColor.rgb, 1.0);",
 		"}"
-	].join("\n")
+	].join( "\n" )
 
 };
 
@@ -426,7 +423,7 @@ THREE.PixelBoxMeshShader = {
 		brightness: { type: "f", value: 0.0 },
 		
 		// fog color
-		fogColor:    { type: "c", value: new THREE.Color(0xFFFFFF) },
+		fogColor:    { type: "c", value: new THREE.Color( 0xFFFFFF ) },
 	    fogNear:     { type: "f", value: 100 },
 	    fogFar:      { type: "f", value: 1000 },
 	    
@@ -442,7 +439,7 @@ THREE.PixelBoxMeshShader = {
 		spotLightShadowMap: { type: "iv1", value: [] }
 	},
 
-	attributes: { },
+	attributes: {},
 
 	vertexShader: [
 	"varying vec3 vViewPosition;",
@@ -462,7 +459,7 @@ THREE.PixelBoxMeshShader = {
 	
 	"	gl_Position = projectionMatrix * mvPosition;",
 	"}"
-	].join("\n"),
+	].join( "\n" ),
 	
 	fragmentShader: [
 	"uniform vec3 tintColor;",
@@ -498,11 +495,11 @@ THREE.PixelBoxMeshShader = {
 	"		return depth;",
 	"	}",
 	
-	"	vec3 getShadowColor(int shadowIndex, vec4 mPosition){",
+	"	vec3 getShadowColor(int shadowIndex, vec4 mPosition) {",
 	"		vec3 shadowColor = vec3(1.0);",
 	"		float fDepth;",
 	
-	"		if(shadowIndex == 0){",
+	"		if (shadowIndex == 0) {",
 	"			vec4 sm = shadowMatrix[ 0 ] * mPosition;",
 	"			vec3 shadowCoord = sm.xyz / sm.w;",
 	"			bvec4 inFrustumVec = bvec4 ( shadowCoord.x >= 0.0, shadowCoord.x <= 1.0, shadowCoord.y >= 0.0, shadowCoord.y <= 1.0 );",
@@ -512,14 +509,14 @@ THREE.PixelBoxMeshShader = {
 	"			if ( frustumTest ) {",
 	"				shadowCoord.z += shadowBias[ 0 ];",
 	"				float fDepth = unpackDepth( texture2D( shadowMap[ 0 ], shadowCoord.xy ) );",
-	"				if ( fDepth < shadowCoord.z ){",
+	"				if ( fDepth < shadowCoord.z ) {",
 	"					shadowColor = vec3(0.0);",
 	"				}",
 	"			}",
 	"		} ",
 	"#if MAX_SHADOWS >= 2",
 	"		else ",
-	"		if(shadowIndex == 1){",
+	"		if (shadowIndex == 1) {",
 	"			vec4 sm = shadowMatrix[ 1 ] * mPosition;",
 	"			vec3 shadowCoord = sm.xyz / sm.w;",
 	"			bvec4 inFrustumVec = bvec4 ( shadowCoord.x >= 0.0, shadowCoord.x <= 1.0, shadowCoord.y >= 0.0, shadowCoord.y <= 1.0 );",
@@ -529,7 +526,7 @@ THREE.PixelBoxMeshShader = {
 	"			if ( frustumTest ) {",
 	"				shadowCoord.z += shadowBias[ 1 ];",
 	"				float fDepth = unpackDepth( texture2D( shadowMap[ 1 ], shadowCoord.xy ) );",
-	"				if ( fDepth < shadowCoord.z ){",
+	"				if ( fDepth < shadowCoord.z ) {",
 	"					shadowColor = vec3(0.0);",
 	"				}",
 	"			}",
@@ -537,7 +534,7 @@ THREE.PixelBoxMeshShader = {
 	"#endif",
 	"#if MAX_SHADOWS >= 3",
 	"		else ",
-	"		if(shadowIndex == 2){",
+	"		if (shadowIndex == 2) {",
 	"			vec4 sm = shadowMatrix[ 2 ] * mPosition;",
 	"			vec3 shadowCoord = sm.xyz / sm.w;",
 	"			bvec4 inFrustumVec = bvec4 ( shadowCoord.x >= 0.0, shadowCoord.x <= 1.0, shadowCoord.y >= 0.0, shadowCoord.y <= 1.0 );",
@@ -547,7 +544,7 @@ THREE.PixelBoxMeshShader = {
 	"			if ( frustumTest ) {",
 	"				shadowCoord.z += shadowBias[ 2 ];",
 	"				float fDepth = unpackDepth( texture2D( shadowMap[ 2 ], shadowCoord.xy ) );",
-	"				if ( fDepth < shadowCoord.z ){",
+	"				if ( fDepth < shadowCoord.z ) {",
 	"					shadowColor = vec3(0.0);",
 	"				}",
 	"			}",
@@ -555,7 +552,7 @@ THREE.PixelBoxMeshShader = {
 	"#endif",
 	"#if MAX_SHADOWS >= 4",
 	"		else ",
-	"		if(shadowIndex == 3){",
+	"		if (shadowIndex == 3) {",
 	"			vec4 sm = shadowMatrix[ 3 ] * mPosition;",
 	"			vec3 shadowCoord = sm.xyz / sm.w;",
 	"			bvec4 inFrustumVec = bvec4 ( shadowCoord.x >= 0.0, shadowCoord.x <= 1.0, shadowCoord.y >= 0.0, shadowCoord.y <= 1.0 );",
@@ -565,7 +562,7 @@ THREE.PixelBoxMeshShader = {
 	"			if ( frustumTest ) {",
 	"				shadowCoord.z += shadowBias[ 3 ];",
 	"				float fDepth = unpackDepth( texture2D( shadowMap[ 3 ], shadowCoord.xy ) );",
-	"				if ( fDepth < shadowCoord.z ){",
+	"				if ( fDepth < shadowCoord.z ) {",
 	"					shadowColor = vec3(0.0);",
 	"				}",
 	"			}",
@@ -573,7 +570,7 @@ THREE.PixelBoxMeshShader = {
 	"#endif",
 	"#if MAX_SHADOWS >= 5",
 	"		else ",
-	"		if(shadowIndex == 4){",
+	"		if (shadowIndex == 4) {",
 	"			vec4 sm = shadowMatrix[ 4 ] * mPosition;",
 	"			vec3 shadowCoord = sm.xyz / sm.w;",
 	"			bvec4 inFrustumVec = bvec4 ( shadowCoord.x >= 0.0, shadowCoord.x <= 1.0, shadowCoord.y >= 0.0, shadowCoord.y <= 1.0 );",
@@ -583,7 +580,7 @@ THREE.PixelBoxMeshShader = {
 	"			if ( frustumTest ) {",
 	"				shadowCoord.z += shadowBias[ 4 ];",
 	"				float fDepth = unpackDepth( texture2D( shadowMap[ 4 ], shadowCoord.xy ) );",
-	"				if ( fDepth < shadowCoord.z ){",
+	"				if ( fDepth < shadowCoord.z ) {",
 	"					shadowColor = vec3(0.0);",
 	"				}",
 	"			}",
@@ -591,7 +588,7 @@ THREE.PixelBoxMeshShader = {
 	"#endif",
 	"#if MAX_SHADOWS >= 6",
 	"		else ",
-	"		if(shadowIndex == 5){",
+	"		if (shadowIndex == 5) {",
 	"			vec4 sm = shadowMatrix[ 5 ] * mPosition;",
 	"			vec3 shadowCoord = sm.xyz / sm.w;",
 	"			bvec4 inFrustumVec = bvec4 ( shadowCoord.x >= 0.0, shadowCoord.x <= 1.0, shadowCoord.y >= 0.0, shadowCoord.y <= 1.0 );",
@@ -601,7 +598,7 @@ THREE.PixelBoxMeshShader = {
 	"			if ( frustumTest ) {",
 	"				shadowCoord.z += shadowBias[ 5 ];",
 	"				float fDepth = unpackDepth( texture2D( shadowMap[ 5 ], shadowCoord.xy ) );",
-	"				if ( fDepth < shadowCoord.z ){",
+	"				if ( fDepth < shadowCoord.z ) {",
 	"					shadowColor = vec3(0.0);",
 	"				}",
 	"			}",
@@ -609,7 +606,7 @@ THREE.PixelBoxMeshShader = {
 	"#endif",
 	"#if MAX_SHADOWS >= 7",
 	"		else ",
-	"		if(shadowIndex == 6){",
+	"		if (shadowIndex == 6) {",
 	"			vec4 sm = shadowMatrix[ 6 ] * mPosition;",
 	"			vec3 shadowCoord = sm.xyz / sm.w;",
 	"			bvec4 inFrustumVec = bvec4 ( shadowCoord.x >= 0.0, shadowCoord.x <= 1.0, shadowCoord.y >= 0.0, shadowCoord.y <= 1.0 );",
@@ -619,7 +616,7 @@ THREE.PixelBoxMeshShader = {
 	"			if ( frustumTest ) {",
 	"				shadowCoord.z += shadowBias[ 6 ];",
 	"				float fDepth = unpackDepth( texture2D( shadowMap[ 6 ], shadowCoord.xy ) );",
-	"				if ( fDepth < shadowCoord.z ){",
+	"				if ( fDepth < shadowCoord.z ) {",
 	"					shadowColor = vec3(0.0);",
 	"				}",
 	"			}",
@@ -627,7 +624,7 @@ THREE.PixelBoxMeshShader = {
 	"#endif",
 	"#if MAX_SHADOWS >= 8",
 	"		else ",
-	"		if(shadowIndex == 7){",
+	"		if (shadowIndex == 7) {",
 	"			vec4 sm = shadowMatrix[ 7 ] * mPosition;",
 	"			vec3 shadowCoord = sm.xyz / sm.w;",
 	"			bvec4 inFrustumVec = bvec4 ( shadowCoord.x >= 0.0, shadowCoord.x <= 1.0, shadowCoord.y >= 0.0, shadowCoord.y <= 1.0 );",
@@ -637,7 +634,7 @@ THREE.PixelBoxMeshShader = {
 	"			if ( frustumTest ) {",
 	"				shadowCoord.z += shadowBias[ 7 ];",
 	"				float fDepth = unpackDepth( texture2D( shadowMap[ 7 ], shadowCoord.xy ) );",
-	"				if ( fDepth < shadowCoord.z ){",
+	"				if ( fDepth < shadowCoord.z ) {",
 	"					shadowColor = vec3(0.0);",
 	"				}",
 	"			}",
@@ -677,7 +674,7 @@ THREE.PixelBoxMeshShader = {
 	"uniform float pointLightDistance[ MAX_POINT_LIGHTS ];",
 	"#endif",
 
-	"float rand(vec2 co){",
+	"float rand(vec2 co) {",
 	"	float a = 12.9898;",
 	"	float b = 78.233;",
 	"   float c = 43758.5453;",
@@ -689,15 +686,15 @@ THREE.PixelBoxMeshShader = {
 	"void main() {",
 	//	stipple and alpha
 	"	float s = 1.0; ",
-	"	if(stipple != 0.0){ ",
+	"	if (stipple != 0.0) { ",
 	"		vec2 stip = fract( vec2(gl_FragCoord.x + stipple, gl_FragCoord.y) * 0.5);",
 	"		s = step(0.25,abs(stip.x-stip.y));",
 	"	}",
-	"	if(tintAlpha == 0.0 || s == 0.0) discard;",
-	"	else if(tintAlpha < 1.0){",
+	"	if (tintAlpha == 0.0 || s == 0.0) discard;",
+	"	else if (tintAlpha < 1.0) {",
 	"		float a = rand(gl_FragCoord.xy);",
 	"		a = s * (1.0 - step(tintAlpha, a));",
-	"		if(a == 0.0) discard;",
+	"		if (a == 0.0) discard;",
 	"	}",
 	
 	"	vec3 diffuse = tintColor;",
@@ -712,7 +709,7 @@ THREE.PixelBoxMeshShader = {
 	"#if MAX_POINT_LIGHTS > 0",
 	"vec3 pointDiffuse = vec3( 0.0 );",
 	"for ( int i = 0; i < MAX_POINT_LIGHTS; i ++ ) {",	//
-	"	if(i < actualPointLights){",
+	"	if (i < actualPointLights) {",
 	"	vec4 lPosition = viewMatrix * vec4( pointLightPosition[ i ], 1.0 );",
 	"	vec3 lVector = lPosition.xyz - mvPosition.xyz;",
 	"	float lDistance = 1.0;",
@@ -741,8 +738,8 @@ THREE.PixelBoxMeshShader = {
 	"#if MAX_DIR_LIGHTS > 0",
 	"vec3 dirDiffuse = vec3( 0.0 );",
 
-	"for( int i = 0; i < MAX_DIR_LIGHTS; i ++ ) {", //
-	"	if(i < actualDirLights){",		
+	"for ( int i = 0; i < MAX_DIR_LIGHTS; i ++ ) {", //
+	"	if (i < actualDirLights) {",		
 	"	vec4 lDirection = viewMatrix * vec4( directionalLightDirection[ i ], 0.0 );",
 	"	vec3 dirVector = normalize( lDirection.xyz);",
 	"	float dotProduct = dot(vertexNormal, dirVector);",
@@ -756,7 +753,7 @@ THREE.PixelBoxMeshShader = {
 	"	thisLight = diffuse * directionalLightColor[ i ] * dirDiffuseWeight;",
 	"#ifdef USE_SHADOWMAP",
 	"	shadowMapIndex = directionalLightShadowMap[ i ];",
-	"	if(shadowMapIndex != 0) {",
+	"	if (shadowMapIndex != 0) {",
 	"		thisLight = thisLight * getShadowColor(shadowMapIndex - 1, mPosition);",
 	"	}",
 	"#endif",
@@ -769,7 +766,7 @@ THREE.PixelBoxMeshShader = {
 	"#if MAX_SPOT_LIGHTS > 0",
 	"vec3 spotDiffuse = vec3( 0.0 );",
 	"for ( int i = 0; i < MAX_SPOT_LIGHTS; i ++ ) {", //
-	"	if(i < actualSpotLights){",		
+	"	if (i < actualSpotLights) {",		
 	"	vec4 lPosition = viewMatrix * vec4( spotLightPosition[ i ], 1.0 );",
 	"	vec3 lVector = lPosition.xyz - mvPosition.xyz;//lPosition.xyz + vViewPosition.xyz;",
 	"	float lDistance = 1.0;",
@@ -791,7 +788,7 @@ THREE.PixelBoxMeshShader = {
 	"		thisLight = diffuse * spotLightColor[ i ] * spotDiffuseWeight * lDistance * spotEffect;",
 	"#ifdef USE_SHADOWMAP",
 	"		shadowMapIndex = spotLightShadowMap[ i ];",
-	"		if(shadowMapIndex != 0) {",
+	"		if (shadowMapIndex != 0) {",
 	"			thisLight = thisLight * getShadowColor(shadowMapIndex - 1, mPosition);",
 	"		}",			
 	"#endif",
@@ -805,8 +802,8 @@ THREE.PixelBoxMeshShader = {
 	// hemi
 	"#if MAX_HEMI_LIGHTS > 0",
 	"vec3 hemiDiffuse = vec3( 0.0 );",
-	"for( int i = 0; i < MAX_HEMI_LIGHTS; i ++ ) {", //
-	"	if(i < actualHemiLights){",		
+	"for ( int i = 0; i < MAX_HEMI_LIGHTS; i ++ ) {", //
+	"	if (i < actualHemiLights) {",		
 	"	vec4 lDirection = viewMatrix * vec4( hemisphereLightDirection[ i ], 0.0 );",
 	"	vec3 lVector = normalize( lDirection.xyz );",
 	"	float dotProduct = dot( vertexNormal, lVector );",
@@ -826,27 +823,28 @@ THREE.PixelBoxMeshShader = {
 	// fog
 	"gl_FragColor = vec4(mix(totalDiffuse + addColor, fogColor, fogFactor), 1.0);",
 	"}"
-	].join("\n")	
+	].join( "\n" )	
 };
 
-THREE.MeshPixelBoxMaterial = function(params){
-	var material = new THREE.ShaderMaterial({
-		uniforms:       THREE.UniformsUtils.merge([THREE.UniformsLib['shadowmap'],THREE.UniformsLib['lights'],THREE.PixelBoxMeshShader.uniforms]),
+THREE.MeshPixelBoxMaterial = function ( params ) {
+
+	var material = new THREE.ShaderMaterial( {
+		uniforms:       THREE.UniformsUtils.merge( [ THREE.UniformsLib[ 'shadowmap' ], THREE.UniformsLib[ 'lights' ], THREE.PixelBoxMeshShader.uniforms ] ),
 		attributes:     THREE.PixelBoxMeshShader.attributes,
 		vertexShader:   THREE.PixelBoxMeshShader.vertexShader,
 		fragmentShader: THREE.PixelBoxMeshShader.fragmentShader,
 		transparent: false,
 		lights: true,
-		fog:true
+		fog: true
 	});
 	
-	function param(pname, defaultValue){ if(params && params[pname] != undefined) return params[pname]; return defaultValue; }
+	function param ( pname, defaultValue ) { if ( params && params[ pname ] != undefined ) return params[ pname ]; return defaultValue; }
 	
 	var uniforms = material.uniforms;
-	uniforms.tintColor.value.set(param('tint', 0xffffff));
-	uniforms.addColor.value.set(param('addColor', 0x0));
-	uniforms.tintAlpha.value = param('alpha', 1.0);
-	uniforms.brightness.value = param('brightness', 0.0);
+	uniforms.tintColor.value.set( param( 'tint', 0xffffff ) );
+	uniforms.addColor.value.set( param( 'addColor', 0x0 ) );
+	uniforms.tintAlpha.value = param( 'alpha', 1.0 );
+	uniforms.brightness.value = param( 'brightness', 0.0 );
 	
 	// share uniforms with prototype
 	uniforms.actualHemiLights = THREE.PixelBoxUtil.material.uniforms.actualHemiLights;
@@ -856,32 +854,34 @@ THREE.MeshPixelBoxMaterial = function(params){
 	uniforms.directionalLightShadowMap = THREE.PixelBoxUtil.material.uniforms.directionalLightShadowMap;
 	uniforms.spotLightShadowMap = THREE.PixelBoxUtil.material.uniforms.spotLightShadowMap;
 	
-	Object.defineProperty(material, 'tint', {
-		get: function(){ return this.uniforms.tintColor.value; },
-		set: function(v){ this.uniforms.tintColor.value.copy(v); },
-	});
-	Object.defineProperty(material, 'addColor', {
-		get: function(){ return this.uniforms.addColor.value; },
-		set: function(v){ this.uniforms.addColor.value.copy(v); },
-	});
-	Object.defineProperty(material, 'alpha', {
-		get: function(){ return this.uniforms.tintAlpha.value; },
-		set: function(v){ this.uniforms.tintAlpha.value = v; },
-	});
-	Object.defineProperty(material, 'brightness', {
-		get: function(){ return this.uniforms.brightness.value; },
-		set: function(v){ this.uniforms.brightness.value = v; },
-	});
-	Object.defineProperty(material, 'stipple', {
-		get: function(){ return this.uniforms.stipple.value; },
-		set: function(v){ this.uniforms.stipple.value = v; },
-	});
+	Object.defineProperty( material, 'tint', {
+		get: function () { return this.uniforms.tintColor.value; },
+		set: function ( v ) { this.uniforms.tintColor.value.copy( v ); },
+	} );
+	Object.defineProperty( material, 'addColor', {
+		get: function () { return this.uniforms.addColor.value; },
+		set: function ( v ) { this.uniforms.addColor.value.copy( v ); },
+	} );
+	Object.defineProperty( material, 'alpha', {
+		get: function () { return this.uniforms.tintAlpha.value; },
+		set: function ( v ) { this.uniforms.tintAlpha.value = v; },
+	} );
+	Object.defineProperty( material, 'brightness', {
+		get: function () { return this.uniforms.brightness.value; },
+		set: function ( v ) { this.uniforms.brightness.value = v; },
+	} );
+	Object.defineProperty( material, 'stipple', {
+		get: function () { return this.uniforms.stipple.value; },
+		set: function ( v ) { this.uniforms.stipple.value = v; },
+	} );
 	
-	return material;	
+	return material;
+		
 };
 
-THREE.PixelBox = function(data){
-	function param(pname, defaultValue){ if(data[pname] != undefined) return data[pname]; return defaultValue; }
+THREE.PixelBox = function ( data ) {
+
+	function param ( pname, defaultValue ) { if ( data[ pname ] != undefined ) return data[ pname ]; return defaultValue; }
 
 	// clone base materials
 	var material = THREE.PixelBoxUtil.material.clone();
@@ -902,20 +902,23 @@ THREE.PixelBox = function(data){
 	depthMaterial.uniforms.pointSize = material.uniforms.pointSize;
 	
 	// these uniforms' defaults come from data object
-	material.uniforms.occlusion.value = param('occlusion', 1.0);
-	material.uniforms.pointSize.value = param('pointSize', 1.0);
-	material.uniforms.cullBack.value = param('cullBack', true);
+	material.uniforms.occlusion.value = param( 'occlusion', 1.0 );
+	material.uniforms.pointSize.value = param( 'pointSize', 1.0 );
+	material.uniforms.cullBack.value = param( 'cullBack', true );
 		
 	// create geometry
 	var geometry = new THREE.BufferGeometry();
 	
 	// create pivot
-	this._pivot = new THREE.Vector3(data.width * 0.5, data.height * 0.5, data.depth * 0.5);	
+	this._pivot = new THREE.Vector3( data.width * 0.5, data.height * 0.5, data.depth * 0.5 );
 	
 	// bounding sphere respect pivot
-	geometry.computeBoundingSphere = function(){
-		if (this.geometry.boundingSphere === null ) {
+	geometry.computeBoundingSphere = function () {
+	
+		if ( this.geometry.boundingSphere === null ) {
+		
 			this.geometry.boundingSphere = new THREE.Sphere();
+			
 		}
 		
 		this.geometry.boundingSphere.center.set(
@@ -923,26 +926,27 @@ THREE.PixelBox = function(data){
 			this.geometry.data.height * 0.5 - this._pivot.y,
 			this.geometry.data.depth * 0.5 - this._pivot.z
 		);
-		this.geometry.boundingSphere.radius = 0.5 * Math.max(this.geometry.data.width, this.geometry.data.depth, this.geometry.data.height);
-	}.bind(this);
+		
+		this.geometry.boundingSphere.radius = 0.5 * Math.max( this.geometry.data.width, this.geometry.data.depth, this.geometry.data.height );
+		
+	}.bind( this );
 
 	// bounding box respect pivot
-	geometry.computeBoundingBox = function() {
-		if ( this.geometry.boundingBox === null ) {
-			this.geometry.boundingBox = new THREE.Box3();
-		}
+	geometry.computeBoundingBox = function () {
+	
+		if ( this.geometry.boundingBox === null ) this.geometry.boundingBox = new THREE.Box3();
 
-		this.geometry.boundingBox.min.set(0,0,0);
-		this.geometry.boundingBox.max.set(this.geometry.data.width, this.geometry.data.height, this.geometry.data.depth);
-		this.geometry.boundingBox.translate(this._pivot.clone().multiplyScalar(-1));
+		this.geometry.boundingBox.min.set( 0,0,0 );
+		this.geometry.boundingBox.max.set( this.geometry.data.width, this.geometry.data.height, this.geometry.data.depth );
+		this.geometry.boundingBox.translate( this._pivot.clone().multiplyScalar( -1 ) );
 		
-	}.bind(this);
+	}.bind( this );
 	
 	// process data
-	THREE.PixelBoxUtil.processPixelBoxFrames(data);
+	THREE.PixelBoxUtil.processPixelBoxFrames( data );
 	
 	// init as PointCloud
-	THREE.PointCloud.call(this, geometry, material);
+	THREE.PointCloud.call( this, geometry, material );
 
 	this.customDepthMaterial = depthMaterial;
 	this.castShadow = true;
@@ -950,98 +954,132 @@ THREE.PixelBox = function(data){
 	
 	// create anchors
 	this.anchors = {};
-	if(data.anchors){
-		for(var aname in data.anchors){
-			if(aname == 'PIVOT') { 
-				this._pivot.set(data.anchors[aname][0].x, data.anchors[aname][0].y, data.anchors[aname][0].z);
+	if ( data.anchors ) {
+	
+		for ( var aname in data.anchors ) {
+		
+			if ( aname == 'PIVOT' ) { 
+			
+				this._pivot.set( data.anchors[ aname ][ 0 ].x, data.anchors[ aname ][ 0 ].y, data.anchors[ aname ][ 0 ].z );
 				continue;
+				
 			}
+			
 			var obj3d = new THREE.Object3D();
 			obj3d.isContainer = true;
 			obj3d.detached = false;
 			obj3d.isAnchor = true;
 			obj3d.name = aname;
 			obj3d.visible = false;
-			this.add(obj3d);
-			this.anchors[aname] = obj3d;
+			this.add( obj3d );
+			this.anchors[ aname ] = obj3d;
+			
 		}
+		
 	} else {
+	
 		data.anchors = {};
+		
 	}
 	
 	// create frame setter on pointcloud
 	geometry.data = data;
 	geometry._frame = -1;
-	Object.defineProperty(this, 'frame', {
-	get: (function(){ return this.geometry._frame; }),
-	set: (function(f){
-		var geom = this.geometry;
-		var data = geom.data;
-		 
-		// validate frame
-		if(f == geom._frame || !data.frameData.length) return;
-		if(f < 0) throw (data.name + " frame " + f + " is out of range");
-		f = f % data.frameData.length;
-		geom._frame = f;
+	
+	Object.defineProperty( this, 'frame', {
+		get: (function () { return this.geometry._frame; }),
+		set: (function ( f ) {
 		
-		// init buffer if needed
-		var fd = data.frameData[f];
-		if(fd.p){
-			// add attributes
-			geom.addAttribute( 'position', fd.p);
-			geom.addAttribute( 'color', fd.c);
-			geom.addAttribute( 'normal', fd.n);
-			geom.addAttribute( 'occlude', fd.o);
+			var geom = this.geometry;
+			var data = geom.data;
+			 
+			// validate frame
+			if ( f == geom._frame || !data.frameData.length ) return;
+			if ( f < 0 ) f = data.frameData.length + ( f % data.frameData.length );
+			f = f % data.frameData.length;
+			geom._frame = f;
 			
-			// create buffers if needed
-			if(!fd.p.buffer){
-				var _gl = renderer.webgl.context;
-				for (var name in geom.attributes) {
-					var bufferType = ( name === 'index' ) ? _gl.ELEMENT_ARRAY_BUFFER : _gl.ARRAY_BUFFER;
-					var attribute = geom.attributes[ name ];
-					if(!attribute.buffer){
-						attribute.buffer = _gl.createBuffer();
-						var res = _gl.bindBuffer( bufferType, attribute.buffer );
-						_gl.bufferData( bufferType, attribute.array, _gl.STATIC_DRAW );
-					}
-				}
-			}
-		}
-		
-		// set offset/length
-		// regular frame
-		if(fd.s != undefined){
-			geom.offsets = [ { index: fd.s, count: fd.l } ];
-		// no offsets stored, use full range (editor)
-		} else if(fd.o){
-			geom.offsets = [];
-		}
-		
-		var ev = {type:'frame', frame: f};
-		this.dispatchEvent(ev); ev = null;
-		
-		var degToRad = Math.PI/180.0;
-		
-		// update anchors
-		for(var aname in this.anchors){
-			var anchor = this.anchors[aname];
-			var adata = data.anchors[aname][f];
-			if(!anchor.detached){
-				anchor.visible = !!adata.on;
-				anchor.position.set(adata.x - this._pivot.x, adata.y - this._pivot.y, adata.z - this._pivot.z);
-				anchor.rotation.set(adata.rx * degToRad, adata.ry * degToRad, adata.rz * degToRad);
-				anchor.scale.set(adata.sx || 0.00001, adata.sy || 0.00001, adata.sz || 0.00001);
-				anchor.updateMatrixWorld(true);
+			// init buffer if needed
+			var fd = data.frameData[ f ];
+			
+			if ( fd.p ) {
+			
+				// add attributes
+				geom.addAttribute( 'position', fd.p );
+				geom.addAttribute( 'color', fd.c );
+				geom.addAttribute( 'normal', fd.n );
+				geom.addAttribute( 'occlude', fd.o );
 				
-				if(adata.meta.length) { 
-					var ev = {type:'anchor-meta', frame:f, anchor: anchor, meta:adata.meta };
-					this.dispatchEvent(ev); ev = null;
+				// create buffers if needed
+				if ( !fd.p.buffer ) {
+				
+					var _gl = renderer.webgl.context;
+					
+					for ( var name in geom.attributes ) {
+					
+						var bufferType = ( name === 'index' ) ? _gl.ELEMENT_ARRAY_BUFFER : _gl.ARRAY_BUFFER;
+						var attribute = geom.attributes[ name ];
+						
+						if ( !attribute.buffer ) {
+						
+							attribute.buffer = _gl.createBuffer();
+							var res = _gl.bindBuffer( bufferType, attribute.buffer );
+							_gl.bufferData( bufferType, attribute.array, _gl.STATIC_DRAW );
+							
+						}
+						
+					}
+					
 				}
+				
 			}
-		}
+			
+			// set offset/length
+			// regular frame
+			if ( fd.s != undefined ) {
+			
+				geom.offsets = [ { index: fd.s, count: fd.l } ];
+				
+			// no offsets stored, use full range (editor)
+			} else if ( fd.o ) {
+			
+				geom.offsets = [];
+				
+			}
+			
+			var ev = { type:'frame', frame: f };
+			this.dispatchEvent( ev );
+			
+			var degToRad = Math.PI / 180.0;
+			
+			// update anchors
+			for ( var aname in this.anchors ) {
+			
+				var anchor = this.anchors[ aname ];
+				var adata = data.anchors[ aname ][ f ];
+				
+				if ( !anchor.detached ) {
+				
+					anchor.visible = !!adata.on;
+					anchor.position.set( adata.x - this._pivot.x, adata.y - this._pivot.y, adata.z - this._pivot.z );
+					anchor.rotation.set( adata.rx * degToRad, adata.ry * degToRad, adata.rz * degToRad );
+					anchor.scale.set( adata.sx || 0.00001, adata.sy || 0.00001, adata.sz || 0.00001 );
+					anchor.updateMatrixWorld( true );
+					
+					if ( adata.meta.length ) {
+					
+						var ev = { type:'anchor-meta', frame:f, anchor: anchor, meta:adata.meta };
+						this.dispatchEvent( ev );
+						
+					}
+					
+				}
+				
+			}
 		
-		}),
-	});	
+		} )
+		
+	} );	
 	
 	// set frame / anim params
 	this.vertexBufferStart = 0;
@@ -1050,124 +1088,157 @@ THREE.PixelBox = function(data){
 	this.totalFrames = data.frameData.length;
 
 	// dispose function
-	this.dispose = function(unloadAsset){
-		if(this.geometry){
-			if(unloadAsset){
-				if(this.geometry.data){
-					THREE.PixelBoxUtil.dispose(this.geometry.data);
+	this.dispose = function ( unloadAsset ) {
+	
+		if ( this.geometry ) {
+		
+			if ( unloadAsset ) {
+			
+				if ( this.geometry.data ) {
+				
+					THREE.PixelBoxUtil.dispose( this.geometry.data );
 					delete this.geometry.data;
+					
 				}
+				
 				this.geometry.dispose();
+				
 			}
+			
 			delete this.geometry;
 			this.material.dispose();
+			
 		}
+		
 	};
 	
 	// add animation functions
 	this.currentAnimation = null;
 	this._animSpeed = 1.0;
-	Object.defineProperty(this, 'animSpeed', {
-		get: function(){ return this._animSpeed; },
-		set: function(v){ 
+	
+	Object.defineProperty( this, 'animSpeed', {
+		get: function () { return this._animSpeed; },
+		set: function ( v ) {
+		
 			this._animSpeed = v;
+			
 			// reset timer
-			if(this._animationInterval && this.currentAnimation){
-				var nextFrameIn = 1.0 / (Math.abs(v ? v : 0.001) * this.currentAnimation.fps);
-				clearTimeout(this._animationInterval);
-				this._animationInterval = setTimeout(this.advanceAnimationFrame, nextFrameIn * 1000);
+			if ( this._animationInterval && this.currentAnimation ) {
+			
+				var nextFrameIn = 1.0 / (Math.abs( v ? v : 0.001 ) * this.currentAnimation.fps);
+				clearTimeout( this._animationInterval );
+				this._animationInterval = setTimeout( this.advanceAnimationFrame, nextFrameIn * 1000 );
+				
 			}
-		},
-	});
+			
+		}
+		
+	} );
+	
 	this._animationInterval = 0;
 	this._animLoops = -1;
 	this._currentAnimationPosition = 0;
-	Object.defineProperty(this, 'currentAnimationPosition', {
-		get: function(){ return this._currentAnimationPosition; },
-		set: function(v){ // set frame according to anim position
-			v = Math.min(1, Math.max(0, v));
-			var f =  Math.min(this.currentAnimation.length - 1, Math.floor(v * this.currentAnimation.length));
-			if(this.animSpeed < 0){ // backwards
+	
+	Object.defineProperty( this, 'currentAnimationPosition', {
+		get: function () { return this._currentAnimationPosition; },
+		set: function ( v ) { // set frame according to anim position
+		
+			v = Math.min( 1, Math.max( 0, v ) );
+			var f =  Math.min( this.currentAnimation.length - 1, Math.floor( v * this.currentAnimation.length ) );
+			
+			if ( this.animSpeed < 0 ) { // backwards
+			
 				f = this.currentAnimation.length - 1 - f;
+				
 			}
+			
 			this._currentAnimationPosition = v;
 			this.frame = f + this.currentAnimation.start;
-		},
-	});
+			
+		}
+		
+	} );
 	
 	// pre-bind
-	this.advanceAnimationFrame = THREE.PixelBox.prototype.advanceAnimationFrame.bind(this);
+	this.advanceAnimationFrame = THREE.PixelBox.prototype.advanceAnimationFrame.bind( this );
 	
-	this.addEventListener('removed', this.stopAnim);
+	this.addEventListener( 'removed', this.stopAnim );
 	
 	// add shorthand accessors
-	Object.defineProperty(this, 'asset', {
-		get: function(){ return this.geometry.data; },
-	});
+	Object.defineProperty( this, 'asset', {
+		get: function () { return this.geometry.data; }
+	} );
 	
-	Object.defineProperty(this, 'alpha', {
-		get: function(){ return this.material.uniforms.tintAlpha.value; },
-		set: function(v){ this.material.uniforms.tintAlpha.value = v; },
-	});
+	Object.defineProperty( this, 'alpha', {
+		get: function () { return this.material.uniforms.tintAlpha.value; },
+		set: function ( v ) { this.material.uniforms.tintAlpha.value = v; }
+	} );
 	
-	Object.defineProperty(this, 'tint', {
-		get: function(){ return this.material.uniforms.tintColor.value; },
-		set: function(v){ this.material.uniforms.tintColor.value.copy(v); },
-	});
+	Object.defineProperty( this, 'tint', {
+		get: function () { return this.material.uniforms.tintColor.value; },
+		set: function ( v ) { this.material.uniforms.tintColor.value.copy( v ); }
+	} );
 
-	Object.defineProperty(this, 'addColor', {
-		get: function(){ return this.material.uniforms.addColor.value; },
-		set: function(v){ this.material.uniforms.addColor.value.copy(v); },
-	});
+	Object.defineProperty( this, 'addColor', {
+		get: function () { return this.material.uniforms.addColor.value; },
+		set: function ( v ) { this.material.uniforms.addColor.value.copy( v ); }
+	} );
 
-	Object.defineProperty(this, 'occlusion', {
-		get: function(){ return this.material.uniforms.occlusion.value; },
-		set: function(v){ this.material.uniforms.occlusion.value = v; },
-	});
+	Object.defineProperty( this, 'occlusion', {
+		get: function () { return this.material.uniforms.occlusion.value; },
+		set: function ( v ) { this.material.uniforms.occlusion.value = v; }
+	} );
 
-	Object.defineProperty(this, 'pointSize', {
-		get: function(){ return this.material.uniforms.pointSize.value; },
-		set: function(v){ this.material.uniforms.pointSize.value = v; },
-	});
+	Object.defineProperty( this, 'pointSize', {
+		get: function () { return this.material.uniforms.pointSize.value; },
+		set: function ( v ) { this.material.uniforms.pointSize.value = v; }
+	} );
 	
-	Object.defineProperty(this, 'stipple', {
-		get: function(){ return this.material.uniforms.stipple.value; },
-		set: function(v){ this.material.uniforms.stipple.value = v; },
-	});
+	Object.defineProperty( this, 'stipple', {
+		get: function () { return this.material.uniforms.stipple.value; },
+		set: function ( v ) { this.material.uniforms.stipple.value = v; }
+	} );
 	
-	Object.defineProperty(this, 'cullBack', {
-		get: function(){ return !!this.material.uniforms.cullBack.value; },
-		set: function(v){ this.material.uniforms.cullBack.value = v ? 1 : 0; },
-	});
+	Object.defineProperty( this, 'cullBack', {
+		get: function () { return !!this.material.uniforms.cullBack.value; },
+		set: function ( v ) { this.material.uniforms.cullBack.value = v ? 1 : 0; }
+	} );
 	
 	this.fasterRaycast = true; // raycast just tests for an intersection (returns first match)
 	
 	// create particles
-	if(data.particles !== undefined){
+	if ( data.particles !== undefined ) {
+	
 		var pos = new Array();
 		var clr = new Array();
 		var nrm = new Array();
 		var occ = new Array();
-		for(var i = 0; i < data.particles; i++ ){
-			pos.push(0, 0, 0);
-			clr.push(1,1,1,1);
-			nrm.push(0,1,0);
-			occ.push(0);
-		}		
-		data.frameData.push({ 	p: new THREE.BufferAttribute(new Float32Array(pos), 3),
-								c: new THREE.BufferAttribute(new Float32Array(clr), 4),
-								n: new THREE.BufferAttribute(new Float32Array(nrm), 3),
-								o: new THREE.BufferAttribute(new Float32Array(occ), 1) });
+		
+		for ( var i = 0; i < data.particles; i++ ) {
+		
+			pos.push( 0, 0, 0 );
+			clr.push( 1, 1, 1, 1 );
+			nrm.push( 0, 1, 0 );
+			occ.push( 0 );
+			
+		}
+			
+		data.frameData.push( { 	p: new THREE.BufferAttribute( new Float32Array( pos ), 3 ),
+								c: new THREE.BufferAttribute( new Float32Array( clr ), 4 ),
+								n: new THREE.BufferAttribute( new Float32Array( nrm ), 3 ),
+								o: new THREE.BufferAttribute( new Float32Array( occ ), 1 ) } );
 								
 		this.geometry._frame = -1; // invalidate
 		this.frame = 0; // refresh
 		this.geometry.computeBoundingSphere();
+		
 	}
 	
 	return this;
+	
 }
 
-THREE.PixelBox.prototype = Object.create(THREE.PointCloud.prototype);
+THREE.PixelBox.prototype = Object.create( THREE.PointCloud.prototype );
 THREE.PixelBox.prototype.constructor = THREE.PixelBox;
 
 /* 
@@ -1198,104 +1269,147 @@ THREE.PixelBox.prototype.constructor = THREE.PixelBox;
 
 */
 
-THREE.PixelBox.prototype.advanceAnimationFrame = function(){
-	if(this._animationInterval) clearTimeout(this._animationInterval);
+THREE.PixelBox.prototype.advanceAnimationFrame = function () {
+
+	if ( this._animationInterval ) clearTimeout( this._animationInterval );
 	
-	var nextFrameIn = 1.0 / (Math.abs(this.animSpeed ? this.animSpeed : 0.001) * this.currentAnimation.fps);
+	var nextFrameIn = 1.0 / ( Math.abs( this.animSpeed ? this.animSpeed : 0.001 ) * this.currentAnimation.fps);
 	var keepGoing = true;
 	
-	if(!renderer.paused){
+	if ( !renderer.paused ) {
+	
 		var step = this.currentAnimation.length > 1 ? (1.0 / (this.currentAnimation.length - 1)) : 1;
 		this.currentAnimationPosition += step;
 		this._animationInterval = 0;
 		
 		// end of anim
-		if(this.currentAnimationPosition == 1){
+		if ( this.currentAnimationPosition == 1 ) {
+		
 			// was looping
-			if(this._animLoops > 0){
-				var ev = {type:'anim-loop', anim:this.currentAnimation, loop: this._animLoops};
-				this.dispatchEvent(ev); ev = null;
+			if ( this._animLoops > 0 ) {
+			
+				var ev = { type:'anim-loop', anim:this.currentAnimation, loop: this._animLoops };
+				this.dispatchEvent( ev );
 				this._animLoops--;
 				this._currentAnimationPosition = -step;
+				
 			// end of animation
 			} else {
+			
 				keepGoing = false;
-				var ev = {type:'anim-finish', anim:this.currentAnimation};
-				this.dispatchEvent(ev); ev = null;
+				var ev = { type:'anim-finish', anim:this.currentAnimation };
+				this.dispatchEvent( ev );
+				
 			}
+			
 		}
+		
 	}
 	
 	// set up next time
-	if(keepGoing){
-		this._animationInterval = setTimeout(this.advanceAnimationFrame, nextFrameIn * 1000);
+	if (keepGoing) {
+	
+		this._animationInterval = setTimeout( this.advanceAnimationFrame, nextFrameIn * 1000 );
+		
 	}
 };
 
-THREE.PixelBox.prototype.playAnim = function(animName, fromCurrentFrame){
-	this.loopAnim(animName, 0, fromCurrentFrame);
+THREE.PixelBox.prototype.playAnim = function ( animName, fromCurrentFrame ) {
+
+	this.loopAnim( animName, 0, fromCurrentFrame );
+	
 };
 
-THREE.PixelBox.prototype.loopAnim = function(animName, numLoops, fromCurrentFrame){
-	var anim = this.geometry.data.anims[animName];
-	if(!anim){ 
-		console.log("Animation "+animName+" not found in ", this.data); return;
+THREE.PixelBox.prototype.loopAnim = function ( animName, numLoops, fromCurrentFrame ) {
+
+	var anim = this.geometry.data.anims[ animName ];
+	
+	if ( !anim ) {
+	 
+		console.log( "Animation " + animName + " not found in ", this.data );
+		return;
+		
 	}
-	if(this._animationInterval){
+	
+	if ( this._animationInterval ) {
+	
 		// same anim, from current frame	
-		if(this.currentAnimation == anim && this._animLoops > 0) { 
+		if ( this.currentAnimation == anim && this._animLoops > 0 ) { 
+		
 			this._animLoops = numLoops;
 			return;
+			
 		}
+		
 		this.stopAnim();
+		
 	}
+	
 	// current anim
 	this.currentAnimation = anim;
 	this._animLoops = (numLoops === undefined ? Infinity : numLoops);
 	
 	// set up first frame
-	if(fromCurrentFrame && this.frame >= anim.start && this.frame < anim.start + anim.length){
-		if(this.animSpeed >= 0){
+	if ( fromCurrentFrame && this.frame >= anim.start && this.frame < anim.start + anim.length ) {
+	
+		if ( this.animSpeed >= 0 ) {
+		
 			this.currentAnimationPosition = (this.frame - anim.start) / anim.length;
+			
 		} else {
+		
 			this.currentAnimationPosition = 1.0 - (this.frame - anim.start) / anim.length;
 		}
+		
 	} else {
+	
 		this.currentAnimationPosition = 0;
+		
 	}
 	
-	var ev = {type:'anim-start', anim:this.currentAnimation};
-	this.dispatchEvent(ev); ev = null;
+	var ev = { type:'anim-start', anim:this.currentAnimation };
+	this.dispatchEvent( ev );
 	
 	// anim meta
-	if(this.currentAnimation.meta.length){
-		ev = {type:'anim-meta', anim:this.currentAnimation, meta:anim.meta};
-		this.dispatchEvent(ev); ev = null;
+	if ( this.currentAnimation.meta.length ) {
+	
+		ev = { type:'anim-meta', anim:this.currentAnimation, meta:anim.meta };
+		this.dispatchEvent(ev);
+		
 	}
 	
 	// set up timeout
-	var nextFrameIn = 1.0 / (Math.abs(this.animSpeed) * anim.fps);
+	var nextFrameIn = 1.0 / (Math.abs( this.animSpeed ) * anim.fps);
 	this._animLoops--;
-	this._animationInterval = setTimeout(this.advanceAnimationFrame, nextFrameIn * 1000);
+	this._animationInterval = setTimeout( this.advanceAnimationFrame, nextFrameIn * 1000 );
+	
 };
 
-THREE.PixelBox.prototype.gotoAndStop = function(animName, positionWithinAnimation){
-	var anim = this.geometry.data.anims[animName];
+THREE.PixelBox.prototype.gotoAndStop = function ( animName, positionWithinAnimation ) {
+
+	var anim = this.geometry.data.anims[ animName ];
 	var diff = (this.currentAnimation != anim);
 	positionWithinAnimation = (positionWithinAnimation === undefined ? 0 : positionWithinAnimation);
-	if(!anim){ 
-		console.log("Animation "+animName+" not found in ", this.data); 
+	
+	if ( !anim ) { 
+	
+		console.log( "Animation " + animName + " not found in ", this.data ); 
 		return;
+		
 	}
 	
-	if(this._animationInterval){
+	if ( this._animationInterval ) {
+	
 		this.stopAnim();
+		
 	}
 	
 	// stop
-	if(diff){
-		var ev = {type:'anim-stop', anim:this.currentAnimation};
-		this.dispatchEvent(ev); ev = null;
+	if ( diff ) {
+	
+		var ev = { type:'anim-stop', anim:this.currentAnimation };
+		this.dispatchEvent( ev );
+		
 	}
 	
 	// current anim
@@ -1304,26 +1418,38 @@ THREE.PixelBox.prototype.gotoAndStop = function(animName, positionWithinAnimatio
 	this._animLoops = -1;	
 
 	// anim meta
-	if(diff && anim.meta.length){
-		var ev = {type:'anim-meta', anim:anim, meta:anim.meta};
-		this.dispatchEvent(ev); ev = null;
+	if ( diff && anim.meta.length ) {
+	
+		var ev = { type:'anim-meta', anim:anim, meta:anim.meta };
+		this.dispatchEvent( ev );
+		
 	}
+	
 };
 
-THREE.PixelBox.prototype.animNamed = function(animName){
-	return this.geometry.data.anims[animName];
+THREE.PixelBox.prototype.animNamed = function ( animName ) {
+
+	return this.geometry.data.anims[ animName ];
+	
 };
 
-THREE.PixelBox.prototype.stopAnim = function(){
-	if(this._animationInterval){
-		clearTimeout(this._animationInterval);
+THREE.PixelBox.prototype.stopAnim = function () {
+	
+	if ( this._animationInterval ) {
+	
+		clearTimeout( this._animationInterval );
 		this._animationInterval = 0;
+		
 	}
-	if(this.currentAnimation){
-		var ev = {type:'anim-stop', anim:this.currentAnimation};
-		this.dispatchEvent(ev); ev = null;
+	
+	if ( this.currentAnimation ) {
+	
+		var ev = { type:'anim-stop', anim:this.currentAnimation };
+		this.dispatchEvent( ev );
 		this.currentAnimation = null;
+		
 	}
+	
 };
 
 /* 
@@ -1344,49 +1470,53 @@ THREE.PixelBox.prototype.stopAnim = function(){
 	
 */
 
-THREE.PixelBox.prototype.updateFrameWithCallback = function(callBack, extraParam){
+THREE.PixelBox.prototype.updateFrameWithCallback = function ( callBack, extraParam ) {
+
 	var geometry = this.geometry;
 	var dataObject = geometry.data;
-	var frameBuffers = dataObject.frameData[0];
+	var frameBuffers = dataObject.frameData[ 0 ];
 	var addr = 0;
 	var pobj = {
-		p: new THREE.Vector3(),	
+		p: new THREE.Vector3(),
 		n: new THREE.Vector3(),	
 		c: new THREE.Color(),
 		a: 0.0,
 		b: 1.0, 
-		o: 0.0,
+		o: 0.0
 	};
+	
 	var numParticles = dataObject.particles;
-	for(addr = 0; addr < numParticles; addr++){
+	for ( addr = 0; addr < numParticles; addr++ ) {
+	
 		pobj.i = addr;
-		pobj.p.set(frameBuffers.p.array[addr * 3], frameBuffers.p.array[addr * 3 + 1], frameBuffers.p.array[addr * 3 + 2]);
-		pobj.n.set(frameBuffers.n.array[addr * 3], frameBuffers.n.array[addr * 3 + 1], frameBuffers.n.array[addr * 3 + 2]);
+		pobj.p.set( frameBuffers.p.array[ addr * 3 ], frameBuffers.p.array[ addr * 3 + 1 ], frameBuffers.p.array[ addr * 3 + 2 ] );
+		pobj.n.set( frameBuffers.n.array[ addr * 3 ], frameBuffers.n.array[ addr * 3 + 1 ], frameBuffers.n.array[ addr * 3 + 2 ] );
 		pobj.b = pobj.n.length() - 1.0;
 		pobj.n.normalize();
-		pobj.o = frameBuffers.o.array[addr];
-		pobj.c.setRGB(frameBuffers.c.array[addr * 4], frameBuffers.c.array[addr * 4 + 1], frameBuffers.c.array[addr * 4 + 2]);
-		pobj.a = frameBuffers.c.array[addr * 4 + 3];
+		pobj.o = frameBuffers.o.array[ addr ];
+		pobj.c.setRGB( frameBuffers.c.array[ addr * 4 ], frameBuffers.c.array[ addr * 4 + 1 ], frameBuffers.c.array[ addr * 4 + 2 ] );
+		pobj.a = frameBuffers.c.array[ addr * 4 + 3 ];
 
 		// call
-		callBack(pobj, extraParam);
+		callBack( pobj, extraParam );
 		
 		// copy back
-		frameBuffers.p.array[addr * 3] = pobj.p.x;
-		frameBuffers.p.array[addr * 3 + 1] = pobj.p.y;
-		frameBuffers.p.array[addr * 3 + 2] = pobj.p.z;
+		frameBuffers.p.array[ addr * 3 ] = pobj.p.x;
+		frameBuffers.p.array[ addr * 3 + 1 ] = pobj.p.y;
+		frameBuffers.p.array[ addr * 3 + 2 ] = pobj.p.z;
 		
-		frameBuffers.o.array[addr] = pobj.o;
+		frameBuffers.o.array[ addr ] = pobj.o;
 		
-		pobj.n.multiplyScalar(1.0 + pobj.b);
-		frameBuffers.n.array[addr * 3] = pobj.n.x;
-		frameBuffers.n.array[addr * 3 + 1] = pobj.n.y;
-		frameBuffers.n.array[addr * 3 + 2] = pobj.n.z;
+		pobj.n.multiplyScalar( 1.0 + pobj.b );
+		frameBuffers.n.array[ addr * 3 ] = pobj.n.x;
+		frameBuffers.n.array[ addr * 3 + 1 ] = pobj.n.y;
+		frameBuffers.n.array[ addr * 3 + 2 ] = pobj.n.z;
 		
-		frameBuffers.c.array[addr * 4] = pobj.c.r;
-		frameBuffers.c.array[addr * 4 + 1] = pobj.c.g;
-		frameBuffers.c.array[addr * 4 + 2] = pobj.c.b;
-		frameBuffers.c.array[addr * 4 + 3] = pobj.a;
+		frameBuffers.c.array[ addr * 4 ] = pobj.c.r;
+		frameBuffers.c.array[ addr * 4 + 1 ] = pobj.c.g;
+		frameBuffers.c.array[ addr * 4 + 2 ] = pobj.c.b;
+		frameBuffers.c.array[ addr * 4 + 3 ] = pobj.a;
+		
 	}
 	
 	frameBuffers.c.needsUpdate = true;
@@ -1405,66 +1535,97 @@ THREE.PixelBox.prototype.updateFrameWithCallback = function(callBack, extraParam
 THREE.PixelBoxUtil = {};
 
 THREE.PixelBoxUtil.material = new THREE.ShaderMaterial( {
-	uniforms:       THREE.UniformsUtils.merge([THREE.UniformsLib['shadowmap'], THREE.UniformsLib['lights'],THREE.PixelBoxShader.uniforms]),
+	uniforms:       THREE.UniformsUtils.merge( [ THREE.UniformsLib[ 'shadowmap' ], THREE.UniformsLib[ 'lights' ], THREE.PixelBoxShader.uniforms ] ),
 	attributes:     THREE.PixelBoxShader.attributes,
 	vertexShader:   THREE.PixelBoxShader.vertexShader,
 	fragmentShader: THREE.PixelBoxShader.fragmentShader,
 	transparent: false,
 	lights: true,
 	fog: true
-});
+} );
 
 THREE.PixelBoxUtil.depthMaterial = new THREE.ShaderMaterial( {
 	uniforms:       THREE.PixelBoxDepthShader.uniforms,
 	vertexShader:   THREE.PixelBoxDepthShader.vertexShader,
-	fragmentShader: THREE.PixelBoxDepthShader.fragmentShader,
+	fragmentShader: THREE.PixelBoxDepthShader.fragmentShader
 });
+
 THREE.PixelBoxUtil.depthMaterial._shadowPass = true;
 
-THREE.PixelBoxUtil.updateViewPortUniform = function(optCamera){ 
+THREE.PixelBoxUtil.updateViewPortUniform = function ( optCamera ) {
+
 	// get cam scale	
 	var camWorldScale = new THREE.Vector3();
 	
 	// viewPortScale is based on the camera
-	function getValueForCam(cam){
-		camWorldScale.setFromMatrixScale(cam.matrixWorld);
+	function getValueForCam ( cam ) {
+	
+		camWorldScale.setFromMatrixScale( cam.matrixWorld );
+		
 		// perspective camera
-		if(cam instanceof THREE.PerspectiveCamera){
-			return (renderer.webgl.domElement.height / (2 * Math.tan(0.5 * cam.fov * Math.PI / 180.0))) / camWorldScale.x;
+		if ( cam instanceof THREE.PerspectiveCamera ) {
+		
+			return (renderer.webgl.domElement.height / (2 * Math.tan( 0.5 * cam.fov * Math.PI / 180.0 ))) / camWorldScale.x;
+			
 		// ortho
 		} else {
+		
 			return (cam.zoom * renderer.webgl.domElement.height / (cam.top * 2)) / camWorldScale.x;
-		}	
-	}
-	var val = 1;
-	if(renderer.scene instanceof THREE.PixelBoxSceneTransition && renderer.scene.sceneA instanceof THREE.PixelBoxScene){
-		var t = renderer.scene.smoothTime;
-		var val1 = getValueForCam(renderer.scene.sceneB.camera);
-		val = getValueForCam(renderer.scene.sceneA.camera);
-		val = val + (val1 - val) * t;
-	} else if(optCamera){
-		val = getValueForCam(optCamera);
-	} else if(renderer.currentScene && renderer.currentScene.camera){
-		val = getValueForCam(renderer.currentScene.camera);
+			
+		}
+		
 	}
 	
-	THREE.PixelBoxUtil.material.uniforms.viewPortScale.value = val;	
+	var val = 1;
+	
+	if ( renderer.scene instanceof THREE.PixelBoxSceneTransition && renderer.scene.sceneA instanceof THREE.PixelBoxScene ) {
+	
+		var t = renderer.scene.smoothTime;
+		var val1 = getValueForCam( renderer.scene.sceneB.camera );
+		val = getValueForCam( renderer.scene.sceneA.camera );
+		val = val + (val1 - val) * t;
+		
+	} else if ( optCamera ) {
+	
+		val = getValueForCam( optCamera );
+		
+	} else if ( renderer.currentScene && renderer.currentScene.camera ) {
+	
+		val = getValueForCam( renderer.currentScene.camera );
+		
+	}
+	
+	THREE.PixelBoxUtil.material.uniforms.viewPortScale.value = val;
+	
 };
 
-THREE.PixelBoxUtil.dispose = function(data){
-	if(data && data.frameData){
+THREE.PixelBoxUtil.dispose = function ( data ) {
+
+	if ( data && data.frameData ) {
+	
 		var _gl = renderer.webgl.context;
-		for(var f = 0; f < data.frameData.length; f++){
-			if(!data.frameData[f]['p']) continue; // skip empty
-			for ( var key in data.frameData[f] ) {
-				if ( data.frameData[f][key].buffer !== undefined ) {
-					_gl.deleteBuffer(data.frameData[f][key].buffer);
-					delete data.frameData[f][key];
+		
+		for ( var f = 0; f < data.frameData.length; f++ ) {
+		
+			if ( !data.frameData[ f ][ 'p' ] ) continue; // skip empty
+			
+			for ( var key in data.frameData[ f ] ) {
+			
+				if ( data.frameData[ f ][ key ].buffer !== undefined ) {
+				
+					_gl.deleteBuffer( data.frameData[ f ][ key ].buffer );
+					delete data.frameData[ f ][ key ];
+					
 				}
+				
 			}
+			
 		}
+		
 		delete data.frameData;
+		
 	}
+	
 };
 
 /*
@@ -1472,49 +1633,69 @@ THREE.PixelBoxUtil.dispose = function(data){
 	Alters data object itself
 */
 
-THREE.PixelBoxUtil.processPixelBoxFrames = function(data){
-	if(data.frames === null || data.particles !== undefined){
+THREE.PixelBoxUtil.processPixelBoxFrames = function ( data ) {
+
+	if ( data.frames === null || data.particles !== undefined ) {
 	
 		// special case for PixelBox editor or particle systems
 		data.frameData = [];
-		
 		return true;
+		
 	// parse data for the first time (modifies data object)
-	} else if(data.frames){
-		if(!data.frames.length) return false;
+	} else if ( data.frames ) {
+	
+		if ( !data.frames.length ) return false;
 	
 		// pivot
 		var pivot = new THREE.Vector3();
-		if(data.anchors && data.anchors['PIVOT']){
-			pivot.set(data.anchors['PIVOT'][0].x, data.anchors['PIVOT'][0].y, data.anchors['PIVOT'][0].z);
+		
+		if ( data.anchors && data.anchors[ 'PIVOT' ] ) {
+		
+			pivot.set( data.anchors[ 'PIVOT' ][ 0 ].x, data.anchors[ 'PIVOT' ][ 0 ].y, data.anchors[ 'PIVOT' ][ 0 ].z );
+			
 		} else {
-			pivot.set(data.width * 0.5, data.height * 0.5, data.depth * 0.5);
+		
+			pivot.set( data.width * 0.5, data.height * 0.5, data.depth * 0.5 );
+			
 		}		
 	
 		// decode frames
-		if(!data.frameData){
-			data.frameData = new Array(data.frames.length);
-			for(var f = 0; f < data.frames.length; f++){
-				data.frameData[f] = THREE.PixelBoxUtil.decodeFrame(data, f);
+		if ( !data.frameData ) {
+		
+			data.frameData = new Array( data.frames.length );
+			
+			for ( var f = 0; f < data.frames.length; f++ ) {
+			
+				data.frameData[ f ] = THREE.PixelBoxUtil.decodeFrame( data, f );
+				
 			}
-			THREE.PixelBoxUtil.finalizeFrames(data, pivot);
+			
+			THREE.PixelBoxUtil.finalizeFrames( data, pivot );
+			
 		}
 		
 		// change anims to an object
-		if(_.isArray(data.anims)){
+		if ( _.isArray( data.anims ) ) {
+		
 			var anims = {};
-			for(var i = 0; i < data.anims.length; i++){
-				anims[data.anims[i].name] = data.anims[i];
+			for ( var i = 0; i < data.anims.length; i++ ) {
+			
+				anims[ data.anims[ i ].name ] = data.anims[ i ];
+				
 			}
+			
 			data.anims = anims;
+			
 		}
 		
 		// clean up
 		delete data.frames;
 		return true;
+		
 	}
 	
 	return false;
+	
 };
 
 /* 	
@@ -1525,7 +1706,7 @@ THREE.PixelBoxUtil.processPixelBoxFrames = function(data){
 	to generate better shadows
 */
 
-THREE.PixelBoxUtil.updateLights = function(scene, updateAllMaterials){	
+THREE.PixelBoxUtil.updateLights = function ( scene, updateAllMaterials ) {	
 	
 	var uniforms = THREE.PixelBoxUtil.material.uniforms;
 	uniforms.actualHemiLights.value = 0;
@@ -1537,34 +1718,58 @@ THREE.PixelBoxUtil.updateLights = function(scene, updateAllMaterials){
 
 	var shadowMapIndex = 0;
 	
-	scene.traverse(function(obj){
-		if(obj.visible){
-			if (obj instanceof THREE.SpotLight){
+	scene.traverse( function ( obj ) {
+	
+		if ( obj.visible ) {
+		
+			if ( obj instanceof THREE.SpotLight ) {
+			
 				uniforms.actualSpotLights.value++;
-				if(obj.castShadow && renderer.webgl.shadowMapEnabled) { 
-					uniforms.spotLightShadowMap.value.push(++shadowMapIndex);
-				} else uniforms.spotLightShadowMap.value.push(0);
-			} else if(obj instanceof THREE.DirectionalLight){
+				
+				if ( obj.castShadow && renderer.webgl.shadowMapEnabled ) {
+				
+					uniforms.spotLightShadowMap.value.push( ++shadowMapIndex );
+					
+				} else uniforms.spotLightShadowMap.value.push( 0 );
+				
+			} else if ( obj instanceof THREE.DirectionalLight ) {
+			
 				uniforms.actualDirLights.value++;
-				if(obj.castShadow && renderer.webgl.shadowMapEnabled) { 
-					uniforms.directionalLightShadowMap.value.push(++shadowMapIndex);
-				} else uniforms.directionalLightShadowMap.value.push(0);
-			} else if(obj instanceof THREE.HemisphereLight){
+				
+				if ( obj.castShadow && renderer.webgl.shadowMapEnabled ) { 
+				
+					uniforms.directionalLightShadowMap.value.push( ++shadowMapIndex );
+					
+				} else uniforms.directionalLightShadowMap.value.push( 0 );
+				
+			} else if ( obj instanceof THREE.HemisphereLight ) {
+			
 				uniforms.actualHemiLights.value++;
-			} else if(obj instanceof THREE.PointLight){
+				
+			} else if ( obj instanceof THREE.PointLight ) {
+			
 				uniforms.actualPointLights.value++;
+				
 			}
+			
 		}
 		
-		if(updateAllMaterials && obj.material) obj.material.needsUpdate = true;
-	});
+		if ( updateAllMaterials && obj.material ) obj.material.needsUpdate = true;
+		
+	} );
 	
-	if(!uniforms.directionalLightShadowMap.value.length){
-		uniforms.spotLightShadowMap.value.push(0);
+	if ( !uniforms.directionalLightShadowMap.value.length ) {
+	
+		uniforms.spotLightShadowMap.value.push( 0 );
+		
 	}
-	if(!uniforms.spotLightShadowMap.value.length){
-		uniforms.spotLightShadowMap.value.push(0);
+	
+	if ( !uniforms.spotLightShadowMap.value.length ) {
+	
+		uniforms.spotLightShadowMap.value.push( 0 );
+		
 	}
+	
 };
 
 /* 
@@ -1602,8 +1807,8 @@ THREE.PixelBoxUtil.updateLights = function(scene, updateAllMaterials){
 		
 */
 
-THREE.PixelBoxUtil.decodeFrame = function(dataObject, frameIndex){
-	//var startTime = new Date();
+THREE.PixelBoxUtil.decodeFrame = function ( dataObject, frameIndex ) {
+
 	var smoothNormals = dataObject.smoothNormals != undefined ? dataObject.smoothNormals : 1.0;
 	var floor = dataObject.floor != undefined ? dataObject.floor : false;
 	var optimize = dataObject.optimize != undefined ? dataObject.optimize : true;
@@ -1615,261 +1820,308 @@ THREE.PixelBoxUtil.decodeFrame = function(dataObject, frameIndex){
 	var width = dataObject.width, height = dataObject.height, depth = dataObject.depth;
 	var hw = width * 0.5, hh = height * 0.5, hd = depth * 0.5;
 
-	var frameData = dataObject.frames[frameIndex];
+	var frameData = dataObject.frames[ frameIndex ];
 	var prevFrameData = null;
 	var assembledFrameData = [];
-	var isRaw = (typeof(dataObject.frames[0]) == 'object' && dataObject.frames[0]['p'] != undefined);
+	var isRaw = (typeof( dataObject.frames[ 0 ] ) == 'object' && dataObject.frames[ 0 ][ 'p' ] != undefined);
 	var isDeltaFormat = frameIndex > 0;
 	
-	if(isRaw){
+	if ( isRaw ) {
+	
 		positions = frameData.p;
 		colors = frameData.c;
 		normals = frameData.n;
-		occlusion = frameData.o;		
+		occlusion = frameData.o;
+		
 	} else {
-		if(isDeltaFormat){
-			frameData = frameData.match(/.{14}/g);
+	
+		if ( isDeltaFormat ) {
+		
+			frameData = frameData.match( /.{14}/g );
 			var pi = frameIndex - 1;
-			while(!prevFrameData){
-				prevFrameData = dataObject.frames[pi];
+			
+			while ( !prevFrameData ) {
+			
+				prevFrameData = dataObject.frames[ pi ];
 				pi--;
+				
 			}
+			
 		} else {
-			frameData = frameData.match(/.{8}/g);
+		
+			frameData = frameData.match( /.{8}/g );
+			
 		}
 		
 		// no changes from prev frame 
 		var sameAsLast = false;
-		if(frameData === null) { 
+		
+		if ( frameData === null ) { 
+		
 			frameData = [];
 			sameAsLast = true;
-			//return dataObject.frameData[frameIndex - 1];
+			
 		}
 		var chunk, temp, pixel, optimizeRemoved = 0, index = 0;
 		var colorObj = new THREE.Color();
 		var perp = new THREE.Vector3(), normal = new THREE.Vector3(), tilted = new THREE.Vector3();
 	
 		// decode and assemble current frame
-		for(var x = 0; x < width; x++){
-		for(var y = 0; y < height; y++){
-		for(var z = 0; z < depth; z++){
+		for ( var x = 0; x < width; x++ ) {
+		for ( var y = 0; y < height; y++ ) {
+		for ( var z = 0; z < depth; z++ ) {
+		
 			// delta
-			if(isDeltaFormat){
-				pixel = prevFrameData[index];
+			if ( isDeltaFormat ) {
+			
+				pixel = prevFrameData[ index ];
 				pixel = { c: pixel.c, a: pixel.a, b: pixel.b }; // copied
-				assembledFrameData.push(pixel);
+				assembledFrameData.push( pixel );
+				
 			// full format	
 			} else {
+			
 				// parse pixel
-				chunk = frameData[index];
+				chunk = frameData[ index ];
 				pixel = { 
-					c: parseInt(chunk.substr(0, 6), 16), 
-					a: parseInt(chunk.substr(6, 1), 16) / 15.0, 
-					b: parseInt(chunk.substr(7, 1), 16) / 15.0
+					c: parseInt( chunk.substr( 0, 6 ), 16 ), 
+					a: parseInt( chunk.substr( 6, 1 ), 16 ) / 15.0, 
+					b: parseInt( chunk.substr( 7, 1 ), 16 ) / 15.0
 				};
-				assembledFrameData.push(pixel);
+				assembledFrameData.push( pixel );
+				
 			}
 		
 			index++;
+			
 		}}}
 		
-		if(isDeltaFormat){
-			for(index = 0; index < frameData.length; index++){
-				chunk = frameData[index];
-				temp = parseInt(chunk.substr(0,6), 16);
-				assembledFrameData[temp] = {
-					c: parseInt(chunk.substr(6,6), 16),
-					a: parseInt(chunk.substr(12,1), 16) / 15.0,
-					b: parseInt(chunk.substr(13,1), 16) / 15.0
-				};						
+		if ( isDeltaFormat ) {
+		
+			for ( index = 0; index < frameData.length; index++ ) {
+			
+				chunk = frameData[ index ];
+				temp = parseInt( chunk.substr( 0,6 ), 16 );
+				assembledFrameData[ temp ] = {
+					c: parseInt( chunk.substr( 6,6 ), 16 ),
+					a: parseInt( chunk.substr( 12,1 ), 16 ) / 15.0,
+					b: parseInt( chunk.substr( 13,1 ), 16 ) / 15.0
+				};
+				
 			}
+			
 		}
 		
 		// update dataObject with decoded frame data
-		if(!sameAsLast) dataObject.frames[frameIndex] = assembledFrameData;
+		if ( !sameAsLast ) dataObject.frames[ frameIndex ] = assembledFrameData;
 		
-		if(sameAsLast){
-			return null; //dataObject.frameData[frameIndex - 1];
-		}
+		if (sameAsLast) return null;
 	
 		// helper
-		function getNorm(x, y, z, dx, dy, dz){
+		function getNorm ( x, y, z, dx, dy, dz ) {
+		
 			x += dx; y += dy; z += dz;
 			var oobxz = (x < 0 || z < 0 || x >= width || z >= depth);
 			var ooby = (y < 0 || y >= height);
-			if(floor && oobxz) return new THREE.Vector3(0,0,0);
-			if(oobxz || ooby ||
-				assembledFrameData[(x * depth * height) + (y * depth) + z].a == 0.0) return new THREE.Vector3(dx,dy,dz);
-			return new THREE.Vector3(0,0,0);
+			if ( floor && oobxz ) return new THREE.Vector3( 0, 0, 0 );
+			if ( oobxz || ooby || assembledFrameData[ (x * depth * height) + (y * depth) + z ].a == 0.0 ) return new THREE.Vector3( dx, dy, dz );
+			return new THREE.Vector3( 0, 0, 0 );
 		}
 	
 		// helper
-		function getAlpha(x, y, z){
+		function getAlpha ( x, y, z ) {
+		
 			var ii = (x * depth * height) + (y * depth) + z;
 			
-			if(x < 0 || y < 0 || z < 0 || x >= width || y >= height || z >= depth) return 0;
+			if (x < 0 || y < 0 || z < 0 || x >= width || y >= height || z >= depth) return 0;
 			
-			return assembledFrameData[ii].a;
+			return assembledFrameData[ ii ].a;
+			
 		}
 		
 		// ready to populate buffers
 		index = 0;
 		var neighbors;
 		
-		for(var x = 0; x < width; x++){
-		for(var y = 0; y < height; y++){
-		for(var z = 0; z < depth; z++){
+		for ( var x = 0; x < width; x++ ) {
+		for ( var y = 0; y < height; y++ ) {
+		for ( var z = 0; z < depth; z++ ) {
 		
-			if(assembledFrameData[index].a == 0.0) { 
+			if ( assembledFrameData[ index ].a == 0.0 ) { 
+			
 				index++;
 				continue;
+				
 			}
 			
 			// collect nearest neighbors
-			neighbors = [getAlpha(x - 1, y, z), getAlpha(x + 1, y, z), getAlpha(x, y - 1, z), getAlpha(x, y + 1, z), getAlpha(x, y, z - 1), getAlpha(x, y, z + 1)];
-			var numNeighbors = 	Math.floor(neighbors[0]) + Math.floor(neighbors[1]) + Math.floor(neighbors[2]) +
-								Math.floor(neighbors[3]) + Math.floor(neighbors[4]) + Math.floor(neighbors[5]);
+			neighbors = [ getAlpha( x - 1, y, z ), getAlpha( x + 1, y, z ), getAlpha( x, y - 1, z ), getAlpha( x, y + 1, z ), getAlpha( x, y, z - 1 ), getAlpha( x, y, z + 1 ) ];
+			var numNeighbors = 	Math.floor( neighbors[ 0 ] ) + Math.floor( neighbors[ 1 ] ) + Math.floor( neighbors[ 2 ] ) +
+								Math.floor( neighbors[ 3 ] ) + Math.floor( neighbors[ 4 ] ) + Math.floor( neighbors[ 5 ] );
 								
 			// optimize - discard pixel if can't be seen inside the cloud
-			if(optimize && numNeighbors == 6 && // <- nearest neighbors
-				getAlpha(x - 2, y, z) + getAlpha(x + 2, y, z) + getAlpha(x, y - 2, z) +
-				getAlpha(x, y + 2, z) + getAlpha(x, y, z - 2) + getAlpha(x, y, z + 2) == 6 // <- extended neighbors
-			){
+			if ( optimize && numNeighbors == 6 && // <- nearest neighbors
+				getAlpha( x - 2, y, z ) + getAlpha( x + 2, y, z ) + getAlpha( x, y - 2, z ) +
+				getAlpha( x, y + 2, z ) + getAlpha( x, y, z - 2 ) + getAlpha( x, y, z + 2 ) == 6 // <- extended neighbors
+			) {
+			
 				// if pixel is surrounded by completely opaque pixels, it can be discarded
 				optimizeRemoved++;
 				index++;
 				continue;
+				
 			}
 			
 			// start normal
-			if(numNeighbors > 2){
-				normal = !floor ? (new THREE.Vector3(x - hw, y - hh, z - hd)) : (new THREE.Vector3(0, 1, 0));
-				normal.normalize().multiplyScalar(0.1);
+			if ( numNeighbors > 2 ) {
+			
+				normal = !floor ? (new THREE.Vector3( x - hw, y - hh, z - hd )) : (new THREE.Vector3( 0, 1, 0 ));
+				normal.normalize().multiplyScalar( 0.1 );
+				
 			} else {
-				normal = new THREE.Vector3(0, 1, 0);
+			
+				normal = new THREE.Vector3( 0, 1, 0 );
+				
 			}
 			
 			// direct
-			normal.add(getNorm(x,y,z, 1, 0, 0));
-			normal.add(getNorm(x,y,z, -1, 0, 0));
-			normal.add(getNorm(x,y,z, 0, 1, 0));
-			normal.add(getNorm(x,y,z, 0, -1, 0));
-			normal.add(getNorm(x,y,z, 0, 0, 1));
-			normal.add(getNorm(x,y,z, 0, 0, -1));
+			normal.add( getNorm( x, y, z, 1, 0, 0 ) );
+			normal.add( getNorm( x, y, z, -1, 0, 0 ) );
+			normal.add( getNorm( x, y, z, 0, 1, 0 ) );
+			normal.add( getNorm( x, y, z, 0, -1, 0 ) );
+			normal.add( getNorm( x, y, z, 0, 0, 1 ) );
+			normal.add( getNorm( x, y, z, 0, 0, -1 ) );
 			
 			var weight;
-			if(smoothNormals > 0.0){
+			
+			if ( smoothNormals > 0.0 ) {
+			
 				// two over
 				weight = 0.25 * smoothNormals;
-				normal.add(getNorm(x,y,z, 2, 0, 0).multiplyScalar(weight));
-				normal.add(getNorm(x,y,z, -2, 0, 0).multiplyScalar(weight));
-				normal.add(getNorm(x,y,z, 0, 2, 0).multiplyScalar(weight));
-				normal.add(getNorm(x,y,z, 0, -2, 0).multiplyScalar(weight));
-				normal.add(getNorm(x,y,z, 0, 0, 2).multiplyScalar(weight));
-				normal.add(getNorm(x,y,z, 0, 0, -2).multiplyScalar(weight));
+				normal.add(getNorm( x, y, z, 2, 0, 0 ).multiplyScalar( weight ) );
+				normal.add(getNorm( x, y, z, -2, 0, 0 ).multiplyScalar( weight ) );
+				normal.add(getNorm( x, y, z, 0, 2, 0 ).multiplyScalar( weight ) );
+				normal.add(getNorm( x, y, z, 0, -2, 0 ).multiplyScalar( weight ) );
+				normal.add(getNorm( x, y, z, 0, 0, 2 ).multiplyScalar( weight ) );
+				normal.add(getNorm( x, y, z, 0, 0, -2 ).multiplyScalar( weight ) );
 		
 				// diagonals
 				weight = 0.4 * smoothNormals;
-				normal.add(getNorm(x,y,z, 1, 1, 0).multiplyScalar(weight));
-				normal.add(getNorm(x,y,z, 0, 1, 1).multiplyScalar(weight));
-				normal.add(getNorm(x,y,z, 1, 1, 1).multiplyScalar(weight));
-				normal.add(getNorm(x,y,z, -1, -1, 0).multiplyScalar(weight));
-				normal.add(getNorm(x,y,z, 0, -1, -1).multiplyScalar(weight));
-				normal.add(getNorm(x,y,z, -1, -1, -1).multiplyScalar(weight));
+				normal.add(getNorm( x, y, z, 1, 1, 0 ).multiplyScalar( weight ) );
+				normal.add(getNorm( x, y, z, 0, 1, 1 ).multiplyScalar( weight ) );
+				normal.add(getNorm( x, y, z, 1, 1, 1 ).multiplyScalar( weight ) );
+				normal.add(getNorm( x, y, z, -1, -1, 0 ).multiplyScalar( weight ) );
+				normal.add(getNorm( x, y, z, 0, -1, -1 ).multiplyScalar( weight ) );
+				normal.add(getNorm( x, y, z, -1, -1, -1 ).multiplyScalar( weight ) );
+				
 			}
 			
 			// normalize
-			if(normal.length() == 0) normal.set(0, 1, 0);
+			if ( normal.length() == 0 ) normal.set( 0, 1, 0 );
 			else normal.normalize();
 			
 			// occlusion
 			// sample neighbors first
 			var occ = 0.0;
-			if(numNeighbors > 2){
+			
+			if ( numNeighbors > 2 ) {
+			
 				weight = 0.125;
 				
 				// add direct neighbors
-				for(var n = 0; n < 6; n++) occ += neighbors[n];
+				for ( var n = 0; n < 6; n++ ) occ += neighbors[ n ];
 				occ *= 0.25 / 6.0;
 				
 				// sample in direction of the normal		
-				occ += 1.0 * getAlpha(Math.round(x + normal.x), Math.round(y + normal.y), Math.round(z + normal.z));
+				occ += 1.0 * getAlpha( Math.round( x + normal.x ), Math.round( y + normal.y ), Math.round( z + normal.z ) );
 				
 				// find a perpendicular vector
-				ax = Math.abs(normal.x); ay = Math.abs(normal.y); az = Math.abs(normal.z);
-				mv = Math.min(ax, ay, az);
-				if(mv == ax){
-					perp.set(1, 0, 0);
-				} else if(mv == ay){
-					perp.set(0, 1, 0);
+				ax = Math.abs( normal.x ); ay = Math.abs( normal.y ); az = Math.abs( normal.z );
+				mv = Math.min( ax, ay, az );
+				if ( mv == ax ) {
+				
+					perp.set( 1, 0, 0 );
+					
+				} else if ( mv == ay ) {
+				
+					perp.set( 0, 1, 0 );
+					
 				} else {
-					perp.set(0, 0, 1);
+				
+					perp.set( 0, 0, 1 );
+					
 				}
-				perp.cross(normal).normalize();
+				
+				perp.cross( normal ).normalize();
 				
 				// narrow cone
-				tilted.copy(normal).applyAxisAngle(perp, Math.PI * 0.2).normalize().multiplyScalar(2);
-				occ += weight * getAlpha(Math.round(x + tilted.x), Math.round(y + tilted.y), Math.round(z + tilted.z));
-				tilted.applyAxisAngle(normal, Math.PI * 0.25);
-				occ += weight * getAlpha(Math.round(x + tilted.x), Math.round(y + tilted.y), Math.round(z + tilted.z));
-				tilted.applyAxisAngle(normal, Math.PI * 0.25);
-				occ += weight * getAlpha(Math.round(x + tilted.x), Math.round(y + tilted.y), Math.round(z + tilted.z));
-				tilted.applyAxisAngle(normal, Math.PI * 0.25);
-				occ += weight * getAlpha(Math.round(x + tilted.x), Math.round(y + tilted.y), Math.round(z + tilted.z));
-				tilted.applyAxisAngle(normal, Math.PI * 0.25);
-				occ += weight * getAlpha(Math.round(x + tilted.x), Math.round(y + tilted.y), Math.round(z + tilted.z));
-				tilted.applyAxisAngle(normal, Math.PI * 0.25);
-				occ += weight * getAlpha(Math.round(x + tilted.x), Math.round(y + tilted.y), Math.round(z + tilted.z));
-				tilted.applyAxisAngle(normal, Math.PI * 0.25);
-				occ += weight * getAlpha(Math.round(x + tilted.x), Math.round(y + tilted.y), Math.round(z + tilted.z));
-				tilted.applyAxisAngle(normal, Math.PI * 0.25);
-				occ += weight * getAlpha(Math.round(x + tilted.x), Math.round(y + tilted.y), Math.round(z + tilted.z));
+				tilted.copy( normal ).applyAxisAngle( perp, Math.PI * 0.2 ).normalize().multiplyScalar( 2 );
+				occ += weight * getAlpha( Math.round( x + tilted.x ), Math.round( y + tilted.y ), Math.round( z + tilted.z ) );
+				tilted.applyAxisAngle( normal, Math.PI * 0.25 );
+				occ += weight * getAlpha( Math.round( x + tilted.x ), Math.round( y + tilted.y ), Math.round( z + tilted.z ) );
+				tilted.applyAxisAngle( normal, Math.PI * 0.25 );
+				occ += weight * getAlpha( Math.round( x + tilted.x ), Math.round( y + tilted.y ), Math.round( z + tilted.z ) );
+				tilted.applyAxisAngle( normal, Math.PI * 0.25 );
+				occ += weight * getAlpha( Math.round( x + tilted.x ), Math.round( y + tilted.y ), Math.round( z + tilted.z ) );
+				tilted.applyAxisAngle( normal, Math.PI * 0.25 );
+				occ += weight * getAlpha( Math.round( x + tilted.x ), Math.round( y + tilted.y ), Math.round( z + tilted.z ) );
+				tilted.applyAxisAngle( normal, Math.PI * 0.25 );
+				occ += weight * getAlpha( Math.round( x + tilted.x ), Math.round( y + tilted.y ), Math.round( z + tilted.z ) );
+				tilted.applyAxisAngle( normal, Math.PI * 0.25 );
+				occ += weight * getAlpha( Math.round( x + tilted.x ), Math.round( y + tilted.y ), Math.round( z + tilted.z ) );
+				tilted.applyAxisAngle( normal, Math.PI * 0.25 );
+				occ += weight * getAlpha( Math.round( x + tilted.x ), Math.round( y + tilted.y ), Math.round( z + tilted.z ) );
 	
 				// wider cone
 				tilted.copy(normal).applyAxisAngle(perp, Math.PI * 0.35).normalize().multiplyScalar(3.5);
-				occ += weight * 0.5 * getAlpha(Math.round(x + tilted.x), Math.round(y + tilted.y), Math.round(z + tilted.z));
-				tilted.applyAxisAngle(normal, Math.PI * 0.25);
-				occ += weight * 0.5 *getAlpha(Math.round(x + tilted.x), Math.round(y + tilted.y), Math.round(z + tilted.z));
-				tilted.applyAxisAngle(normal, Math.PI * 0.25);
-				occ += weight * 0.5 *getAlpha(Math.round(x + tilted.x), Math.round(y + tilted.y), Math.round(z + tilted.z));
-				tilted.applyAxisAngle(normal, Math.PI * 0.25);
-				occ += weight * 0.5 *getAlpha(Math.round(x + tilted.x), Math.round(y + tilted.y), Math.round(z + tilted.z));
-				tilted.applyAxisAngle(normal, Math.PI * 0.25);
-				occ += weight * 0.5 *getAlpha(Math.round(x + tilted.x), Math.round(y + tilted.y), Math.round(z + tilted.z));
-				tilted.applyAxisAngle(normal, Math.PI * 0.25);
-				occ += weight * 0.5 *getAlpha(Math.round(x + tilted.x), Math.round(y + tilted.y), Math.round(z + tilted.z));
-				tilted.applyAxisAngle(normal, Math.PI * 0.25);
-				occ += weight * 0.5 *getAlpha(Math.round(x + tilted.x), Math.round(y + tilted.y), Math.round(z + tilted.z));
-				tilted.applyAxisAngle(normal, Math.PI * 0.25);
-				occ += weight * 0.5 *getAlpha(Math.round(x + tilted.x), Math.round(y + tilted.y), Math.round(z + tilted.z));
+				occ += weight * 0.5 * getAlpha( Math.round( x + tilted.x ), Math.round( y + tilted.y ), Math.round( z + tilted.z ) );
+				tilted.applyAxisAngle( normal, Math.PI * 0.25 );
+				occ += weight * 0.5 * getAlpha( Math.round( x + tilted.x ), Math.round( y + tilted.y ), Math.round( z + tilted.z ) );
+				tilted.applyAxisAngle( normal, Math.PI * 0.25 );
+				occ += weight * 0.5 * getAlpha( Math.round( x + tilted.x ), Math.round( y + tilted.y ), Math.round( z + tilted.z ) );
+				tilted.applyAxisAngle( normal, Math.PI * 0.25 );
+				occ += weight * 0.5 * getAlpha( Math.round( x + tilted.x ), Math.round( y + tilted.y ), Math.round( z + tilted.z ) );
+				tilted.applyAxisAngle( normal, Math.PI * 0.25 );
+				occ += weight * 0.5 * getAlpha( Math.round( x + tilted.x ), Math.round( y + tilted.y ), Math.round( z + tilted.z ) );
+				tilted.applyAxisAngle( normal, Math.PI * 0.25 );
+				occ += weight * 0.5 * getAlpha( Math.round( x + tilted.x ), Math.round( y + tilted.y ), Math.round( z + tilted.z ) );
+				tilted.applyAxisAngle( normal, Math.PI * 0.25 );
+				occ += weight * 0.5 * getAlpha( Math.round( x + tilted.x ), Math.round( y + tilted.y ), Math.round( z + tilted.z ) );
+				tilted.applyAxisAngle( normal, Math.PI * 0.25 );
+				occ += weight * 0.5 * getAlpha( Math.round( x + tilted.x ), Math.round( y + tilted.y ), Math.round( z + tilted.z ) );
 	
 				occ /= 3;
+				
 			} else {
+			
 				occ = -numNeighbors * 0.25;
+				
 			}
 			
-			occlusion.push(occ);//THREE.Math.smoothstep(occ, 0.3, 1.2));
+			occlusion.push( occ );
 		
 			// store brightness in normal length, after occlusion step
-			normal.multiplyScalar(1.0 + assembledFrameData[index].b);
+			normal.multiplyScalar( 1.0 + assembledFrameData[ index ].b );
 				
 			// color
-			colorObj.set(assembledFrameData[index].c);
-			colors.push(colorObj.r, colorObj.g, colorObj.b, assembledFrameData[index].a);
+			colorObj.set( assembledFrameData[ index ].c );
+			colors.push( colorObj.r, colorObj.g, colorObj.b, assembledFrameData[ index ].a );
 			
 			// position
-			positions.push(x, y, z);
+			positions.push( x, y, z );
 			
 			// normal
-			normals.push(normal.x, normal.y, normal.z); 
+			normals.push( normal.x, normal.y, normal.z ); 
 					
-			index++;	
+			index++;
+			
 		}}}
 
 	}
 	
-	return {p:positions, c:colors, n:normals, o:occlusion};
-}
+	return { p: positions, c: colors, n: normals, o: occlusion };
+	
+};
 
 /*
 	Finalizes loaded frames by concatenating frameData entries and creating BufferAttribute 
@@ -1883,48 +2135,63 @@ THREE.PixelBoxUtil.decodeFrame = function(dataObject, frameIndex){
 
 */
 
-THREE.PixelBoxUtil.finalizeFrames = function(dataObject, pivot){
-	var ffd = dataObject.frameData[0];
+THREE.PixelBoxUtil.finalizeFrames = function ( dataObject, pivot ) {
+
+	var ffd = dataObject.frameData[ 0 ];
 	var curOffset = 0;
 	var lastNonEmpty = 0;
-	for(var f = 0; f < dataObject.frameData.length; f++){
-		var fd = dataObject.frameData[f];
+	for ( var f = 0; f < dataObject.frameData.length; f++ ) {
+	
+		var fd = dataObject.frameData[ f ];
+		
 		// store offset
 		// non-empty
-		if(fd){
+		if ( fd ) {
+		
 			lastNonEmpty = f;
 			fd.s = curOffset;
 			fd.l = fd.o.length;
 			curOffset += fd.o.length;
+			
 		// empty (same as previous)
 		} else {
-			dataObject.frameData[f] = dataObject.frameData[lastNonEmpty];
+		
+			dataObject.frameData[ f ] = dataObject.frameData[ lastNonEmpty ];
+			
 		}
+		
 		// concat arrays
-		if(f && fd){
-			ffd.p = ffd.p.concat(fd.p);
-			ffd.c = ffd.c.concat(fd.c);
-			ffd.n = ffd.n.concat(fd.n);
-			ffd.o = ffd.o.concat(fd.o);
+		if ( f && fd ) {
+		
+			ffd.p = ffd.p.concat( fd.p );
+			ffd.c = ffd.c.concat( fd.c );
+			ffd.n = ffd.n.concat( fd.n );
+			ffd.o = ffd.o.concat( fd.o );
 			delete fd.p;
 			delete fd.c;
 			delete fd.n;
 			delete fd.o;
+			
 		}
+		
 	}
+	
 	// offset by pivot
-	for(var i = 0, l = ffd.p.length; i < l; i+=3){
-		ffd.p[i] -= pivot.x;
-		ffd.p[i + 1] -= pivot.y;
-		ffd.p[i + 2] -= pivot.z;
+	for ( var i = 0, l = ffd.p.length; i < l; i += 3 ) {
+	
+		ffd.p[ i ] -= pivot.x;
+		ffd.p[ i + 1 ] -= pivot.y;
+		ffd.p[ i + 2 ] -= pivot.z;
+		
 	}
 	
 	// create buffers
-	ffd.p = new THREE.BufferAttribute(new Float32Array(ffd.p), 3);
-	ffd.c = new THREE.BufferAttribute(new Float32Array(ffd.c), 4);
-	ffd.n = new THREE.BufferAttribute(new Float32Array(ffd.n), 3);
-	ffd.o = new THREE.BufferAttribute(new Float32Array(ffd.o), 1);
-}
+	ffd.p = new THREE.BufferAttribute( new Float32Array( ffd.p ), 3 );
+	ffd.c = new THREE.BufferAttribute( new Float32Array( ffd.c ), 4 );
+	ffd.n = new THREE.BufferAttribute( new Float32Array( ffd.n ), 3 );
+	ffd.o = new THREE.BufferAttribute( new Float32Array( ffd.o ), 1 );
+	
+};
 
 /* 
 	Encodes/appends a single frame into dataObject
@@ -1943,43 +2210,57 @@ THREE.PixelBoxUtil.finalizeFrames = function(dataObject, pivot){
 	after finishing encoding all frames, delete dataObject.assembledFrames property (used while encoding for delta lookups)
 */
 
-THREE.PixelBoxUtil.encodeFrame = function(frameData, dataObject){
+THREE.PixelBoxUtil.encodeFrame = function ( frameData, dataObject ) {
+
 	// current frame number
 	var frameIndex = dataObject.frames.length;
 
 	// add assembledFrame
-	if(dataObject.assembledFrames === undefined) dataObject.assembledFrames = [];
-	dataObject.assembledFrames.push(frameData);
+	if ( dataObject.assembledFrames === undefined ) dataObject.assembledFrames = [];
+	
+	dataObject.assembledFrames.push( frameData );
 	
 	var combine = [];
 	var prevFramePixel;
 	
 	// begin encode	
 	var index = 0;	
-	for(var x = 0; x < dataObject.width; x++){
-	for(var y = 0; y < dataObject.height; y++){
-	for(var z = 0; z < dataObject.depth; z++){
+	for ( var x = 0; x < dataObject.width; x++ ) {
+	for ( var y = 0; y < dataObject.height; y++ ) {
+	for ( var z = 0; z < dataObject.depth; z++ ) {
+	
 		// pixel
-		var fd = frameData[index];
-		fd = fd ? fd : {c:0, a:0, b:0};
-		var c = ('00000'+(new Number(fd.c)).toString(16)).substr(-6);
-		var a = (new Number(Math.floor(fd.a * 15.0))).toString(16);
-		var b = (new Number(Math.floor(fd.b * 15.0))).toString(16);
+		var fd = frameData[ index ];
+		fd = fd ? fd : { c:0, a:0, b:0 };
+		var c = ('00000' + (new Number( fd.c )).toString( 16 )).substr( -6 );
+		var a = (new Number(Math.floor( fd.a * 15.0 ))).toString( 16 );
+		var b = (new Number(Math.floor( fd.b * 15.0 ))).toString( 16 );
+		
 		// delta
-		if(frameIndex){
+		if ( frameIndex ) {
+		
 			// compare with previous
-			prevFramePixel = dataObject.assembledFrames[frameIndex - 1][index];
-			prevFramePixel = prevFramePixel ? prevFramePixel : {c:0, a:0, b:0};
-			if(prevFramePixel.c != fd.c || prevFramePixel.a != fd.a || prevFramePixel.b != fd.b){
-				combine.push(('00000'+(new Number(index)).toString(16)).substr(-6) + c+a+b);
+			prevFramePixel = dataObject.assembledFrames[ frameIndex - 1 ][ index ];
+			prevFramePixel = prevFramePixel ? prevFramePixel : { c:0, a:0, b:0 };
+			
+			if ( prevFramePixel.c != fd.c || prevFramePixel.a != fd.a || prevFramePixel.b != fd.b ) {
+			
+				combine.push( ('00000' + (new Number( index )).toString( 16 )).substr( -6 ) + c + a + b );
+				
 			}
+			
 		// full
 		} else {
-			combine.push(c+a+b);
+		
+			combine.push( c + a + b );
+			
 		}
+		
 		index++;
+		
 	}}}
 	
-	dataObject.frames.push(combine.join(''));
-}
+	dataObject.frames.push( combine.join( '' ) );
+	
+};
 

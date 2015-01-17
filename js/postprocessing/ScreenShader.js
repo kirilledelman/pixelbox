@@ -5,6 +5,7 @@
 */
 
 THREE.ScreenShader = {
+
 	uniforms: {
 		"tDiffuse":   { type: "t", value: null },
 		"time":       { type: "f", value: 1.0 },
@@ -18,7 +19,7 @@ THREE.ScreenShader = {
 			"gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );",
 		"}"
 
-	].join("\n"),
+	].join( "\n" ),
 
 	fragmentShader: [
 		"uniform float time;",
@@ -41,18 +42,19 @@ THREE.ScreenShader = {
 			"gl_FragColor =  vec4( cResult, cTextureScreen.a );",
 		"}"
 
-	].join("\n")
+	].join( "\n" )
 
 };
 
 THREE.ScreenPass = function () {
+
 	var screenShader = THREE.ScreenShader;
 	this.screenUniforms = THREE.UniformsUtils.clone( screenShader.uniforms );
 	this.screenMaterial = new THREE.ShaderMaterial( {
 		uniforms: this.screenUniforms,
 		vertexShader:  screenShader.vertexShader,
 		fragmentShader: screenShader.fragmentShader
-	});
+	} );
 
 	this.enabled = true;
 	this.needsSwap = false;
@@ -63,10 +65,13 @@ THREE.ScreenPass = function () {
 
 	this.quad = new THREE.Mesh( new THREE.PlaneGeometry( 2, 2 ), null );
 	this.scene.add( this.quad );
+	
 };
 
 THREE.ScreenPass.prototype = {
-	onResized: function(){},
+
+	onResized: function() {},
+	
 	render: function ( renderer, writeBuffer, readBuffer, delta, maskActive ) {
 
 		if ( maskActive ) renderer.context.disable( renderer.context.STENCIL_TEST );
@@ -76,9 +81,15 @@ THREE.ScreenPass.prototype = {
 		this.screenUniforms.time.value += delta;
 		
 		if ( this.renderToScreen ) {
+		
 			renderer.render( this.scene, this.camera );
+			
 		} else {
+		
 			renderer.render( this.scene, this.camera, writeBuffer, false );
+			
 		}
+		
 	}
+	
 };

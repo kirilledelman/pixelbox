@@ -1,4 +1,11 @@
-THREE.PixelBoxAssets = function(){
+/*
+ * @author Kirill Edelman
+ * @source https://github.com/kirilledelman/pixelbox
+ * @documentation https://github.com/kirilledelman/pixelbox/wiki
+ * @license MIT
+*/
+
+THREE.PixelBoxAssets = function () {
 
 /*
 	
@@ -16,7 +23,8 @@ THREE.PixelBoxAssets = function(){
 
 */
 
-	this.loadAssets = function(params, onLoaded){
+	this.loadAssets = function ( params, onLoaded ) {
+	
 		this.textures = params.textures ? params.textures : [];
 		this.scenedata = params.scenes ? params.scenes : [];
 		this.models = params.assets ? params.assets : [];
@@ -28,210 +36,316 @@ THREE.PixelBoxAssets = function(){
 		this.totalAssets = this.textures.length + this.scenedata.length + this.models.length + this.json.length;
 		
 		// textures
-		for(var i = 0; i < this.textures.length; i++){
-			var url = this.textures[i];
-			var reqObj = function(url) { 
-				return function(){
-					assets.cache.add(url, new THREE.ImageUtils.loadTexture(url, undefined, assets.assetLoaded));
+		for ( var i = 0; i < this.textures.length; i++ ) {
+		
+			var url = this.textures[ i ];
+			var reqObj = function ( url ) {
+			
+				return function () {
+				
+					assets.cache.add( url, new THREE.ImageUtils.loadTexture(url, undefined, assets.assetLoaded ) );
+					
 				};
-			}(url);
-			this.loadQueue.push(reqObj);
+				
+			}( url );
+			this.loadQueue.push( reqObj );
+			
 		}
 		
 		// scenes
-		for(var i = 0; i < this.scenedata.length; i++){
-			var url = this.scenedata[i];
-			var reqObj = function(url) { 
-				return function(){
+		for ( var i = 0; i < this.scenedata.length; i++ ) {
+		
+			var url = this.scenedata[ i ];
+			var reqObj = function ( url ) {
+			
+				return function () {
+				
 					var request = new XMLHttpRequest();
-					request.open('GET', url, true);
-					request.onload = function() {
-						if (request.status >= 200 && request.status < 400) {
+					request.open( 'GET', url, true );
+					request.onload = function () {
+					
+						if ( request.status >= 200 && request.status < 400 ) {
+						
 							var data = request.responseText;
 							var json;
-							if(data.substr(0,1) == '{' || data.substr(0,1) == '['){
+							if ( data.substr(0,1) == '{' || data.substr(0,1) == '[' ){
+							
 								json = data;
+								
 							} else {
-								json = LZString.decompressFromBase64(data); // decompress if needed
+							
+								json = LZString.decompressFromBase64( data ); // decompress if needed
+								
 							}
+												
 							// parse
-							if(!json){
-								console.error("Failed to LZString decompressFromBase64 "+url);
+							if ( !json ) {
+							
+								console.error( "Failed to LZString decompressFromBase64 " + url );
+								
 							} else {
+							
 								try {
-									json = JSON.parse(json);
-								} catch(e){
-									console.error("Failed to parse JSON for "+url,e,json);
+								
+									json = JSON.parse( json );
+									
+								} catch( e ) {
+								
+									console.error( "Failed to parse JSON for " + url, e, json );
+									
 								}
-								assets.cache.add(json.name, json);
+								
+								assets.cache.add( json.name, json );
+								
 							}
+							
 							assets.assetLoaded();
-						} else console.error('Failed to load '+url);
-					};					
-					request.onerror = function() {
-						console.error('Connection error while loading '+url);
+							
+						} else console.error( "Failed to load " + url );
+						
 					};
+									
+					request.onerror = function () {
+					
+						console.error( "Connection error while loading " + url );
+						
+					};
+					
 					request.send();
+					
 				};
-			}(url);
-			this.loadQueue.push(reqObj);
+				
+			}( url );
+			this.loadQueue.push( reqObj );
 		}
 		
 		// models
-		for(var i = 0; i < this.models.length; i++){
-			var url = this.models[i];
-			var reqObj = function(url) { 
-				return function(){
+		for ( var i = 0; i < this.models.length; i++ ) {
+		
+			var url = this.models[ i ];
+			var reqObj = function ( url ) {
+			
+				return function () {
+				
 					var request = new XMLHttpRequest();
-					request.open('GET', url, true);
-					request.onload = function() {
-						if (request.status >= 200 && request.status < 400) {
-							var time = new Date();
-							var json;
-							if(data.substr(0,1) == '{'){
+					request.open( 'GET', url, true );
+					request.onload = function () {
+					
+						if ( request.status >= 200 && request.status < 400 ) {
+						
+							var time = new Date(), json;
+							if ( data.substr(0,1) == '{' ) {
+							
 								json = data;
+								
 							} else {
-								json = LZString.decompressFromBase64(data); // decompress if needed
+							
+								json = LZString.decompressFromBase64( data ); // decompress if needed
+								
 							}
+							
 							// parse
-							if(!json){
-								console.error("Failed to LZString decompressFromBase64 "+url);
+							if ( !json ){
+							
+								console.error( "Failed to LZString decompressFromBase64 " + url );
+								
 							} else {
+							
 								try {
-									json = JSON.parse(json);
-								} catch(e){
-									console.error("Failed to parse JSON for "+url,e,json);
-								}
-								console.log("["+json.name+"] decompress+parse time:"+((new Date()).getTime() - time));
+								
+									json = JSON.parse( json );
+									
+								} catch( e ) {
+								
+									console.error( "Failed to parse JSON for " + url, e, json );
+									
+								}								
+								console.log( "[" + json.name + "] decompress+parse time:" + ( (new Date()).getTime() - time ) );
 	
 								// process
 								time = new Date();
-								THREE.PixelBoxUtil.processPixelBoxFrames(json);
-								assets.cache.add(json.name, json);
-								console.log("["+json.name+"] process time:"+((new Date()).getTime() - time));
+								THREE.PixelBoxUtil.processPixelBoxFrames( json );
+								assets.cache.add( json.name, json );
+								console.log( "[" + json.name + "] process time:" + ( (new Date()).getTime() - time ) );
+								
 							}
-							assets.assetLoaded();						
-						} else console.error('Failed to load '+url);
-					};					
-					request.onerror = function() {
-						console.error('Connection error while loading '+url);
+							assets.assetLoaded();
+							
+						} else console.error( "Failed to load " + url );
+					};	
+									
+					request.onerror = function () {
+					
+						console.error("Connection error while loading " + url );
+						
 					};
+					
 					request.send();					
 				};
-			}(url);
-			this.loadQueue.push(reqObj);
+			}( url );
+			
+			this.loadQueue.push( reqObj );
+			
 		}
 		
 		// json
-		for(var i = 0; i < this.json.length; i++){
-			var url = this.json[i];
-			var reqObj = function(url) { 
-				return function(){
+		for ( var i = 0; i < this.json.length; i++ ) {
+		
+			var url = this.json[ i ];
+			var reqObj = function ( url ) {
+			
+				return function () {
+				
 					var request = new XMLHttpRequest();
-					request.open('GET', url, true);
-					request.onload = function() {
-						if (request.status >= 200 && request.status < 400) {
+					request.open( 'GET', url, true );
+					request.onload = function () {
+						if ( request.status >= 200 && request.status < 400 ) {
+						
 							// decompress if needed
 							var json;
-							if(data.substr(0,1) == '{'){
+							if ( data.substr(0,1) == '{' ) {
+							
 								json = data;
+								
 							} else {
-								json = LZString.decompressFromBase64(data);
+							
+								json = LZString.decompressFromBase64( data );
+								
 							}
+							
 							// parse
-							if(!json){
-								console.error("Failed to LZString decompressFromBase64 "+url);
+							if ( !json ) {
+							
+								console.error( "Failed to LZString decompressFromBase64 " + url );
+								
 							} else {
+							
 								try {
-									json = JSON.parse(json);
-								} catch(e){
-									console.error("Failed to parse JSON for "+url,e,json);
+								
+									json = JSON.parse( json );
+									
+								} catch( e ){
+								
+									console.error( "Failed to parse JSON for " + url, e, json );
+									
 								}
-								// process
-								assets.cache.add(url, json);
+								
+								assets.cache.add( url, json );
+								
 							}
+							
 							assets.assetLoaded();
-						} else console.error('Failed to load '+url);
-					};					
-					request.onerror = function() {
-						console.error('Connection error while loading '+url);
+							
+						} else console.error( "Failed to load " + url );
+						
 					};
+									
+					request.onerror = function () {
+					
+						console.error( "Connection error while loading " + url );
+						
+					};
+					
 					request.send();	
+					
 				};
-			}(url);
-			this.loadQueue.push(reqObj);
+				
+			}( url );
+			this.loadQueue.push( reqObj );
+			
 		}
 		
 		// start
-		if(this.totalAssets) this.loadQueue[this.totalAssets - 1]();	
-		else if(this.onloaded) this.onloaded();
+		if ( this.totalAssets ) this.loadQueue[ this.totalAssets - 1 ]();
+		else if ( this.onloaded ) this.onloaded();
 	};
 	
-	this.assetLoaded = function(){ 
+	this.assetLoaded = function () { 
+	
 		assets.totalLoaded++;
 		assets.loadQueue.pop();
-		if(assets.totalLoaded == assets.totalAssets){
-			if(assets.onloaded) assets.onloaded();
+		if ( assets.totalLoaded === assets.totalAssets ){
+		
+			if ( assets.onloaded ) assets.onloaded();
+			
 		} else {
-			if(assets.onprogress) assets.onprogress(100 * assets.totalLoaded / assets.totalAssets);
-			setTimeout(assets.loadQueue[assets.loadQueue.length - 1], 10);
+		
+			if ( assets.onprogress ) assets.onprogress( 100 * assets.totalLoaded / assets.totalAssets );
+			setTimeout( assets.loadQueue[ assets.loadQueue.length - 1 ], 10 );
+			
 		}
+		
 	};
 
-	this.unload = function(){
-		for(var key in this.cache.files){
-			var a = this.cache.files[key];
+	this.unload = function () {
+	
+		for ( var key in this.cache.files ){
+		
+			var a = this.cache.files[ key ];
+			
 			// PixelBox
-			if(a.frameData || a.frames){
-				THREE.PixelBox.prototype.dispose(a);
-			} else if(a instanceof THREE.Texture){
+			if ( a.frameData || a.frames ) {
+				
+				THREE.PixelBox.prototype.dispose( a );
+				
+			} else if ( a instanceof THREE.Texture ) {
+			
 				a.dispose();
+				
 			}
+			
 		}
+		
 		this.cache.clear();
-		console.log("All assets unloaded");
-	};	
+		console.log( "All assets unloaded" );
+		
+	};
+	
 	this.cache = new THREE.Cache();
 	this.totalLoaded = 0;
 	this.totalAssets = 0;
 	this.loadQueue = [];
 	
 	this.objectLoader = new THREE.JSONLoader();
+	
 }
 
 var assets = new THREE.PixelBoxAssets();
 
 /*
-
-	Linepath represents a transformable path
-	
+ * @author Kirill Edelman
+ * @source https://github.com/kirilledelman/pixelbox
+ * @documentation https://github.com/kirilledelman/pixelbox/wiki
+ * @license MIT
 */
 
-THREE.LinePath = function(){
+THREE.LinePath = function () {
 	
-	THREE.Line.call(this, new THREE.Geometry(), THREE.LinePath.prototype.sharedMaterial);
+	THREE.Line.call( this, new THREE.Geometry(), THREE.LinePath.prototype.sharedMaterial );
 	
 	this.path = new THREE.CurvePath();
-	
 	this.type = THREE.LineStrip;
 	
 	return this;
+	
 };
 
-THREE.LinePath.prototype = Object.create(THREE.Line.prototype);
+THREE.LinePath.prototype = Object.create( THREE.Line.prototype );
 THREE.LinePath.prototype.constructor = THREE.LinePath;
 
 /* creates the segments from definition */
-THREE.LinePath.prototype.initialize = function(objDef){
+THREE.LinePath.prototype.initialize = function ( objDef ) {
+
 	var lastPoint = null, srg, curve;
-	for(var i = 0, l = objDef.segments.length; i < l; i++){
-		seg = objDef.segments[i];
+	for ( var i = 0, l = objDef.segments.length; i < l; i++ ) {
+	
+		seg = objDef.segments[ i ];
 
 		curve = new THREE.CubicBezierCurve3(
-			lastPoint ? lastPoint : (new THREE.Vector3()).fromArray(seg.v0),
-			(new THREE.Vector3()).fromArray(seg.v1),
-			(new THREE.Vector3()).fromArray(seg.v2),
-			(new THREE.Vector3()).fromArray(seg.v3)
+			lastPoint ? lastPoint : (new THREE.Vector3()).fromArray( seg.v0 ),
+			(new THREE.Vector3()).fromArray( seg.v1 ),
+			(new THREE.Vector3()).fromArray( seg.v2 ),
+			(new THREE.Vector3()).fromArray( seg.v3 )
 		);
 
 		curve.v0.lockTangents = (seg.v0.length > 3);
@@ -241,136 +355,172 @@ THREE.LinePath.prototype.initialize = function(objDef){
 
 		lastPoint = curve.v3;
 
-		this.path.add(curve);
+		this.path.add( curve );
 	}
 	
-	this.isLoop = this.path.curves[0].v0.equals(this.path.curves[this.path.curves.length - 1].v3);
+	this.isLoop = this.path.curves[ 0 ].v0.equals( this.path.curves[ this.path.curves.length - 1 ].v3 );
 
 };
 
 /* overridden, to save lastGetPointCurveIndex */
-THREE.LinePath.prototype.getPoint = function(t){
+THREE.LinePath.prototype.getPoint = function ( t ) {
+
 	var d = t * this.path.getLength();
 	var curveLengths = this.path.getCurveLengths();
 	var i = 0, diff, curve;
 	while ( i < curveLengths.length ) {
+	
 		if ( curveLengths[ i ] >= d ) {
+		
 			diff = curveLengths[ i ] - d;
 			curve = this.path.curves[ i ];
 			var u = 1 - diff / curve.getLength();
 			this.lastGetPointCurveIndex = i;
 			return curve.getPointAt( u );
 		}
-		i ++;
+		
+		i++;
+		
 	}
+	
 	return null;
+	
 };
 
 /* reverses path direction */
-THREE.LinePath.prototype.reverse = function(){
+THREE.LinePath.prototype.reverse = function () {
+
 	this.path.curves.reverse();
-	for(var i = 0, nc = this.path.curves.length; i < nc; i++){
-		var curve = this.path.curves[i];
+	for ( var i = 0, nc = this.path.curves.length; i < nc; i++ ) {
+	
+		var curve = this.path.curves[ i ];
 		var temp = curve.v0;
 		curve.v0 = curve.v3;
 		curve.v3 = temp;
 		temp = curve.v1;
 		curve.v1 = curve.v2;
 		curve.v2 = temp;
+		
 	}
-	if(this.path.cacheLengths) this.path.cacheLengths.length = 0;
+	
+	if ( this.path.cacheLengths ) this.path.cacheLengths.length = 0;
+	
 };
 
 /* tweens */
-THREE.LinePath.prototype.applyTween = function(tweenObj){
+THREE.LinePath.prototype.applyTween = function ( tweenObj ) {
 	
 	var valueChange = tweenObj.to - tweenObj.from;
-	var t = tweenObj.easing(tweenObj.time, tweenObj.from, valueChange, tweenObj.duration);
+	var t = tweenObj.easing( tweenObj.time, tweenObj.from, valueChange, tweenObj.duration );
 	
 	// global position at t
 	var modt = t % 1.0;
-	var pos = this.getPoint(modt);
-	var delta = Math.sign(valueChange) * 0.0001;
-	this.localToWorld(pos);
+	var pos = this.getPoint( modt );
+	var delta = Math.sign( valueChange ) * 0.0001;
+	this.localToWorld( pos );
 	
 	// detect curve change
 	var meta1 = null;
 	var meta2 = null;
-	if(this.lastGetPointCurveIndex != tweenObj.currentCurveIndex){
-		var curve = this.path.curves[this.lastGetPointCurveIndex];
-		var prevCurve = tweenObj.currentCurveIndex !== undefined ? this.path.curves[tweenObj.currentCurveIndex] : null;
+	if ( this.lastGetPointCurveIndex != tweenObj.currentCurveIndex ) {
+	
+		var curve = this.path.curves[ this.lastGetPointCurveIndex ];
+		var prevCurve = (tweenObj.currentCurveIndex !== undefined) ? this.path.curves[ tweenObj.currentCurveIndex ] : null;
 		tweenObj.currentCurveIndex = this.lastGetPointCurveIndex;
-		if(valueChange > 0){
-			if(curve.v0.meta) meta1 = curve.v0.meta;
-			if(prevCurve && prevCurve.v3.meta && prevCurve.v3 != curve.v0) meta2 = prevCurve.v3.meta;
+		if ( valueChange > 0 ) {
+		
+			if ( curve.v0.meta ) meta1 = curve.v0.meta;
+			if ( prevCurve && prevCurve.v3.meta && prevCurve.v3 != curve.v0 ) meta2 = prevCurve.v3.meta;
+			
 		} else {
-			if(curve.v3.meta) meta1 = curve.v3.meta;
-			if(prevCurve && prevCurve.v0.meta && prevCurve.v0 != curve.v3) meta2 = prevCurve.v0.meta;
+		
+			if ( curve.v3.meta ) meta1 = curve.v3.meta;
+			if ( prevCurve && prevCurve.v0.meta && prevCurve.v0 != curve.v3 ) meta2 = prevCurve.v0.meta;
+			
 		}
 	}
 	
-	if(meta1){
-		if(tweenObj.meta) tweenObj.meta.call(this, tweenObj, meta1);
-		var ev = {type:'path-meta', tweenObject: tweenObj, meta: meta1};
-		tweenObj.target.dispatchEvent(ev);
-		this.dispatchEvent(ev);
-		ev = null;
+	if ( meta1 ) {
+	
+		if ( tweenObj.meta ) tweenObj.meta.call( this, tweenObj, meta1 );
+		var ev = { type:'path-meta', tweenObject: tweenObj, meta: meta1 };
+		tweenObj.target.dispatchEvent( ev );
+		this.dispatchEvent( ev );
+		
 	}
-	if(meta2){
-		if(tweenObj.meta) tweenObj.meta.call(this, tweenObj, meta2);
-		var ev = {type:'path-meta', tweenObject: tweenObj, meta: meta2};
-		tweenObj.target.dispatchEvent(ev);
-		this.dispatchEvent(ev);
-		ev = null;
+	
+	if ( meta2 ) {
+	
+		if ( tweenObj.meta ) tweenObj.meta.call( this, tweenObj, meta2 );
+		var ev = { type:'path-meta', tweenObject: tweenObj, meta: meta2 };
+		tweenObj.target.dispatchEvent( ev );
+		this.dispatchEvent( ev );
+		
 	}
 	
 	var targetParent = tweenObj.target.parent;
-	if(targetParent){
-		tweenObj.target.parent.worldToLocal(pos);
+	if ( targetParent ) {
+	
+		tweenObj.target.parent.worldToLocal( pos );
+		
 	}
 	
 	// set position
-	tweenObj.target.position.copy(pos);
+	tweenObj.target.position.copy( pos );
 	
 	// orient to path
 	var incTime = modt + delta;
-	if(tweenObj.orientToPath && incTime > 0 && (this.isLoop || incTime <= 1.0)){
-		var tangent = this.getPoint(incTime % 1.0);
-		this.localToWorld(tangent);
+	if ( tweenObj.orientToPath && incTime > 0 && (this.isLoop || incTime <= 1.0) ) {
+	
+		var tangent = this.getPoint( incTime % 1.0 );
+		this.localToWorld( tangent );
 		
-		if(targetParent){
-			targetParent.worldToLocal(tangent);
+		if ( targetParent ) {
+		
+			targetParent.worldToLocal( tangent );
+			
 		}
 		
-		tweenObj.target.lookAt(tangent);
+		tweenObj.target.lookAt( tangent );
+		
 	}
+	
 };
 
-THREE.LinePath.prototype.tween = function(obj){
+THREE.LinePath.prototype.tween = function ( obj ) {
+
 	var objs;
-	if(!_.isArray(obj)) objs = [obj];
+	if ( !_.isArray( obj ) ) objs = [ obj ];
 	else objs = obj.concat();
 	
-	for(var i = objs.length - 1; i >= 0; i--){
-		var tweenObj = objs[i];
+	for ( var i = objs.length - 1; i >= 0; i-- ) {
+	
+		var tweenObj = objs[ i ];
 		
-		if(tweenObj.target === undefined) {
-			console.log("tween object \'target\' parameter is missing: ", tweenObj);
-			objs.splice(i, 1);
+		if ( tweenObj.target === undefined ) {
+		
+			console.log( "tween object \'target\' parameter is missing: ", tweenObj );
+			objs.splice( i, 1 );
 			continue;
-		} else if(!(tweenObj.target instanceof THREE.Object3D)){
-			console.log("tween object \'target\' must be a descendant of THREE.Object3D: ", tweenObj);
-			objs.splice(i, 1);
+			
+		} else if ( !(tweenObj.target instanceof THREE.Object3D) ) {
+		
+			console.log( "tween object \'target\' must be a descendant of THREE.Object3D: ", tweenObj );
+			objs.splice( i, 1 );
 			continue;
-		} if(this.isDescendantOf(tweenObj.target)){
-			console.log("tween object \'target\' must not be a parent/ascendant of this THREE.LinePath instance: ", tweenObj);
-			objs.splice(i, 1);
+			
+		} if ( this.isDescendantOf( tweenObj.target ) ) {
+		
+			console.log( "tween object \'target\' must not be a parent/ascendant of this THREE.LinePath instance: ", tweenObj );
+			objs.splice( i, 1 );
 			continue;
+			
 		}
 
 	}	
 	
-	return THREE.Object3D.prototype.tween.call(this, objs);
+	return THREE.Object3D.prototype.tween.call( this, objs );
+	
 };
 // Copyright (c) 2013 Pieroxy <pieroxy@pieroxy.net>
 // This work is free. You can redistribute it and/or modify it
@@ -1037,54 +1187,80 @@ var LZString = {
 if( typeof module !== 'undefined' && module != null ) {
   module.exports = LZString
 }
-/* 
-
-	THREE.Object3D extensions 
-
+/*
+ * @author Kirill Edelman
+ * @source https://github.com/kirilledelman/pixelbox
+ * @documentation https://github.com/kirilledelman/pixelbox/wiki
+ * @license MIT
 */
 
-THREE.Object3D.prototype.nearestParentWithProperty = function(prop, val){
-	if(this.parent){ 
-		if(this.parent[prop] && (val === undefined || this.parent[prop] === val)) return this.parent;
-		return this.parent.nearestParentWithProperty(prop, val);
+THREE.Object3D.prototype.nearestParentWithProperty = function ( prop, val ) {
+
+	if ( this.parent ) {
+	
+		if ( this.parent[ prop ] && (val === undefined || this.parent[ prop ] === val) ) return this.parent;
+		
+		return this.parent.nearestParentWithProperty( prop, val );
+		
 	}
+	
 	return null;
+	
 }
 
-THREE.Object3D.prototype.isVisibleRecursive = function(){
-	if(!this.visible) return false;
-	if(this.parent) return this.parent.isVisibleRecursive();
+THREE.Object3D.prototype.isVisibleRecursive = function () {
+
+	if ( !this.visible ) return false;
+	
+	if ( this.parent ) return this.parent.isVisibleRecursive();
+	
 	return this.visible;	
 }
 
 /* another can be an array or a single object */
-THREE.Object3D.prototype.isDescendantOf = function(another){
-	if(!this.parent) return false;
-	if(_.isArray(another)){
-		for(var i = 0, l = another.length; i < l; i++){
-			var ai = another[i];
-			if(this.parent == ai) return true;
-			var p = this.parent.isDescendantOf(ai);
-			if(p) return true;
+THREE.Object3D.prototype.isDescendantOf = function ( another ) {
+
+	if ( !this.parent ) return false;
+	
+	if ( _.isArray( another ) ) {
+	
+		for ( var i = 0, l = another.length; i < l; i++ ) {
+		
+			var ai = another[ i ];
+			if ( this.parent == ai ) return true;
+			var p = this.parent.isDescendantOf( ai );
+			if ( p ) return true;
+			
 		}
+		
 		return false;
+		
 	} else {
-		if(this.parent == another) return true;
-		return this.parent.isDescendantOf(another);
+	
+		if ( this.parent == another ) return true;
+		return this.parent.isDescendantOf( another );
+		
 	}
 }
 
 /* if object is a descendent of an instance, returns that instance */
-THREE.Object3D.prototype.parentInstance = function(){
-	if(this.isInstance) return this;
-	if(!this.parent) return null;
+THREE.Object3D.prototype.parentInstance = function () {
+
+	if ( this.isInstance ) return this;
+	
+	if ( !this.parent ) return null;
+	
 	return this.parent.parentInstance();
+	
 };
 
 /* if object is a descendent of a template, returns that template */
-THREE.Object3D.prototype.nearestTemplate = function(){
-	if(this.isTemplate) return this;
-	return this.nearestParentWithProperty('isTemplate', true);
+THREE.Object3D.prototype.nearestTemplate = function () {
+
+	if ( this.isTemplate ) return this;
+	
+	return this.nearestParentWithProperty( 'isTemplate', true );
+	
 };
 
 /* 
@@ -1094,79 +1270,106 @@ THREE.Object3D.prototype.nearestTemplate = function(){
    used when recycling objects
 */
 
-THREE.Object3D.prototype.recursiveRemoveChildren = function(omit){
+THREE.Object3D.prototype.recursiveRemoveChildren = function ( omit ) {
+
 	var removedChildren = [];
-	for(var i = this.children.length - 1; i >= 0; i--){
-		var child = this.children[i];
-		if(omit && omit.indexOf(child) !== -1){
-			continue;
-		}
+	
+	for ( var i = this.children.length - 1; i >= 0; i-- ) {
+	
+		var child = this.children[ i ];
 		
-		removedChildren = removedChildren.concat(child.recursiveRemoveChildren(omit));
-		if(child.stopTweens) child.stopTweens();
-		if(child.stopAnim) child.stopAnim();
-		if(child['name']){
-			if(child.anchored && this.parent[child.name] && this.parent[child.name] == child) {
+		if ( omit && omit.indexOf( child ) !== -1) continue;
+		
+		removedChildren = removedChildren.concat(child.recursiveRemoveChildren( omit ));
+		if ( child.stopTweens ) child.stopTweens();
+		if ( child.stopAnim ) child.stopAnim();
+		if ( child['name'] ) {
+		
+			if ( child.anchored && this.parent[ child.name ] && this.parent[ child.name ] == child ) {
+			
 				delete this.parent[child.name];
-			} else if(this[child.name] == child){
-				delete this[child.name];
+				
+			} else if ( this[ child.name ] == child ) {
+			
+				delete this[ child.name ];
+				
 			}
+			
 		}
 		
-		if(!child.isAnchor) { 
-			this.remove(child);
-			removedChildren.push(child);
+		if ( !child.isAnchor ) {
+		
+			this.remove( child );
+			removedChildren.push( child );
+			
 		}
+		
 	}
 	
 	return removedChildren;
+	
 };
 
 THREE.Object3D.prototype.getObjectByUUID = function ( uuid, recursive ) {
+
 	if ( this.uuid === uuid ) return this;
 
 	for ( var i = 0, l = this.children.length; i < l; i ++ ) {
 		var child = this.children[ i ];
 		var object = child.getObjectByUUID( uuid, recursive );
 		if ( object !== undefined ) {
+		
 			return object;
+			
 		}
+		
 	}
+	
 	return undefined;
+	
 };
 
-THREE.Object3D.prototype.removeFromParent = function(){
-	if(!this.parent) return false;
-	this.parent.remove(this);
+THREE.Object3D.prototype.removeFromParent = function () {
+
+	if ( !this.parent ) return false;
+	this.parent.remove( this );
 	return true;
+	
 };
 
-THREE.Object3D.prototype.lookAtObject = function(other){
-	var objWorldPosition = other.parent ? other.parent.localToWorld(other.position.clone()) : other.position.clone();
-	this.lookAt(this.parent ? this.parent.worldToLocal(objWorldPosition) : objWorldPosition);
+THREE.Object3D.prototype.lookAtObject = function ( other ) {
+
+	var objWorldPosition = other.parent ? other.parent.localToWorld( other.position.clone() ) : other.position.clone();
+	this.lookAt( this.parent ? this.parent.worldToLocal( objWorldPosition ) : objWorldPosition );
+	
 };
 
-THREE.Object3D.prototype.transplant = function(newParent){
-	if(newParent.isDescendantOf(this)){
-		console.error("Can't transplant this object to its descendant.");
+THREE.Object3D.prototype.transplant = function ( newParent ) {
+
+	if ( newParent.isDescendantOf( this ) ) {
+	
+		console.error( "Can't transplant this object to its descendant." );
 		return;
+		
 	}
+	
 	// convert transform to world
-	//this.updateMatrixWorld(true);
-	this.matrix.copy(this.matrixWorld);
+	this.matrix.copy( this.matrixWorld );
 	this.matrix.decompose( this.position, this.quaternion, this.scale );
-	this.rotation.setFromQuaternion(this.quaternion);
+	this.rotation.setFromQuaternion( this.quaternion );
+	
 	// parent to new parent
-	//newParent.updateMatrixWorld(true);
 	var inv = new THREE.Matrix4();
-	inv.getInverse(newParent.matrixWorld);
-	inv.multiply(this.matrix);
-	this.matrix.copy(inv);
+	inv.getInverse( newParent.matrixWorld );
+	inv.multiply( this.matrix );
+	this.matrix.copy( inv );
+	
 	// refresh pos/rot/sc
 	this.matrix.decompose( this.position, this.quaternion, this.scale );
-	this.rotation.setFromQuaternion(this.quaternion);
+	this.rotation.setFromQuaternion( this.quaternion );
 	
-	newParent.add(this);	
+	newParent.add( this );
+	
 };
 
 /* 
@@ -1194,204 +1397,272 @@ THREE.Object3D.prototype.transplant = function(newParent){
 	
 */
 
-THREE.Object3D.prototype.applyTween = function(tweenObj){
-	if(tweenObj.target instanceof THREE.Color){
-		tweenObj.target.r = tweenObj.easing(tweenObj.time, tweenObj.from.r, tweenObj.to.r - tweenObj.from.r, tweenObj.duration);
-		tweenObj.target.g = tweenObj.easing(tweenObj.time, tweenObj.from.g, tweenObj.to.g - tweenObj.from.g, tweenObj.duration);
-		tweenObj.target.b = tweenObj.easing(tweenObj.time, tweenObj.from.b, tweenObj.to.b - tweenObj.from.b, tweenObj.duration);
-	} else if(tweenObj.target instanceof THREE.Vector3){
+THREE.Object3D.prototype.applyTween = function ( tweenObj ) {
+
+	if ( tweenObj.target instanceof THREE.Color ) {
+	
+		tweenObj.target.r = tweenObj.easing( tweenObj.time, tweenObj.from.r, tweenObj.to.r - tweenObj.from.r, tweenObj.duration );
+		tweenObj.target.g = tweenObj.easing( tweenObj.time, tweenObj.from.g, tweenObj.to.g - tweenObj.from.g, tweenObj.duration );
+		tweenObj.target.b = tweenObj.easing( tweenObj.time, tweenObj.from.b, tweenObj.to.b - tweenObj.from.b, tweenObj.duration );
+		
+	} else if ( tweenObj.target instanceof THREE.Vector3 ) {
+	
 		tweenObj.target.set(
-			tweenObj.easing(tweenObj.time, tweenObj.from.x, tweenObj.to.x - tweenObj.from.x, tweenObj.duration),
-			tweenObj.easing(tweenObj.time, tweenObj.from.y, tweenObj.to.y - tweenObj.from.y, tweenObj.duration),
-			tweenObj.easing(tweenObj.time, tweenObj.from.z, tweenObj.to.z - tweenObj.from.z, tweenObj.duration)
+			tweenObj.easing( tweenObj.time, tweenObj.from.x, tweenObj.to.x - tweenObj.from.x, tweenObj.duration ),
+			tweenObj.easing( tweenObj.time, tweenObj.from.y, tweenObj.to.y - tweenObj.from.y, tweenObj.duration ),
+			tweenObj.easing( tweenObj.time, tweenObj.from.z, tweenObj.to.z - tweenObj.from.z, tweenObj.duration )
 		);
-	} else if(tweenObj.target instanceof THREE.Euler){
+		
+	} else if ( tweenObj.target instanceof THREE.Euler ) {
+	
 		tweenObj.target.set(
-			tweenObj.easing(tweenObj.time, tweenObj.from.x, tweenObj.to.x - tweenObj.from.x, tweenObj.duration),
-			tweenObj.easing(tweenObj.time, tweenObj.from.y, tweenObj.to.y - tweenObj.from.y, tweenObj.duration),
-			tweenObj.easing(tweenObj.time, tweenObj.from.z, tweenObj.to.z - tweenObj.from.z, tweenObj.duration), 'XYZ'
+			tweenObj.easing( tweenObj.time, tweenObj.from.x, tweenObj.to.x - tweenObj.from.x, tweenObj.duration ),
+			tweenObj.easing( tweenObj.time, tweenObj.from.y, tweenObj.to.y - tweenObj.from.y, tweenObj.duration ),
+			tweenObj.easing( tweenObj.time, tweenObj.from.z, tweenObj.to.z - tweenObj.from.z, tweenObj.duration ), 'XYZ'
 		);
-	} else if(tweenObj.prop){
-		tweenObj.target[tweenObj.prop] = 
-			tweenObj.easing(tweenObj.time, tweenObj.from, tweenObj.to - tweenObj.from, tweenObj.duration);
+		
+	} else if ( tweenObj.prop ) {
+	
+		tweenObj.target[ tweenObj.prop ] = 
+			tweenObj.easing( tweenObj.time, tweenObj.from, tweenObj.to - tweenObj.from, tweenObj.duration );
+			
 	}
+	
 }
 
-THREE.Object3D.prototype.advanceTweenFrame = function(){
-	if(this._tweenInterval) clearTimeout(this._tweenInterval);
+THREE.Object3D.prototype.advanceTweenFrame = function () {
+
+	if ( this._tweenInterval ) clearTimeout( this._tweenInterval );
 	
 	var nextFrameIn = 1.0 / this.tweenFps;
 	var keepGoing = true;
 	
-	if(!renderer.paused){
+	if ( !renderer.paused ) {
 		this._tweenInterval = 0;
-		for(var i = this._tweens.length - 1; i >= 0; i--){
-			var tweenObj = this._tweens[i];
+		for ( var i = this._tweens.length - 1; i >= 0; i-- ) {
+		
+			var tweenObj = this._tweens[ i ];
 			
-			tweenObj.time = Math.min(tweenObj.time + nextFrameIn, tweenObj.duration);
+			tweenObj.time = Math.min( tweenObj.time + nextFrameIn, tweenObj.duration );
 			
-			this.applyTween(tweenObj);
+			this.applyTween( tweenObj );
 			
-			if(tweenObj.time >= tweenObj.duration){
+			if ( tweenObj.time >= tweenObj.duration ) {
+				
 				// loop
-				if(tweenObj.numLoops > 0){
+				if ( tweenObj.numLoops > 0 ) {
+				
 					tweenObj.numLoops--;
-					if(tweenObj.autoReverse){
+					if ( tweenObj.autoReverse ) {
+					
 						var temp = tweenObj.to;
 						tweenObj.to = tweenObj.from;
 						tweenObj.from = temp;
+						
 					}
-					if(tweenObj.loop !== undefined) tweenObj.loop.call(this, tweenObj);
+					
+					if ( tweenObj.loop !== undefined ) tweenObj.loop.call( this, tweenObj );
 					tweenObj.time = 0;
 					
 				// finish tween
 				} else {
-					if(tweenObj.done !== undefined) tweenObj.done.call(this, tweenObj);
-					this._tweens.splice(i, 1);	
+				
+					if ( tweenObj.done !== undefined ) tweenObj.done.call( this, tweenObj );
+					this._tweens.splice( i, 1 );
+					
 				}
-			}			
+				
+			}
+					
 		}
+		
 		keepGoing = this._tweens.length > 0;
+		
 	}
 	
 	// set up next time
-	if(keepGoing){
-		this._tweenInterval = setTimeout(this.advanceTweenFrame, nextFrameIn * 1000);
+	if ( keepGoing ) {
+	
+		this._tweenInterval = setTimeout( this.advanceTweenFrame, nextFrameIn * 1000 );
+		
 	}
+	
 };
 
-THREE.Object3D.prototype.tween = function(obj){
+THREE.Object3D.prototype.tween = function ( obj ) {
+
 	var objs;
-	if(!_.isArray(obj)) objs = [obj];
+	if ( !_.isArray( obj ) ) objs = [ obj ];
 	else objs = obj;
 	
 	// first time
-	if(!this.hasOwnProperty('advanceTweenFrame')){
+	if ( !this.hasOwnProperty( 'advanceTweenFrame' ) ) {
+	
 		this._tweens = [];
-		this.advanceTweenFrame = this.advanceTweenFrame.bind(this);
+		this.advanceTweenFrame = this.advanceTweenFrame.bind( this );
 		this.tweenFps = (this.tweenFps !== undefined ? this.tweenFps : 30);
+		
 	}
 	
-	for(var i = objs.length - 1; i >= 0; i--){
-		var tweenObj = objs[i];
+	for ( var i = objs.length - 1; i >= 0; i-- ) {
+	
+		var tweenObj = objs[ i ];
 		tweenObj.time = 0;
 		
 		// validate
-		if(tweenObj.duration === undefined) tweenObj.duration = 1.0;
+		if ( tweenObj.duration === undefined ) tweenObj.duration = 1.0;
 		
-		if(tweenObj.target === undefined) tweenObj.target = this;
+		if ( tweenObj.target === undefined ) tweenObj.target = this;
 		
-		if(tweenObj.easing === undefined) tweenObj.easing = Math.linearTween;
+		if ( tweenObj.easing === undefined ) tweenObj.easing = Math.linearTween;
 		
-		if(tweenObj.numLoops === undefined) tweenObj.numLoops = 0;
+		if ( tweenObj.numLoops === undefined ) tweenObj.numLoops = 0;
 		
-		if(tweenObj.from === undefined) {
-			if(tweenObj.target instanceof THREE.Color || tweenObj.target instanceof THREE.Vector3 || tweenObj.target instanceof THREE.Euler){
+		if ( tweenObj.from === undefined ) {
+		
+			if ( tweenObj.target instanceof THREE.Color || tweenObj.target instanceof THREE.Vector3 || tweenObj.target instanceof THREE.Euler ) {
+			
 				tweenObj.from = tweenObj.target.clone();
-			} else if(tweenObj.prop && tweenObj.target[tweenObj.prop]){
-				tweenObj.from = _.deepClone(tweenObj.target[tweenObj.prop]);
+				
+			} else if ( tweenObj.prop && tweenObj.target[ tweenObj.prop ] ) {
+			
+				tweenObj.from = _deepClone( tweenObj.target[ tweenObj.prop ] );
+				
 			} else {
+			
 				tweenObj.from = 0;
+				
 			}
+			
 		}
 		
-		if(tweenObj.to === undefined) {
-			console.log("tween object \'to\' parameter is missing: ", tweenObj);
-			objs.splice(i, 1);
+		if ( tweenObj.to === undefined ) {
+		
+			console.log( "tween object \'to\' parameter is missing: ", tweenObj );
+			objs.splice( i, 1 );
 			continue;
+			
 		}
+		
 	}
 	
-	this._tweens = this._tweens.concat(objs);
+	this._tweens = this._tweens.concat( objs );
 	
-	if(!this._tweenInterval && this._tweens.length) setTimeout(this.advanceTweenFrame, 1000 / this.tweenFps);
+	if ( !this._tweenInterval && this._tweens.length ) setTimeout( this.advanceTweenFrame, 1000 / this.tweenFps );
 	
 	return objs;
+	
 };
 
 /* stops all tweens */
-THREE.Object3D.prototype.stopTweens = function(snapToFinish, callDone){
-	if(!this._tweens) return;
-	if(snapToFinish){
-		for(var i = 0, l = this._tweens.length; i < l; i++){
-			var tweenObj = this._tweens[i];
+THREE.Object3D.prototype.stopTweens = function ( snapToFinish, callDone ) {
+
+	if ( !this._tweens ) return;
+	if ( snapToFinish ) {
+	
+		for ( var i = 0, l = this._tweens.length; i < l; i++ ) {
+		
+			var tweenObj = this._tweens[ i ];
 			tweenObj.time = tweenObj.duration;
-			this.applyTween(tweenObj);
-			if(callDone && tweenObj.done !== undefined) tweenObj.done.call(this, tweenObj); 
+			this.applyTween( tweenObj );
+			if ( callDone && tweenObj.done !== undefined ) tweenObj.done.call( this, tweenObj ); 
 		}
+		
 	}
+	
 	this._tweens.length = 0;
 	delete this._tweens;
 	this._tweens = [];
-	if(this._tweenInterval) clearTimeout(this._tweenInterval);
+	if ( this._tweenInterval ) clearTimeout( this._tweenInterval );
 	this._tweenInterval = 0;
+	
 };
 
 /* stops specific tween */
-THREE.Object3D.prototype.stopTween = function(obj, snapToFinish, callDone){
-	if(!this._tweens) return;
-	var index = this._tweens.indexOf(obj);
-	if(index !== -1){
-		if(snapToFinish){
-			var tweenObj = this._tweens[index];
+THREE.Object3D.prototype.stopTween = function ( obj, snapToFinish, callDone ) {
+
+	if ( !this._tweens ) return;
+	var index = this._tweens.indexOf( obj );
+	if ( index !== -1 ) {
+	
+		if ( snapToFinish ) {
+		
+			var tweenObj = this._tweens[ index ];
 			tweenObj.time = tweenObj.duration;
-			this.applyTween(tweenObj);
-			if(callDone && tweenObj.done !== undefined) tweenObj.done.call(this, tweenObj);
-		}	
-		this._tweens.splice(index, 1);
-		if(!this._tweens.length && this._tweenInterval) { 
-			clearTimeout(this._tweenInterval);
-			this._tweenInterval = 0;
+			this.applyTween( tweenObj );
+			if ( callDone && tweenObj.done !== undefined ) tweenObj.done.call( this, tweenObj );
+			
 		}
+		this._tweens.splice( index, 1 );
+		if ( !this._tweens.length && this._tweenInterval ) { 
+		
+			clearTimeout( this._tweenInterval );
+			this._tweenInterval = 0;
+			
+		}
+		
 	}
+	
 };
 
 /* ================================================================================ Util */
 
 /* easing: t = current time, b = start value, c = change in value, d = duration */
-Math.easeInOutSine = function (t, b, c, d) { return -c/2 * (Math.cos(Math.PI*t/d) - 1) + b; };
+Math.easeInOutSine = function ( t, b, c, d ) { return -c * 0.5 * (Math.cos( Math.PI * t / d ) - 1) + b; };
 
-Math.easeInSine = function (t, b, c, d) { return -c * Math.cos(t/d * (Math.PI/2)) + c + b; };
+Math.easeInSine = function ( t, b, c, d ) { return -c * Math.cos( t / d * Math.PI * 0.5 ) + c + b; };
 
-Math.easeOutSine = function (t, b, c, d) { return c * Math.sin(t/d * (Math.PI/2)) + b; };
+Math.easeOutSine = function ( t, b, c, d ) { return c * Math.sin( t / d * Math.PI * 0.5 ) + b; };
 
-Math.linearTween = function (t, b, c, d) { return c*t/d + b; };
+Math.linearTween = function ( t, b, c, d ) { return c * t / d + b; };
 
 /* pseudo - random number */
-Math.seededRandom = function(seed) {
-	var x = Math.sin(seed+1) * 10000;
-	return x - Math.floor(x);
+Math.seededRandom = function ( seed ) {
+
+	var x = Math.sin( seed + 1 ) * 10000;
+	return x - Math.floor( x );
+	
 };
 
 /* deep clone */
-function _deepClone(obj, depth) {
-	if (typeof obj !== 'object') return obj;
-	if (obj === null) return null;
-	if (_.isString(obj)) return obj.splice();
-	if (_.isDate(obj)) return new Date(obj.getTime());
-	if (_.isFunction(obj.clone)) return obj.clone();
-	var clone = _.isArray(obj) ? obj.slice() : _.extend({}, obj);
+function _deepClone( obj, depth ) {
+
+	if ( typeof obj !== 'object' ) return obj;
+	if ( obj === null) return null;
+	if ( _.isString( obj ) ) return obj.splice();
+	if ( _.isDate( obj ) ) return new Date( obj.getTime() );
+	if ( _.isFunction ( obj.clone ) ) return obj.clone();
+	var clone = _.isArray( obj ) ? obj.slice() : _.extend( {}, obj );
 	// clone array's extended props
-	if(_.isArray(obj)){
-	  for(var p in obj){
-		  if(obj.hasOwnProperty(p) && _.isUndefined(clone[p]) && isNaN(p)){
-			  clone[p] = obj[p];
-		  }
-	  }
+	if ( _.isArray( obj ) ) {
+	
+		for ( var p in obj ) {
+		
+			if ( obj.hasOwnProperty( p ) && _.isUndefined( clone[ p ] ) && isNaN( p ) ) clone[ p ] = obj[ p ];
+			
+		}
+		
 	}
-	if (!_.isUndefined(depth) && (depth > 0)) {
-	  for (var key in clone) {
-	    clone[key] = _deepClone(clone[key], depth-1);
+	if ( !_.isUndefined( depth ) && ( depth > 0 ) ) {
+	
+	  for ( var key in clone ) {
+	  
+	    clone[ key ] = _deepClone( clone[ key ], depth - 1 );
+	    
 	  }
+	  
 	}
+	
 	return clone;
+	
 };
 
 
 /*
-
-	Later TODO:
-		Find a way to share vertex buffers between different PixelBox data objects
+ * @author Kirill Edelman
+ * @source https://github.com/kirilledelman/pixelbox
+ * @documentation https://github.com/kirilledelman/pixelbox/wiki
+ * @license MIT
 */
 
 THREE.PixelBoxDepthShader = {
@@ -1416,17 +1687,17 @@ THREE.PixelBoxDepthShader = {
 		"	float pointScaleMult = max(length(vec3(modelMatrix[0][0],modelMatrix[1][0],modelMatrix[2][0] )),",
 		"		max(length(vec3(modelMatrix[0][1],modelMatrix[1][1],modelMatrix[2][1] )),",
 		"		length(vec3(modelMatrix[0][2],modelMatrix[1][2],modelMatrix[2][2] ))));",
-		"	if(projectionMatrix[3][3] == 0.0){",// perspective
+		"	if (projectionMatrix[3][3] == 0.0) {",// perspective
 		"		float fov = 2.0 * atan(1.0 / projectionMatrix[1][1]);",
 		"		gl_PointSize = pointScaleMult * pointSize * 600.0 * fov / pow(gl_Position.w, 1.0 + fov * 0.25);",
 		"	} else {", // ortho
 		"		gl_PointSize = pointScaleMult * pointSize * 6.0;",
 		"	} ",
-		"}"	].join("\n"),
+		"}"	].join( "\n" ),
 
 	fragmentShader: [
 		"varying vec4 vColor;",
-		"float rand(vec2 co){",
+		"float rand(vec2 co) {",
 		"	float a = 12.9898;",
 		"	float b = 78.233;",
 		"   float c = 43758.5453;",
@@ -1442,14 +1713,14 @@ THREE.PixelBoxDepthShader = {
 		"	return res;",
 		"}",
 		"void main() {",
-		"	if(vColor.a < 1.0){",
+		"	if (vColor.a < 1.0) {",
 		"		float a = rand(gl_FragCoord.xy);",
 		"		a = 1.0 - step(vColor.a, a);",
-		"		if(a == 0.0) discard;",
+		"		if (a == 0.0) discard;",
 		"	}",
 		"	gl_FragData[ 0 ] = pack_depth(gl_FragCoord.z);",
 		"}"
-	].join("\n")
+	].join( "\n" )
 
 };
 
@@ -1461,16 +1732,16 @@ THREE.PixelBoxShader = {
 		tintAlpha: 	{ type: "f", value: 1.0 },
 		
 		// point scale
-		pointSize: 	{ type: 'f', value: 1.0 },
+		pointSize: 	{ type: "f", value: 1.0 },
 		
 		// ambient occlusion effect
-		occlusion: 	{ type: 'f', value: 1.0 },
+		occlusion: 	{ type: "f", value: 1.0 },
 		
 		// back facing cull mode
-		cullBack: { type:'i', value: 1 },
+		cullBack: { type:"i", value: 1 },
 		
 		// fog color
-		fogColor:    { type: "c", value: new THREE.Color(0xFFFFFF) },
+		fogColor:    { type: "c", value: new THREE.Color( 0xFFFFFF ) },
 	    fogNear:     { type: "f", value: 100 },
 	    fogFar:      { type: "f", value: 1000 },
 	    
@@ -1489,10 +1760,10 @@ THREE.PixelBoxShader = {
 	},
 
 	attributes: {
-		color:		{	type: 'v4', value: null },
-		normal: 	{	type: 'v3', value: null },
-		occlude:	{	type: 'f', value: null },
-		position:	{	type: 'v3', value: null },
+		color:		{	type: "v4", value: null },
+		normal: 	{	type: "v3", value: null },
+		occlude:	{	type: "f", value: null },
+		position:	{	type: "v3", value: null },
 	},
 
 	vertexShader: [
@@ -1534,7 +1805,7 @@ THREE.PixelBoxShader = {
 		"		return depth;",
 		"	}",
 		
-		"	vec3 getShadowColor(int shIndex, vec4 mPosition){",
+		"	vec3 getShadowColor(int shIndex, vec4 mPosition) {",
 		"		float fDepth;",
 		"		vec3 shadowColor = vec3( 1.0 );",
 		
@@ -1547,47 +1818,47 @@ THREE.PixelBoxShader = {
 		
 		"		if ( frustumTest ) {",
 		"			vec4 rgbaDepth;",
-		"			if(shIndex == 0){",
+		"			if (shIndex == 0) {",
 		"				rgbaDepth = texture2D( shadowMap[ 0 ], shadowCoord.xy );",
 		"			}",
 		"#if MAX_SHADOWS >= 2",
-		"			else if(shIndex == 1){",
+		"			else if (shIndex == 1) {",
 		"				rgbaDepth = texture2D( shadowMap[ 1 ], shadowCoord.xy );",
 		"			}",
 		"#endif",
 		"#if MAX_SHADOWS >= 3",
-		"			else if(shIndex == 2){",
+		"			else if (shIndex == 2) {",
 		"				rgbaDepth = texture2D( shadowMap[ 2 ], shadowCoord.xy );",
 		"			}",
 		"#endif",
 		"#if MAX_SHADOWS >= 4",
-		"			else if(shIndex == 3){",
+		"			else if (shIndex == 3) {",
 		"				rgbaDepth = texture2D( shadowMap[ 3 ], shadowCoord.xy );",
 		"			}",
 		"#endif",
 		"#if MAX_SHADOWS >= 5",
-		"			else if(shIndex == 4){",
+		"			else if (shIndex == 4) {",
 		"				rgbaDepth = texture2D( shadowMap[ 4 ], shadowCoord.xy );",
 		"			}",
 		"#endif",
 		"#if MAX_SHADOWS >= 6",
-		"			else if(shIndex == 5){",
+		"			else if (shIndex == 5) {",
 		"				rgbaDepth = texture2D( shadowMap[ 5 ], shadowCoord.xy );",
 		"			}",
 		"#endif",
 		"#if MAX_SHADOWS >= 7",
-		"			else if(shIndex == 6){",
+		"			else if (shIndex == 6) {",
 		"				rgbaDepth = texture2D( shadowMap[ 6 ], shadowCoord.xy );",
 		"			}",
 		"#endif",
 		"#if MAX_SHADOWS >= 8",
-		"			else if(shIndex == 7){",
+		"			else if (shIndex == 7) {",
 		"				rgbaDepth = texture2D( shadowMap[ 7 ], shadowCoord.xy );",
 		"			}",
 		"#endif",
 		"			float fDepth = unpackDepth( rgbaDepth );",
 		"			shadowCoord.z += shadowBias[ shIndex ];",
-		"			if ( fDepth < shadowCoord.z ){",
+		"			if ( fDepth < shadowCoord.z ) {",
 		"				shadowColor = vec3(0.0);",
 		"			}",
 		
@@ -1639,7 +1910,7 @@ THREE.PixelBoxShader = {
 		"	float brightness = normalLength - 1.0;",
 		"	vec3 vertexNormal = normalize(normalMatrix * normal);",		
 		
-		"	if(cullBack != 0 && vertexNormal.z <= -0.5) { ",
+		"	if (cullBack != 0 && vertexNormal.z <= -0.5) { ",
 		"		vColor = vec4(0.0);",
 		"	} else { ",
 		
@@ -1647,7 +1918,7 @@ THREE.PixelBoxShader = {
 		"#if MAX_POINT_LIGHTS > 0",
 		"vec3 pointDiffuse = vec3( 0.0 );",
 		"for ( int i = 0; i < MAX_POINT_LIGHTS; i ++ ) {",	//
-		"	if(i < actualPointLights){",
+		"	if (i < actualPointLights) {",
 		"	vec4 lPosition = viewMatrix * vec4( pointLightPosition[ i ], 1.0 );",
 		"	vec3 lVector = lPosition.xyz - mvPosition.xyz;",
 		"	float lDistance = 1.0;",
@@ -1655,7 +1926,7 @@ THREE.PixelBoxShader = {
 		"		lDistance = 1.0 - min( ( length( lVector ) / pointLightDistance[ i ] ), 1.0 );",
 		"	lVector = normalize( lVector );",
 		"	float dotProduct = dot( vertexNormal, lVector );",
-		"	if(occlude < 0.0) dotProduct = (1.0 + max(dotProduct, 0.0) + occlude) * 0.5;",
+		"	if (occlude < 0.0) dotProduct = (1.0 + max(dotProduct, 0.0) + occlude) * 0.5;",
 		"	#ifdef WRAP_AROUND",
 		"		float pointDiffuseWeightFull = max( dotProduct, 0.0 );",
 		"		float pointDiffuseWeightHalf = max( 0.5 * dotProduct + 0.5, 0.0 );",
@@ -1677,12 +1948,12 @@ THREE.PixelBoxShader = {
 		"#if MAX_DIR_LIGHTS > 0",
 		"vec3 dirDiffuse = vec3( 0.0 );",
 	
-		"for( int i = 0; i < MAX_DIR_LIGHTS; i ++ ) {", //
-		"	if(i < actualDirLights){",		
+		"for ( int i = 0; i < MAX_DIR_LIGHTS; i ++ ) {", //
+		"	if (i < actualDirLights) {",		
 		"	vec4 lDirection = viewMatrix * vec4( directionalLightDirection[ i ], 0.0 );",
 		"	vec3 dirVector = normalize( lDirection.xyz);",
 		"	float dotProduct = dot(vertexNormal, dirVector);",
-		"	if(occlude < 0.0) dotProduct = (1.0 + max(dotProduct, 0.0) + occlude) * 0.5;",
+		"	if (occlude < 0.0) dotProduct = (1.0 + max(dotProduct, 0.0) + occlude) * 0.5;",
 		"	#ifdef WRAP_AROUND",
 		"		float dirDiffuseWeightFull = max( dotProduct, 0.0 );",
 		"		float dirDiffuseWeightHalf = max( 0.5 * dotProduct + 0.5, 0.0 );",
@@ -1693,7 +1964,7 @@ THREE.PixelBoxShader = {
 		"	thisLight = diffuse * directionalLightColor[ i ] * dirDiffuseWeight;",
 		"#ifdef USE_SHADOWMAP",
 		"	shadowMapIndex = directionalLightShadowMap[ i ];",
-		"	if(shadowMapIndex != 0) {",
+		"	if (shadowMapIndex != 0) {",
 		"		thisLight = thisLight * getShadowColor(shadowMapIndex - 1, mPosition);",
 		"	}",
 		"#endif",
@@ -1706,7 +1977,7 @@ THREE.PixelBoxShader = {
 		"#if MAX_SPOT_LIGHTS > 0",
 		"vec3 spotDiffuse = vec3( 0.0 );",
 		"for ( int i = 0; i < MAX_SPOT_LIGHTS; i ++ ) {", //
-		"	if(i < actualSpotLights){",		
+		"	if (i < actualSpotLights) {",		
 		"	vec4 lPosition = viewMatrix * vec4( spotLightPosition[ i ], 1.0 );",
 		"	vec3 lVector = lPosition.xyz - mvPosition.xyz;//lPosition.xyz + vViewPosition.xyz;",
 		"	float lDistance = 1.0;",
@@ -1718,7 +1989,7 @@ THREE.PixelBoxShader = {
 		"		spotEffect = max( pow( max( spotEffect, 0.0 ), spotLightExponent[ i ] * 0.25 ), 0.0 );",
 				// diffuse
 		"		float dotProduct = dot( vertexNormal, lVector );",
-		"		if(occlude < 0.0) dotProduct = (1.0 + max(dotProduct, 0.0) + occlude) * 0.5;",
+		"		if (occlude < 0.0) dotProduct = (1.0 + max(dotProduct, 0.0) + occlude) * 0.5;",
 		"		#ifdef WRAP_AROUND",
 		"			float spotDiffuseWeightFull = max( dotProduct, 0.0 );",
 		"			float spotDiffuseWeightHalf = max( 0.5 * dotProduct + 0.5, 0.0 );",
@@ -1729,7 +2000,7 @@ THREE.PixelBoxShader = {
 		"		thisLight = diffuse * spotLightColor[ i ] * spotDiffuseWeight * lDistance * spotEffect;",
 		"#ifdef USE_SHADOWMAP",
 		"		shadowMapIndex = spotLightShadowMap[ i ];",
-		"		if(shadowMapIndex != 0) {",
+		"		if (shadowMapIndex != 0) {",
 		"			thisLight = thisLight * getShadowColor(shadowMapIndex - 1, mPosition);",
 		"		}",			
 		"#endif",
@@ -1743,12 +2014,12 @@ THREE.PixelBoxShader = {
 		// hemi
 		"#if MAX_HEMI_LIGHTS > 0",
 		"vec3 hemiDiffuse = vec3( 0.0 );",
-		"for( int i = 0; i < MAX_HEMI_LIGHTS; i ++ ) {", //
-		"	if(i < actualHemiLights){",		
+		"for ( int i = 0; i < MAX_HEMI_LIGHTS; i ++ ) {", //
+		"	if (i < actualHemiLights) {",		
 		"	vec4 lDirection = viewMatrix * vec4( hemisphereLightDirection[ i ], 0.0 );",
 		"	vec3 lVector = normalize( lDirection.xyz );",
 		"	float dotProduct = dot( vertexNormal, lVector );",
-		"	if(occlude < 0.0) dotProduct = (1.0 + max(dotProduct, 0.0) + occlude) * 0.5;",
+		"	if (occlude < 0.0) dotProduct = (1.0 + max(dotProduct, 0.0) + occlude) * 0.5;",
 		"	float hemiDiffuseWeight = 0.5 * dotProduct + 0.5;",
 		"	vec3 hemiColor = mix( hemisphereLightGroundColor[ i ], hemisphereLightSkyColor[ i ], hemiDiffuseWeight );",
 		"	hemiDiffuse += diffuse * hemiColor;",
@@ -1771,17 +2042,13 @@ THREE.PixelBoxShader = {
 		"		max(length(vec3(modelMatrix[0][1],modelMatrix[1][1],modelMatrix[2][1] )),",
 		"		length(vec3(modelMatrix[0][2],modelMatrix[1][2],modelMatrix[2][2] ))));",
 		"	gl_PointSize = pointScaleMult * viewPortScale * pointSize / gl_Position.w;",
-		"}"	].join("\n"),
-/*
-var sx = length(vec3( modelMatrix[ 0 ], modelMatrix[ 1 ], modelMatrix[ 2 ] ));
-		var sy = this.set( m.elements[ 4 ], m.elements[ 5 ], m.elements[  6 ] ).length();
-		var sz = this.set( m.elements[ 8 ], m.elements[ 9 ], m.elements[ 10 ] ).length();*/
+		"}"	].join( "\n" ),
 		
 	fragmentShader: [
 		"varying vec4 vColor;",
 		"uniform float stipple;",
 		
-		"float rand(vec2 co){",
+		"float rand(vec2 co) {",
 		"	float a = 12.9898;",
 		"	float b = 78.233;",
 		"   float c = 43758.5453;",
@@ -1791,19 +2058,19 @@ var sx = length(vec3( modelMatrix[ 0 ], modelMatrix[ 1 ], modelMatrix[ 2 ] ));
 		"}",
 		"void main() {",
 		"	float s = 1.0; ",
-		"	if(stipple != 0.0){ ",
+		"	if (stipple != 0.0) { ",
 		"		vec2 stip = fract( vec2(gl_FragCoord.x + stipple, gl_FragCoord.y) * 0.5);",
 		"		s = step(0.25,abs(stip.x-stip.y));",
 		"	}",
-		"	if(vColor.a == 0.0 || s == 0.0) discard;",
-		"	else if(vColor.a < 1.0){",
+		"	if (vColor.a == 0.0 || s == 0.0) discard;",
+		"	else if (vColor.a < 1.0) {",
 		"		float a = rand(gl_FragCoord.xy);",
 		"		a = s * (1.0 - step(vColor.a, a));",
-		"		if(a == 0.0) discard;",
+		"		if (a == 0.0) discard;",
 		"	}",		
 		"	gl_FragColor = vec4(vColor.rgb, 1.0);",
 		"}"
-	].join("\n")
+	].join( "\n" )
 
 };
 
@@ -1816,7 +2083,7 @@ THREE.PixelBoxMeshShader = {
 		brightness: { type: "f", value: 0.0 },
 		
 		// fog color
-		fogColor:    { type: "c", value: new THREE.Color(0xFFFFFF) },
+		fogColor:    { type: "c", value: new THREE.Color( 0xFFFFFF ) },
 	    fogNear:     { type: "f", value: 100 },
 	    fogFar:      { type: "f", value: 1000 },
 	    
@@ -1832,7 +2099,7 @@ THREE.PixelBoxMeshShader = {
 		spotLightShadowMap: { type: "iv1", value: [] }
 	},
 
-	attributes: { },
+	attributes: {},
 
 	vertexShader: [
 	"varying vec3 vViewPosition;",
@@ -1852,7 +2119,7 @@ THREE.PixelBoxMeshShader = {
 	
 	"	gl_Position = projectionMatrix * mvPosition;",
 	"}"
-	].join("\n"),
+	].join( "\n" ),
 	
 	fragmentShader: [
 	"uniform vec3 tintColor;",
@@ -1888,11 +2155,11 @@ THREE.PixelBoxMeshShader = {
 	"		return depth;",
 	"	}",
 	
-	"	vec3 getShadowColor(int shadowIndex, vec4 mPosition){",
+	"	vec3 getShadowColor(int shadowIndex, vec4 mPosition) {",
 	"		vec3 shadowColor = vec3(1.0);",
 	"		float fDepth;",
 	
-	"		if(shadowIndex == 0){",
+	"		if (shadowIndex == 0) {",
 	"			vec4 sm = shadowMatrix[ 0 ] * mPosition;",
 	"			vec3 shadowCoord = sm.xyz / sm.w;",
 	"			bvec4 inFrustumVec = bvec4 ( shadowCoord.x >= 0.0, shadowCoord.x <= 1.0, shadowCoord.y >= 0.0, shadowCoord.y <= 1.0 );",
@@ -1902,14 +2169,14 @@ THREE.PixelBoxMeshShader = {
 	"			if ( frustumTest ) {",
 	"				shadowCoord.z += shadowBias[ 0 ];",
 	"				float fDepth = unpackDepth( texture2D( shadowMap[ 0 ], shadowCoord.xy ) );",
-	"				if ( fDepth < shadowCoord.z ){",
+	"				if ( fDepth < shadowCoord.z ) {",
 	"					shadowColor = vec3(0.0);",
 	"				}",
 	"			}",
 	"		} ",
 	"#if MAX_SHADOWS >= 2",
 	"		else ",
-	"		if(shadowIndex == 1){",
+	"		if (shadowIndex == 1) {",
 	"			vec4 sm = shadowMatrix[ 1 ] * mPosition;",
 	"			vec3 shadowCoord = sm.xyz / sm.w;",
 	"			bvec4 inFrustumVec = bvec4 ( shadowCoord.x >= 0.0, shadowCoord.x <= 1.0, shadowCoord.y >= 0.0, shadowCoord.y <= 1.0 );",
@@ -1919,7 +2186,7 @@ THREE.PixelBoxMeshShader = {
 	"			if ( frustumTest ) {",
 	"				shadowCoord.z += shadowBias[ 1 ];",
 	"				float fDepth = unpackDepth( texture2D( shadowMap[ 1 ], shadowCoord.xy ) );",
-	"				if ( fDepth < shadowCoord.z ){",
+	"				if ( fDepth < shadowCoord.z ) {",
 	"					shadowColor = vec3(0.0);",
 	"				}",
 	"			}",
@@ -1927,7 +2194,7 @@ THREE.PixelBoxMeshShader = {
 	"#endif",
 	"#if MAX_SHADOWS >= 3",
 	"		else ",
-	"		if(shadowIndex == 2){",
+	"		if (shadowIndex == 2) {",
 	"			vec4 sm = shadowMatrix[ 2 ] * mPosition;",
 	"			vec3 shadowCoord = sm.xyz / sm.w;",
 	"			bvec4 inFrustumVec = bvec4 ( shadowCoord.x >= 0.0, shadowCoord.x <= 1.0, shadowCoord.y >= 0.0, shadowCoord.y <= 1.0 );",
@@ -1937,7 +2204,7 @@ THREE.PixelBoxMeshShader = {
 	"			if ( frustumTest ) {",
 	"				shadowCoord.z += shadowBias[ 2 ];",
 	"				float fDepth = unpackDepth( texture2D( shadowMap[ 2 ], shadowCoord.xy ) );",
-	"				if ( fDepth < shadowCoord.z ){",
+	"				if ( fDepth < shadowCoord.z ) {",
 	"					shadowColor = vec3(0.0);",
 	"				}",
 	"			}",
@@ -1945,7 +2212,7 @@ THREE.PixelBoxMeshShader = {
 	"#endif",
 	"#if MAX_SHADOWS >= 4",
 	"		else ",
-	"		if(shadowIndex == 3){",
+	"		if (shadowIndex == 3) {",
 	"			vec4 sm = shadowMatrix[ 3 ] * mPosition;",
 	"			vec3 shadowCoord = sm.xyz / sm.w;",
 	"			bvec4 inFrustumVec = bvec4 ( shadowCoord.x >= 0.0, shadowCoord.x <= 1.0, shadowCoord.y >= 0.0, shadowCoord.y <= 1.0 );",
@@ -1955,7 +2222,7 @@ THREE.PixelBoxMeshShader = {
 	"			if ( frustumTest ) {",
 	"				shadowCoord.z += shadowBias[ 3 ];",
 	"				float fDepth = unpackDepth( texture2D( shadowMap[ 3 ], shadowCoord.xy ) );",
-	"				if ( fDepth < shadowCoord.z ){",
+	"				if ( fDepth < shadowCoord.z ) {",
 	"					shadowColor = vec3(0.0);",
 	"				}",
 	"			}",
@@ -1963,7 +2230,7 @@ THREE.PixelBoxMeshShader = {
 	"#endif",
 	"#if MAX_SHADOWS >= 5",
 	"		else ",
-	"		if(shadowIndex == 4){",
+	"		if (shadowIndex == 4) {",
 	"			vec4 sm = shadowMatrix[ 4 ] * mPosition;",
 	"			vec3 shadowCoord = sm.xyz / sm.w;",
 	"			bvec4 inFrustumVec = bvec4 ( shadowCoord.x >= 0.0, shadowCoord.x <= 1.0, shadowCoord.y >= 0.0, shadowCoord.y <= 1.0 );",
@@ -1973,7 +2240,7 @@ THREE.PixelBoxMeshShader = {
 	"			if ( frustumTest ) {",
 	"				shadowCoord.z += shadowBias[ 4 ];",
 	"				float fDepth = unpackDepth( texture2D( shadowMap[ 4 ], shadowCoord.xy ) );",
-	"				if ( fDepth < shadowCoord.z ){",
+	"				if ( fDepth < shadowCoord.z ) {",
 	"					shadowColor = vec3(0.0);",
 	"				}",
 	"			}",
@@ -1981,7 +2248,7 @@ THREE.PixelBoxMeshShader = {
 	"#endif",
 	"#if MAX_SHADOWS >= 6",
 	"		else ",
-	"		if(shadowIndex == 5){",
+	"		if (shadowIndex == 5) {",
 	"			vec4 sm = shadowMatrix[ 5 ] * mPosition;",
 	"			vec3 shadowCoord = sm.xyz / sm.w;",
 	"			bvec4 inFrustumVec = bvec4 ( shadowCoord.x >= 0.0, shadowCoord.x <= 1.0, shadowCoord.y >= 0.0, shadowCoord.y <= 1.0 );",
@@ -1991,7 +2258,7 @@ THREE.PixelBoxMeshShader = {
 	"			if ( frustumTest ) {",
 	"				shadowCoord.z += shadowBias[ 5 ];",
 	"				float fDepth = unpackDepth( texture2D( shadowMap[ 5 ], shadowCoord.xy ) );",
-	"				if ( fDepth < shadowCoord.z ){",
+	"				if ( fDepth < shadowCoord.z ) {",
 	"					shadowColor = vec3(0.0);",
 	"				}",
 	"			}",
@@ -1999,7 +2266,7 @@ THREE.PixelBoxMeshShader = {
 	"#endif",
 	"#if MAX_SHADOWS >= 7",
 	"		else ",
-	"		if(shadowIndex == 6){",
+	"		if (shadowIndex == 6) {",
 	"			vec4 sm = shadowMatrix[ 6 ] * mPosition;",
 	"			vec3 shadowCoord = sm.xyz / sm.w;",
 	"			bvec4 inFrustumVec = bvec4 ( shadowCoord.x >= 0.0, shadowCoord.x <= 1.0, shadowCoord.y >= 0.0, shadowCoord.y <= 1.0 );",
@@ -2009,7 +2276,7 @@ THREE.PixelBoxMeshShader = {
 	"			if ( frustumTest ) {",
 	"				shadowCoord.z += shadowBias[ 6 ];",
 	"				float fDepth = unpackDepth( texture2D( shadowMap[ 6 ], shadowCoord.xy ) );",
-	"				if ( fDepth < shadowCoord.z ){",
+	"				if ( fDepth < shadowCoord.z ) {",
 	"					shadowColor = vec3(0.0);",
 	"				}",
 	"			}",
@@ -2017,7 +2284,7 @@ THREE.PixelBoxMeshShader = {
 	"#endif",
 	"#if MAX_SHADOWS >= 8",
 	"		else ",
-	"		if(shadowIndex == 7){",
+	"		if (shadowIndex == 7) {",
 	"			vec4 sm = shadowMatrix[ 7 ] * mPosition;",
 	"			vec3 shadowCoord = sm.xyz / sm.w;",
 	"			bvec4 inFrustumVec = bvec4 ( shadowCoord.x >= 0.0, shadowCoord.x <= 1.0, shadowCoord.y >= 0.0, shadowCoord.y <= 1.0 );",
@@ -2027,7 +2294,7 @@ THREE.PixelBoxMeshShader = {
 	"			if ( frustumTest ) {",
 	"				shadowCoord.z += shadowBias[ 7 ];",
 	"				float fDepth = unpackDepth( texture2D( shadowMap[ 7 ], shadowCoord.xy ) );",
-	"				if ( fDepth < shadowCoord.z ){",
+	"				if ( fDepth < shadowCoord.z ) {",
 	"					shadowColor = vec3(0.0);",
 	"				}",
 	"			}",
@@ -2067,7 +2334,7 @@ THREE.PixelBoxMeshShader = {
 	"uniform float pointLightDistance[ MAX_POINT_LIGHTS ];",
 	"#endif",
 
-	"float rand(vec2 co){",
+	"float rand(vec2 co) {",
 	"	float a = 12.9898;",
 	"	float b = 78.233;",
 	"   float c = 43758.5453;",
@@ -2079,15 +2346,15 @@ THREE.PixelBoxMeshShader = {
 	"void main() {",
 	//	stipple and alpha
 	"	float s = 1.0; ",
-	"	if(stipple != 0.0){ ",
+	"	if (stipple != 0.0) { ",
 	"		vec2 stip = fract( vec2(gl_FragCoord.x + stipple, gl_FragCoord.y) * 0.5);",
 	"		s = step(0.25,abs(stip.x-stip.y));",
 	"	}",
-	"	if(tintAlpha == 0.0 || s == 0.0) discard;",
-	"	else if(tintAlpha < 1.0){",
+	"	if (tintAlpha == 0.0 || s == 0.0) discard;",
+	"	else if (tintAlpha < 1.0) {",
 	"		float a = rand(gl_FragCoord.xy);",
 	"		a = s * (1.0 - step(tintAlpha, a));",
-	"		if(a == 0.0) discard;",
+	"		if (a == 0.0) discard;",
 	"	}",
 	
 	"	vec3 diffuse = tintColor;",
@@ -2102,7 +2369,7 @@ THREE.PixelBoxMeshShader = {
 	"#if MAX_POINT_LIGHTS > 0",
 	"vec3 pointDiffuse = vec3( 0.0 );",
 	"for ( int i = 0; i < MAX_POINT_LIGHTS; i ++ ) {",	//
-	"	if(i < actualPointLights){",
+	"	if (i < actualPointLights) {",
 	"	vec4 lPosition = viewMatrix * vec4( pointLightPosition[ i ], 1.0 );",
 	"	vec3 lVector = lPosition.xyz - mvPosition.xyz;",
 	"	float lDistance = 1.0;",
@@ -2131,8 +2398,8 @@ THREE.PixelBoxMeshShader = {
 	"#if MAX_DIR_LIGHTS > 0",
 	"vec3 dirDiffuse = vec3( 0.0 );",
 
-	"for( int i = 0; i < MAX_DIR_LIGHTS; i ++ ) {", //
-	"	if(i < actualDirLights){",		
+	"for ( int i = 0; i < MAX_DIR_LIGHTS; i ++ ) {", //
+	"	if (i < actualDirLights) {",		
 	"	vec4 lDirection = viewMatrix * vec4( directionalLightDirection[ i ], 0.0 );",
 	"	vec3 dirVector = normalize( lDirection.xyz);",
 	"	float dotProduct = dot(vertexNormal, dirVector);",
@@ -2146,7 +2413,7 @@ THREE.PixelBoxMeshShader = {
 	"	thisLight = diffuse * directionalLightColor[ i ] * dirDiffuseWeight;",
 	"#ifdef USE_SHADOWMAP",
 	"	shadowMapIndex = directionalLightShadowMap[ i ];",
-	"	if(shadowMapIndex != 0) {",
+	"	if (shadowMapIndex != 0) {",
 	"		thisLight = thisLight * getShadowColor(shadowMapIndex - 1, mPosition);",
 	"	}",
 	"#endif",
@@ -2159,7 +2426,7 @@ THREE.PixelBoxMeshShader = {
 	"#if MAX_SPOT_LIGHTS > 0",
 	"vec3 spotDiffuse = vec3( 0.0 );",
 	"for ( int i = 0; i < MAX_SPOT_LIGHTS; i ++ ) {", //
-	"	if(i < actualSpotLights){",		
+	"	if (i < actualSpotLights) {",		
 	"	vec4 lPosition = viewMatrix * vec4( spotLightPosition[ i ], 1.0 );",
 	"	vec3 lVector = lPosition.xyz - mvPosition.xyz;//lPosition.xyz + vViewPosition.xyz;",
 	"	float lDistance = 1.0;",
@@ -2181,7 +2448,7 @@ THREE.PixelBoxMeshShader = {
 	"		thisLight = diffuse * spotLightColor[ i ] * spotDiffuseWeight * lDistance * spotEffect;",
 	"#ifdef USE_SHADOWMAP",
 	"		shadowMapIndex = spotLightShadowMap[ i ];",
-	"		if(shadowMapIndex != 0) {",
+	"		if (shadowMapIndex != 0) {",
 	"			thisLight = thisLight * getShadowColor(shadowMapIndex - 1, mPosition);",
 	"		}",			
 	"#endif",
@@ -2195,8 +2462,8 @@ THREE.PixelBoxMeshShader = {
 	// hemi
 	"#if MAX_HEMI_LIGHTS > 0",
 	"vec3 hemiDiffuse = vec3( 0.0 );",
-	"for( int i = 0; i < MAX_HEMI_LIGHTS; i ++ ) {", //
-	"	if(i < actualHemiLights){",		
+	"for ( int i = 0; i < MAX_HEMI_LIGHTS; i ++ ) {", //
+	"	if (i < actualHemiLights) {",		
 	"	vec4 lDirection = viewMatrix * vec4( hemisphereLightDirection[ i ], 0.0 );",
 	"	vec3 lVector = normalize( lDirection.xyz );",
 	"	float dotProduct = dot( vertexNormal, lVector );",
@@ -2216,27 +2483,28 @@ THREE.PixelBoxMeshShader = {
 	// fog
 	"gl_FragColor = vec4(mix(totalDiffuse + addColor, fogColor, fogFactor), 1.0);",
 	"}"
-	].join("\n")	
+	].join( "\n" )	
 };
 
-THREE.MeshPixelBoxMaterial = function(params){
-	var material = new THREE.ShaderMaterial({
-		uniforms:       THREE.UniformsUtils.merge([THREE.UniformsLib['shadowmap'],THREE.UniformsLib['lights'],THREE.PixelBoxMeshShader.uniforms]),
+THREE.MeshPixelBoxMaterial = function ( params ) {
+
+	var material = new THREE.ShaderMaterial( {
+		uniforms:       THREE.UniformsUtils.merge( [ THREE.UniformsLib[ 'shadowmap' ], THREE.UniformsLib[ 'lights' ], THREE.PixelBoxMeshShader.uniforms ] ),
 		attributes:     THREE.PixelBoxMeshShader.attributes,
 		vertexShader:   THREE.PixelBoxMeshShader.vertexShader,
 		fragmentShader: THREE.PixelBoxMeshShader.fragmentShader,
 		transparent: false,
 		lights: true,
-		fog:true
+		fog: true
 	});
 	
-	function param(pname, defaultValue){ if(params && params[pname] != undefined) return params[pname]; return defaultValue; }
+	function param ( pname, defaultValue ) { if ( params && params[ pname ] != undefined ) return params[ pname ]; return defaultValue; }
 	
 	var uniforms = material.uniforms;
-	uniforms.tintColor.value.set(param('tint', 0xffffff));
-	uniforms.addColor.value.set(param('addColor', 0x0));
-	uniforms.tintAlpha.value = param('alpha', 1.0);
-	uniforms.brightness.value = param('brightness', 0.0);
+	uniforms.tintColor.value.set( param( 'tint', 0xffffff ) );
+	uniforms.addColor.value.set( param( 'addColor', 0x0 ) );
+	uniforms.tintAlpha.value = param( 'alpha', 1.0 );
+	uniforms.brightness.value = param( 'brightness', 0.0 );
 	
 	// share uniforms with prototype
 	uniforms.actualHemiLights = THREE.PixelBoxUtil.material.uniforms.actualHemiLights;
@@ -2246,32 +2514,34 @@ THREE.MeshPixelBoxMaterial = function(params){
 	uniforms.directionalLightShadowMap = THREE.PixelBoxUtil.material.uniforms.directionalLightShadowMap;
 	uniforms.spotLightShadowMap = THREE.PixelBoxUtil.material.uniforms.spotLightShadowMap;
 	
-	Object.defineProperty(material, 'tint', {
-		get: function(){ return this.uniforms.tintColor.value; },
-		set: function(v){ this.uniforms.tintColor.value.copy(v); },
-	});
-	Object.defineProperty(material, 'addColor', {
-		get: function(){ return this.uniforms.addColor.value; },
-		set: function(v){ this.uniforms.addColor.value.copy(v); },
-	});
-	Object.defineProperty(material, 'alpha', {
-		get: function(){ return this.uniforms.tintAlpha.value; },
-		set: function(v){ this.uniforms.tintAlpha.value = v; },
-	});
-	Object.defineProperty(material, 'brightness', {
-		get: function(){ return this.uniforms.brightness.value; },
-		set: function(v){ this.uniforms.brightness.value = v; },
-	});
-	Object.defineProperty(material, 'stipple', {
-		get: function(){ return this.uniforms.stipple.value; },
-		set: function(v){ this.uniforms.stipple.value = v; },
-	});
+	Object.defineProperty( material, 'tint', {
+		get: function () { return this.uniforms.tintColor.value; },
+		set: function ( v ) { this.uniforms.tintColor.value.copy( v ); },
+	} );
+	Object.defineProperty( material, 'addColor', {
+		get: function () { return this.uniforms.addColor.value; },
+		set: function ( v ) { this.uniforms.addColor.value.copy( v ); },
+	} );
+	Object.defineProperty( material, 'alpha', {
+		get: function () { return this.uniforms.tintAlpha.value; },
+		set: function ( v ) { this.uniforms.tintAlpha.value = v; },
+	} );
+	Object.defineProperty( material, 'brightness', {
+		get: function () { return this.uniforms.brightness.value; },
+		set: function ( v ) { this.uniforms.brightness.value = v; },
+	} );
+	Object.defineProperty( material, 'stipple', {
+		get: function () { return this.uniforms.stipple.value; },
+		set: function ( v ) { this.uniforms.stipple.value = v; },
+	} );
 	
-	return material;	
+	return material;
+		
 };
 
-THREE.PixelBox = function(data){
-	function param(pname, defaultValue){ if(data[pname] != undefined) return data[pname]; return defaultValue; }
+THREE.PixelBox = function ( data ) {
+
+	function param ( pname, defaultValue ) { if ( data[ pname ] != undefined ) return data[ pname ]; return defaultValue; }
 
 	// clone base materials
 	var material = THREE.PixelBoxUtil.material.clone();
@@ -2292,20 +2562,23 @@ THREE.PixelBox = function(data){
 	depthMaterial.uniforms.pointSize = material.uniforms.pointSize;
 	
 	// these uniforms' defaults come from data object
-	material.uniforms.occlusion.value = param('occlusion', 1.0);
-	material.uniforms.pointSize.value = param('pointSize', 1.0);
-	material.uniforms.cullBack.value = param('cullBack', true);
+	material.uniforms.occlusion.value = param( 'occlusion', 1.0 );
+	material.uniforms.pointSize.value = param( 'pointSize', 1.0 );
+	material.uniforms.cullBack.value = param( 'cullBack', true );
 		
 	// create geometry
 	var geometry = new THREE.BufferGeometry();
 	
 	// create pivot
-	this._pivot = new THREE.Vector3(data.width * 0.5, data.height * 0.5, data.depth * 0.5);	
+	this._pivot = new THREE.Vector3( data.width * 0.5, data.height * 0.5, data.depth * 0.5 );
 	
 	// bounding sphere respect pivot
-	geometry.computeBoundingSphere = function(){
-		if (this.geometry.boundingSphere === null ) {
+	geometry.computeBoundingSphere = function () {
+	
+		if ( this.geometry.boundingSphere === null ) {
+		
 			this.geometry.boundingSphere = new THREE.Sphere();
+			
 		}
 		
 		this.geometry.boundingSphere.center.set(
@@ -2313,26 +2586,27 @@ THREE.PixelBox = function(data){
 			this.geometry.data.height * 0.5 - this._pivot.y,
 			this.geometry.data.depth * 0.5 - this._pivot.z
 		);
-		this.geometry.boundingSphere.radius = 0.5 * Math.max(this.geometry.data.width, this.geometry.data.depth, this.geometry.data.height);
-	}.bind(this);
+		
+		this.geometry.boundingSphere.radius = 0.5 * Math.max( this.geometry.data.width, this.geometry.data.depth, this.geometry.data.height );
+		
+	}.bind( this );
 
 	// bounding box respect pivot
-	geometry.computeBoundingBox = function() {
-		if ( this.geometry.boundingBox === null ) {
-			this.geometry.boundingBox = new THREE.Box3();
-		}
+	geometry.computeBoundingBox = function () {
+	
+		if ( this.geometry.boundingBox === null ) this.geometry.boundingBox = new THREE.Box3();
 
-		this.geometry.boundingBox.min.set(0,0,0);
-		this.geometry.boundingBox.max.set(this.geometry.data.width, this.geometry.data.height, this.geometry.data.depth);
-		this.geometry.boundingBox.translate(this._pivot.clone().multiplyScalar(-1));
+		this.geometry.boundingBox.min.set( 0,0,0 );
+		this.geometry.boundingBox.max.set( this.geometry.data.width, this.geometry.data.height, this.geometry.data.depth );
+		this.geometry.boundingBox.translate( this._pivot.clone().multiplyScalar( -1 ) );
 		
-	}.bind(this);
+	}.bind( this );
 	
 	// process data
-	THREE.PixelBoxUtil.processPixelBoxFrames(data);
+	THREE.PixelBoxUtil.processPixelBoxFrames( data );
 	
 	// init as PointCloud
-	THREE.PointCloud.call(this, geometry, material);
+	THREE.PointCloud.call( this, geometry, material );
 
 	this.customDepthMaterial = depthMaterial;
 	this.castShadow = true;
@@ -2340,98 +2614,132 @@ THREE.PixelBox = function(data){
 	
 	// create anchors
 	this.anchors = {};
-	if(data.anchors){
-		for(var aname in data.anchors){
-			if(aname == 'PIVOT') { 
-				this._pivot.set(data.anchors[aname][0].x, data.anchors[aname][0].y, data.anchors[aname][0].z);
+	if ( data.anchors ) {
+	
+		for ( var aname in data.anchors ) {
+		
+			if ( aname == 'PIVOT' ) { 
+			
+				this._pivot.set( data.anchors[ aname ][ 0 ].x, data.anchors[ aname ][ 0 ].y, data.anchors[ aname ][ 0 ].z );
 				continue;
+				
 			}
+			
 			var obj3d = new THREE.Object3D();
 			obj3d.isContainer = true;
 			obj3d.detached = false;
 			obj3d.isAnchor = true;
 			obj3d.name = aname;
 			obj3d.visible = false;
-			this.add(obj3d);
-			this.anchors[aname] = obj3d;
+			this.add( obj3d );
+			this.anchors[ aname ] = obj3d;
+			
 		}
+		
 	} else {
+	
 		data.anchors = {};
+		
 	}
 	
 	// create frame setter on pointcloud
 	geometry.data = data;
 	geometry._frame = -1;
-	Object.defineProperty(this, 'frame', {
-	get: (function(){ return this.geometry._frame; }),
-	set: (function(f){
-		var geom = this.geometry;
-		var data = geom.data;
-		 
-		// validate frame
-		if(f == geom._frame || !data.frameData.length) return;
-		if(f < 0) throw (data.name + " frame " + f + " is out of range");
-		f = f % data.frameData.length;
-		geom._frame = f;
+	
+	Object.defineProperty( this, 'frame', {
+		get: (function () { return this.geometry._frame; }),
+		set: (function ( f ) {
 		
-		// init buffer if needed
-		var fd = data.frameData[f];
-		if(fd.p){
-			// add attributes
-			geom.addAttribute( 'position', fd.p);
-			geom.addAttribute( 'color', fd.c);
-			geom.addAttribute( 'normal', fd.n);
-			geom.addAttribute( 'occlude', fd.o);
+			var geom = this.geometry;
+			var data = geom.data;
+			 
+			// validate frame
+			if ( f == geom._frame || !data.frameData.length ) return;
+			if ( f < 0 ) f = data.frameData.length + ( f % data.frameData.length );
+			f = f % data.frameData.length;
+			geom._frame = f;
 			
-			// create buffers if needed
-			if(!fd.p.buffer){
-				var _gl = renderer.webgl.context;
-				for (var name in geom.attributes) {
-					var bufferType = ( name === 'index' ) ? _gl.ELEMENT_ARRAY_BUFFER : _gl.ARRAY_BUFFER;
-					var attribute = geom.attributes[ name ];
-					if(!attribute.buffer){
-						attribute.buffer = _gl.createBuffer();
-						var res = _gl.bindBuffer( bufferType, attribute.buffer );
-						_gl.bufferData( bufferType, attribute.array, _gl.STATIC_DRAW );
-					}
-				}
-			}
-		}
-		
-		// set offset/length
-		// regular frame
-		if(fd.s != undefined){
-			geom.offsets = [ { index: fd.s, count: fd.l } ];
-		// no offsets stored, use full range (editor)
-		} else if(fd.o){
-			geom.offsets = [];
-		}
-		
-		var ev = {type:'frame', frame: f};
-		this.dispatchEvent(ev); ev = null;
-		
-		var degToRad = Math.PI/180.0;
-		
-		// update anchors
-		for(var aname in this.anchors){
-			var anchor = this.anchors[aname];
-			var adata = data.anchors[aname][f];
-			if(!anchor.detached){
-				anchor.visible = !!adata.on;
-				anchor.position.set(adata.x - this._pivot.x, adata.y - this._pivot.y, adata.z - this._pivot.z);
-				anchor.rotation.set(adata.rx * degToRad, adata.ry * degToRad, adata.rz * degToRad);
-				anchor.scale.set(adata.sx || 0.00001, adata.sy || 0.00001, adata.sz || 0.00001);
-				anchor.updateMatrixWorld(true);
+			// init buffer if needed
+			var fd = data.frameData[ f ];
+			
+			if ( fd.p ) {
+			
+				// add attributes
+				geom.addAttribute( 'position', fd.p );
+				geom.addAttribute( 'color', fd.c );
+				geom.addAttribute( 'normal', fd.n );
+				geom.addAttribute( 'occlude', fd.o );
 				
-				if(adata.meta.length) { 
-					var ev = {type:'anchor-meta', frame:f, anchor: anchor, meta:adata.meta };
-					this.dispatchEvent(ev); ev = null;
+				// create buffers if needed
+				if ( !fd.p.buffer ) {
+				
+					var _gl = renderer.webgl.context;
+					
+					for ( var name in geom.attributes ) {
+					
+						var bufferType = ( name === 'index' ) ? _gl.ELEMENT_ARRAY_BUFFER : _gl.ARRAY_BUFFER;
+						var attribute = geom.attributes[ name ];
+						
+						if ( !attribute.buffer ) {
+						
+							attribute.buffer = _gl.createBuffer();
+							var res = _gl.bindBuffer( bufferType, attribute.buffer );
+							_gl.bufferData( bufferType, attribute.array, _gl.STATIC_DRAW );
+							
+						}
+						
+					}
+					
 				}
+				
 			}
-		}
+			
+			// set offset/length
+			// regular frame
+			if ( fd.s != undefined ) {
+			
+				geom.offsets = [ { index: fd.s, count: fd.l } ];
+				
+			// no offsets stored, use full range (editor)
+			} else if ( fd.o ) {
+			
+				geom.offsets = [];
+				
+			}
+			
+			var ev = { type:'frame', frame: f };
+			this.dispatchEvent( ev );
+			
+			var degToRad = Math.PI / 180.0;
+			
+			// update anchors
+			for ( var aname in this.anchors ) {
+			
+				var anchor = this.anchors[ aname ];
+				var adata = data.anchors[ aname ][ f ];
+				
+				if ( !anchor.detached ) {
+				
+					anchor.visible = !!adata.on;
+					anchor.position.set( adata.x - this._pivot.x, adata.y - this._pivot.y, adata.z - this._pivot.z );
+					anchor.rotation.set( adata.rx * degToRad, adata.ry * degToRad, adata.rz * degToRad );
+					anchor.scale.set( adata.sx || 0.00001, adata.sy || 0.00001, adata.sz || 0.00001 );
+					anchor.updateMatrixWorld( true );
+					
+					if ( adata.meta.length ) {
+					
+						var ev = { type:'anchor-meta', frame:f, anchor: anchor, meta:adata.meta };
+						this.dispatchEvent( ev );
+						
+					}
+					
+				}
+				
+			}
 		
-		}),
-	});	
+		} )
+		
+	} );	
 	
 	// set frame / anim params
 	this.vertexBufferStart = 0;
@@ -2440,124 +2748,157 @@ THREE.PixelBox = function(data){
 	this.totalFrames = data.frameData.length;
 
 	// dispose function
-	this.dispose = function(unloadAsset){
-		if(this.geometry){
-			if(unloadAsset){
-				if(this.geometry.data){
-					THREE.PixelBoxUtil.dispose(this.geometry.data);
+	this.dispose = function ( unloadAsset ) {
+	
+		if ( this.geometry ) {
+		
+			if ( unloadAsset ) {
+			
+				if ( this.geometry.data ) {
+				
+					THREE.PixelBoxUtil.dispose( this.geometry.data );
 					delete this.geometry.data;
+					
 				}
+				
 				this.geometry.dispose();
+				
 			}
+			
 			delete this.geometry;
 			this.material.dispose();
+			
 		}
+		
 	};
 	
 	// add animation functions
 	this.currentAnimation = null;
 	this._animSpeed = 1.0;
-	Object.defineProperty(this, 'animSpeed', {
-		get: function(){ return this._animSpeed; },
-		set: function(v){ 
+	
+	Object.defineProperty( this, 'animSpeed', {
+		get: function () { return this._animSpeed; },
+		set: function ( v ) {
+		
 			this._animSpeed = v;
+			
 			// reset timer
-			if(this._animationInterval && this.currentAnimation){
-				var nextFrameIn = 1.0 / (Math.abs(v ? v : 0.001) * this.currentAnimation.fps);
-				clearTimeout(this._animationInterval);
-				this._animationInterval = setTimeout(this.advanceAnimationFrame, nextFrameIn * 1000);
+			if ( this._animationInterval && this.currentAnimation ) {
+			
+				var nextFrameIn = 1.0 / (Math.abs( v ? v : 0.001 ) * this.currentAnimation.fps);
+				clearTimeout( this._animationInterval );
+				this._animationInterval = setTimeout( this.advanceAnimationFrame, nextFrameIn * 1000 );
+				
 			}
-		},
-	});
+			
+		}
+		
+	} );
+	
 	this._animationInterval = 0;
 	this._animLoops = -1;
 	this._currentAnimationPosition = 0;
-	Object.defineProperty(this, 'currentAnimationPosition', {
-		get: function(){ return this._currentAnimationPosition; },
-		set: function(v){ // set frame according to anim position
-			v = Math.min(1, Math.max(0, v));
-			var f =  Math.min(this.currentAnimation.length - 1, Math.floor(v * this.currentAnimation.length));
-			if(this.animSpeed < 0){ // backwards
+	
+	Object.defineProperty( this, 'currentAnimationPosition', {
+		get: function () { return this._currentAnimationPosition; },
+		set: function ( v ) { // set frame according to anim position
+		
+			v = Math.min( 1, Math.max( 0, v ) );
+			var f =  Math.min( this.currentAnimation.length - 1, Math.floor( v * this.currentAnimation.length ) );
+			
+			if ( this.animSpeed < 0 ) { // backwards
+			
 				f = this.currentAnimation.length - 1 - f;
+				
 			}
+			
 			this._currentAnimationPosition = v;
 			this.frame = f + this.currentAnimation.start;
-		},
-	});
+			
+		}
+		
+	} );
 	
 	// pre-bind
-	this.advanceAnimationFrame = THREE.PixelBox.prototype.advanceAnimationFrame.bind(this);
+	this.advanceAnimationFrame = THREE.PixelBox.prototype.advanceAnimationFrame.bind( this );
 	
-	this.addEventListener('removed', this.stopAnim);
+	this.addEventListener( 'removed', this.stopAnim );
 	
 	// add shorthand accessors
-	Object.defineProperty(this, 'asset', {
-		get: function(){ return this.geometry.data; },
-	});
+	Object.defineProperty( this, 'asset', {
+		get: function () { return this.geometry.data; }
+	} );
 	
-	Object.defineProperty(this, 'alpha', {
-		get: function(){ return this.material.uniforms.tintAlpha.value; },
-		set: function(v){ this.material.uniforms.tintAlpha.value = v; },
-	});
+	Object.defineProperty( this, 'alpha', {
+		get: function () { return this.material.uniforms.tintAlpha.value; },
+		set: function ( v ) { this.material.uniforms.tintAlpha.value = v; }
+	} );
 	
-	Object.defineProperty(this, 'tint', {
-		get: function(){ return this.material.uniforms.tintColor.value; },
-		set: function(v){ this.material.uniforms.tintColor.value.copy(v); },
-	});
+	Object.defineProperty( this, 'tint', {
+		get: function () { return this.material.uniforms.tintColor.value; },
+		set: function ( v ) { this.material.uniforms.tintColor.value.copy( v ); }
+	} );
 
-	Object.defineProperty(this, 'addColor', {
-		get: function(){ return this.material.uniforms.addColor.value; },
-		set: function(v){ this.material.uniforms.addColor.value.copy(v); },
-	});
+	Object.defineProperty( this, 'addColor', {
+		get: function () { return this.material.uniforms.addColor.value; },
+		set: function ( v ) { this.material.uniforms.addColor.value.copy( v ); }
+	} );
 
-	Object.defineProperty(this, 'occlusion', {
-		get: function(){ return this.material.uniforms.occlusion.value; },
-		set: function(v){ this.material.uniforms.occlusion.value = v; },
-	});
+	Object.defineProperty( this, 'occlusion', {
+		get: function () { return this.material.uniforms.occlusion.value; },
+		set: function ( v ) { this.material.uniforms.occlusion.value = v; }
+	} );
 
-	Object.defineProperty(this, 'pointSize', {
-		get: function(){ return this.material.uniforms.pointSize.value; },
-		set: function(v){ this.material.uniforms.pointSize.value = v; },
-	});
+	Object.defineProperty( this, 'pointSize', {
+		get: function () { return this.material.uniforms.pointSize.value; },
+		set: function ( v ) { this.material.uniforms.pointSize.value = v; }
+	} );
 	
-	Object.defineProperty(this, 'stipple', {
-		get: function(){ return this.material.uniforms.stipple.value; },
-		set: function(v){ this.material.uniforms.stipple.value = v; },
-	});
+	Object.defineProperty( this, 'stipple', {
+		get: function () { return this.material.uniforms.stipple.value; },
+		set: function ( v ) { this.material.uniforms.stipple.value = v; }
+	} );
 	
-	Object.defineProperty(this, 'cullBack', {
-		get: function(){ return !!this.material.uniforms.cullBack.value; },
-		set: function(v){ this.material.uniforms.cullBack.value = v ? 1 : 0; },
-	});
+	Object.defineProperty( this, 'cullBack', {
+		get: function () { return !!this.material.uniforms.cullBack.value; },
+		set: function ( v ) { this.material.uniforms.cullBack.value = v ? 1 : 0; }
+	} );
 	
 	this.fasterRaycast = true; // raycast just tests for an intersection (returns first match)
 	
 	// create particles
-	if(data.particles !== undefined){
+	if ( data.particles !== undefined ) {
+	
 		var pos = new Array();
 		var clr = new Array();
 		var nrm = new Array();
 		var occ = new Array();
-		for(var i = 0; i < data.particles; i++ ){
-			pos.push(0, 0, 0);
-			clr.push(1,1,1,1);
-			nrm.push(0,1,0);
-			occ.push(0);
-		}		
-		data.frameData.push({ 	p: new THREE.BufferAttribute(new Float32Array(pos), 3),
-								c: new THREE.BufferAttribute(new Float32Array(clr), 4),
-								n: new THREE.BufferAttribute(new Float32Array(nrm), 3),
-								o: new THREE.BufferAttribute(new Float32Array(occ), 1) });
+		
+		for ( var i = 0; i < data.particles; i++ ) {
+		
+			pos.push( 0, 0, 0 );
+			clr.push( 1, 1, 1, 1 );
+			nrm.push( 0, 1, 0 );
+			occ.push( 0 );
+			
+		}
+			
+		data.frameData.push( { 	p: new THREE.BufferAttribute( new Float32Array( pos ), 3 ),
+								c: new THREE.BufferAttribute( new Float32Array( clr ), 4 ),
+								n: new THREE.BufferAttribute( new Float32Array( nrm ), 3 ),
+								o: new THREE.BufferAttribute( new Float32Array( occ ), 1 ) } );
 								
 		this.geometry._frame = -1; // invalidate
 		this.frame = 0; // refresh
 		this.geometry.computeBoundingSphere();
+		
 	}
 	
 	return this;
+	
 }
 
-THREE.PixelBox.prototype = Object.create(THREE.PointCloud.prototype);
+THREE.PixelBox.prototype = Object.create( THREE.PointCloud.prototype );
 THREE.PixelBox.prototype.constructor = THREE.PixelBox;
 
 /* 
@@ -2588,104 +2929,147 @@ THREE.PixelBox.prototype.constructor = THREE.PixelBox;
 
 */
 
-THREE.PixelBox.prototype.advanceAnimationFrame = function(){
-	if(this._animationInterval) clearTimeout(this._animationInterval);
+THREE.PixelBox.prototype.advanceAnimationFrame = function () {
+
+	if ( this._animationInterval ) clearTimeout( this._animationInterval );
 	
-	var nextFrameIn = 1.0 / (Math.abs(this.animSpeed ? this.animSpeed : 0.001) * this.currentAnimation.fps);
+	var nextFrameIn = 1.0 / ( Math.abs( this.animSpeed ? this.animSpeed : 0.001 ) * this.currentAnimation.fps);
 	var keepGoing = true;
 	
-	if(!renderer.paused){
+	if ( !renderer.paused ) {
+	
 		var step = this.currentAnimation.length > 1 ? (1.0 / (this.currentAnimation.length - 1)) : 1;
 		this.currentAnimationPosition += step;
 		this._animationInterval = 0;
 		
 		// end of anim
-		if(this.currentAnimationPosition == 1){
+		if ( this.currentAnimationPosition == 1 ) {
+		
 			// was looping
-			if(this._animLoops > 0){
-				var ev = {type:'anim-loop', anim:this.currentAnimation, loop: this._animLoops};
-				this.dispatchEvent(ev); ev = null;
+			if ( this._animLoops > 0 ) {
+			
+				var ev = { type:'anim-loop', anim:this.currentAnimation, loop: this._animLoops };
+				this.dispatchEvent( ev );
 				this._animLoops--;
 				this._currentAnimationPosition = -step;
+				
 			// end of animation
 			} else {
+			
 				keepGoing = false;
-				var ev = {type:'anim-finish', anim:this.currentAnimation};
-				this.dispatchEvent(ev); ev = null;
+				var ev = { type:'anim-finish', anim:this.currentAnimation };
+				this.dispatchEvent( ev );
+				
 			}
+			
 		}
+		
 	}
 	
 	// set up next time
-	if(keepGoing){
-		this._animationInterval = setTimeout(this.advanceAnimationFrame, nextFrameIn * 1000);
+	if (keepGoing) {
+	
+		this._animationInterval = setTimeout( this.advanceAnimationFrame, nextFrameIn * 1000 );
+		
 	}
 };
 
-THREE.PixelBox.prototype.playAnim = function(animName, fromCurrentFrame){
-	this.loopAnim(animName, 0, fromCurrentFrame);
+THREE.PixelBox.prototype.playAnim = function ( animName, fromCurrentFrame ) {
+
+	this.loopAnim( animName, 0, fromCurrentFrame );
+	
 };
 
-THREE.PixelBox.prototype.loopAnim = function(animName, numLoops, fromCurrentFrame){
-	var anim = this.geometry.data.anims[animName];
-	if(!anim){ 
-		console.log("Animation "+animName+" not found in ", this.data); return;
+THREE.PixelBox.prototype.loopAnim = function ( animName, numLoops, fromCurrentFrame ) {
+
+	var anim = this.geometry.data.anims[ animName ];
+	
+	if ( !anim ) {
+	 
+		console.log( "Animation " + animName + " not found in ", this.data );
+		return;
+		
 	}
-	if(this._animationInterval){
+	
+	if ( this._animationInterval ) {
+	
 		// same anim, from current frame	
-		if(this.currentAnimation == anim && this._animLoops > 0) { 
+		if ( this.currentAnimation == anim && this._animLoops > 0 ) { 
+		
 			this._animLoops = numLoops;
 			return;
+			
 		}
+		
 		this.stopAnim();
+		
 	}
+	
 	// current anim
 	this.currentAnimation = anim;
 	this._animLoops = (numLoops === undefined ? Infinity : numLoops);
 	
 	// set up first frame
-	if(fromCurrentFrame && this.frame >= anim.start && this.frame < anim.start + anim.length){
-		if(this.animSpeed >= 0){
+	if ( fromCurrentFrame && this.frame >= anim.start && this.frame < anim.start + anim.length ) {
+	
+		if ( this.animSpeed >= 0 ) {
+		
 			this.currentAnimationPosition = (this.frame - anim.start) / anim.length;
+			
 		} else {
+		
 			this.currentAnimationPosition = 1.0 - (this.frame - anim.start) / anim.length;
 		}
+		
 	} else {
+	
 		this.currentAnimationPosition = 0;
+		
 	}
 	
-	var ev = {type:'anim-start', anim:this.currentAnimation};
-	this.dispatchEvent(ev); ev = null;
+	var ev = { type:'anim-start', anim:this.currentAnimation };
+	this.dispatchEvent( ev );
 	
 	// anim meta
-	if(this.currentAnimation.meta.length){
-		ev = {type:'anim-meta', anim:this.currentAnimation, meta:anim.meta};
-		this.dispatchEvent(ev); ev = null;
+	if ( this.currentAnimation.meta.length ) {
+	
+		ev = { type:'anim-meta', anim:this.currentAnimation, meta:anim.meta };
+		this.dispatchEvent(ev);
+		
 	}
 	
 	// set up timeout
-	var nextFrameIn = 1.0 / (Math.abs(this.animSpeed) * anim.fps);
+	var nextFrameIn = 1.0 / (Math.abs( this.animSpeed ) * anim.fps);
 	this._animLoops--;
-	this._animationInterval = setTimeout(this.advanceAnimationFrame, nextFrameIn * 1000);
+	this._animationInterval = setTimeout( this.advanceAnimationFrame, nextFrameIn * 1000 );
+	
 };
 
-THREE.PixelBox.prototype.gotoAndStop = function(animName, positionWithinAnimation){
-	var anim = this.geometry.data.anims[animName];
+THREE.PixelBox.prototype.gotoAndStop = function ( animName, positionWithinAnimation ) {
+
+	var anim = this.geometry.data.anims[ animName ];
 	var diff = (this.currentAnimation != anim);
 	positionWithinAnimation = (positionWithinAnimation === undefined ? 0 : positionWithinAnimation);
-	if(!anim){ 
-		console.log("Animation "+animName+" not found in ", this.data); 
+	
+	if ( !anim ) { 
+	
+		console.log( "Animation " + animName + " not found in ", this.data ); 
 		return;
+		
 	}
 	
-	if(this._animationInterval){
+	if ( this._animationInterval ) {
+	
 		this.stopAnim();
+		
 	}
 	
 	// stop
-	if(diff){
-		var ev = {type:'anim-stop', anim:this.currentAnimation};
-		this.dispatchEvent(ev); ev = null;
+	if ( diff ) {
+	
+		var ev = { type:'anim-stop', anim:this.currentAnimation };
+		this.dispatchEvent( ev );
+		
 	}
 	
 	// current anim
@@ -2694,26 +3078,38 @@ THREE.PixelBox.prototype.gotoAndStop = function(animName, positionWithinAnimatio
 	this._animLoops = -1;	
 
 	// anim meta
-	if(diff && anim.meta.length){
-		var ev = {type:'anim-meta', anim:anim, meta:anim.meta};
-		this.dispatchEvent(ev); ev = null;
+	if ( diff && anim.meta.length ) {
+	
+		var ev = { type:'anim-meta', anim:anim, meta:anim.meta };
+		this.dispatchEvent( ev );
+		
 	}
+	
 };
 
-THREE.PixelBox.prototype.animNamed = function(animName){
-	return this.geometry.data.anims[animName];
+THREE.PixelBox.prototype.animNamed = function ( animName ) {
+
+	return this.geometry.data.anims[ animName ];
+	
 };
 
-THREE.PixelBox.prototype.stopAnim = function(){
-	if(this._animationInterval){
-		clearTimeout(this._animationInterval);
+THREE.PixelBox.prototype.stopAnim = function () {
+	
+	if ( this._animationInterval ) {
+	
+		clearTimeout( this._animationInterval );
 		this._animationInterval = 0;
+		
 	}
-	if(this.currentAnimation){
-		var ev = {type:'anim-stop', anim:this.currentAnimation};
-		this.dispatchEvent(ev); ev = null;
+	
+	if ( this.currentAnimation ) {
+	
+		var ev = { type:'anim-stop', anim:this.currentAnimation };
+		this.dispatchEvent( ev );
 		this.currentAnimation = null;
+		
 	}
+	
 };
 
 /* 
@@ -2734,49 +3130,53 @@ THREE.PixelBox.prototype.stopAnim = function(){
 	
 */
 
-THREE.PixelBox.prototype.updateFrameWithCallback = function(callBack, extraParam){
+THREE.PixelBox.prototype.updateFrameWithCallback = function ( callBack, extraParam ) {
+
 	var geometry = this.geometry;
 	var dataObject = geometry.data;
-	var frameBuffers = dataObject.frameData[0];
+	var frameBuffers = dataObject.frameData[ 0 ];
 	var addr = 0;
 	var pobj = {
-		p: new THREE.Vector3(),	
+		p: new THREE.Vector3(),
 		n: new THREE.Vector3(),	
 		c: new THREE.Color(),
 		a: 0.0,
 		b: 1.0, 
-		o: 0.0,
+		o: 0.0
 	};
+	
 	var numParticles = dataObject.particles;
-	for(addr = 0; addr < numParticles; addr++){
+	for ( addr = 0; addr < numParticles; addr++ ) {
+	
 		pobj.i = addr;
-		pobj.p.set(frameBuffers.p.array[addr * 3], frameBuffers.p.array[addr * 3 + 1], frameBuffers.p.array[addr * 3 + 2]);
-		pobj.n.set(frameBuffers.n.array[addr * 3], frameBuffers.n.array[addr * 3 + 1], frameBuffers.n.array[addr * 3 + 2]);
+		pobj.p.set( frameBuffers.p.array[ addr * 3 ], frameBuffers.p.array[ addr * 3 + 1 ], frameBuffers.p.array[ addr * 3 + 2 ] );
+		pobj.n.set( frameBuffers.n.array[ addr * 3 ], frameBuffers.n.array[ addr * 3 + 1 ], frameBuffers.n.array[ addr * 3 + 2 ] );
 		pobj.b = pobj.n.length() - 1.0;
 		pobj.n.normalize();
-		pobj.o = frameBuffers.o.array[addr];
-		pobj.c.setRGB(frameBuffers.c.array[addr * 4], frameBuffers.c.array[addr * 4 + 1], frameBuffers.c.array[addr * 4 + 2]);
-		pobj.a = frameBuffers.c.array[addr * 4 + 3];
+		pobj.o = frameBuffers.o.array[ addr ];
+		pobj.c.setRGB( frameBuffers.c.array[ addr * 4 ], frameBuffers.c.array[ addr * 4 + 1 ], frameBuffers.c.array[ addr * 4 + 2 ] );
+		pobj.a = frameBuffers.c.array[ addr * 4 + 3 ];
 
 		// call
-		callBack(pobj, extraParam);
+		callBack( pobj, extraParam );
 		
 		// copy back
-		frameBuffers.p.array[addr * 3] = pobj.p.x;
-		frameBuffers.p.array[addr * 3 + 1] = pobj.p.y;
-		frameBuffers.p.array[addr * 3 + 2] = pobj.p.z;
+		frameBuffers.p.array[ addr * 3 ] = pobj.p.x;
+		frameBuffers.p.array[ addr * 3 + 1 ] = pobj.p.y;
+		frameBuffers.p.array[ addr * 3 + 2 ] = pobj.p.z;
 		
-		frameBuffers.o.array[addr] = pobj.o;
+		frameBuffers.o.array[ addr ] = pobj.o;
 		
-		pobj.n.multiplyScalar(1.0 + pobj.b);
-		frameBuffers.n.array[addr * 3] = pobj.n.x;
-		frameBuffers.n.array[addr * 3 + 1] = pobj.n.y;
-		frameBuffers.n.array[addr * 3 + 2] = pobj.n.z;
+		pobj.n.multiplyScalar( 1.0 + pobj.b );
+		frameBuffers.n.array[ addr * 3 ] = pobj.n.x;
+		frameBuffers.n.array[ addr * 3 + 1 ] = pobj.n.y;
+		frameBuffers.n.array[ addr * 3 + 2 ] = pobj.n.z;
 		
-		frameBuffers.c.array[addr * 4] = pobj.c.r;
-		frameBuffers.c.array[addr * 4 + 1] = pobj.c.g;
-		frameBuffers.c.array[addr * 4 + 2] = pobj.c.b;
-		frameBuffers.c.array[addr * 4 + 3] = pobj.a;
+		frameBuffers.c.array[ addr * 4 ] = pobj.c.r;
+		frameBuffers.c.array[ addr * 4 + 1 ] = pobj.c.g;
+		frameBuffers.c.array[ addr * 4 + 2 ] = pobj.c.b;
+		frameBuffers.c.array[ addr * 4 + 3 ] = pobj.a;
+		
 	}
 	
 	frameBuffers.c.needsUpdate = true;
@@ -2795,66 +3195,97 @@ THREE.PixelBox.prototype.updateFrameWithCallback = function(callBack, extraParam
 THREE.PixelBoxUtil = {};
 
 THREE.PixelBoxUtil.material = new THREE.ShaderMaterial( {
-	uniforms:       THREE.UniformsUtils.merge([THREE.UniformsLib['shadowmap'], THREE.UniformsLib['lights'],THREE.PixelBoxShader.uniforms]),
+	uniforms:       THREE.UniformsUtils.merge( [ THREE.UniformsLib[ 'shadowmap' ], THREE.UniformsLib[ 'lights' ], THREE.PixelBoxShader.uniforms ] ),
 	attributes:     THREE.PixelBoxShader.attributes,
 	vertexShader:   THREE.PixelBoxShader.vertexShader,
 	fragmentShader: THREE.PixelBoxShader.fragmentShader,
 	transparent: false,
 	lights: true,
 	fog: true
-});
+} );
 
 THREE.PixelBoxUtil.depthMaterial = new THREE.ShaderMaterial( {
 	uniforms:       THREE.PixelBoxDepthShader.uniforms,
 	vertexShader:   THREE.PixelBoxDepthShader.vertexShader,
-	fragmentShader: THREE.PixelBoxDepthShader.fragmentShader,
+	fragmentShader: THREE.PixelBoxDepthShader.fragmentShader
 });
+
 THREE.PixelBoxUtil.depthMaterial._shadowPass = true;
 
-THREE.PixelBoxUtil.updateViewPortUniform = function(optCamera){ 
+THREE.PixelBoxUtil.updateViewPortUniform = function ( optCamera ) {
+
 	// get cam scale	
 	var camWorldScale = new THREE.Vector3();
 	
 	// viewPortScale is based on the camera
-	function getValueForCam(cam){
-		camWorldScale.setFromMatrixScale(cam.matrixWorld);
+	function getValueForCam ( cam ) {
+	
+		camWorldScale.setFromMatrixScale( cam.matrixWorld );
+		
 		// perspective camera
-		if(cam instanceof THREE.PerspectiveCamera){
-			return (renderer.webgl.domElement.height / (2 * Math.tan(0.5 * cam.fov * Math.PI / 180.0))) / camWorldScale.x;
+		if ( cam instanceof THREE.PerspectiveCamera ) {
+		
+			return (renderer.webgl.domElement.height / (2 * Math.tan( 0.5 * cam.fov * Math.PI / 180.0 ))) / camWorldScale.x;
+			
 		// ortho
 		} else {
+		
 			return (cam.zoom * renderer.webgl.domElement.height / (cam.top * 2)) / camWorldScale.x;
-		}	
-	}
-	var val = 1;
-	if(renderer.scene instanceof THREE.PixelBoxSceneTransition && renderer.scene.sceneA instanceof THREE.PixelBoxScene){
-		var t = renderer.scene.smoothTime;
-		var val1 = getValueForCam(renderer.scene.sceneB.camera);
-		val = getValueForCam(renderer.scene.sceneA.camera);
-		val = val + (val1 - val) * t;
-	} else if(optCamera){
-		val = getValueForCam(optCamera);
-	} else if(renderer.currentScene && renderer.currentScene.camera){
-		val = getValueForCam(renderer.currentScene.camera);
+			
+		}
+		
 	}
 	
-	THREE.PixelBoxUtil.material.uniforms.viewPortScale.value = val;	
+	var val = 1;
+	
+	if ( renderer.scene instanceof THREE.PixelBoxSceneTransition && renderer.scene.sceneA instanceof THREE.PixelBoxScene ) {
+	
+		var t = renderer.scene.smoothTime;
+		var val1 = getValueForCam( renderer.scene.sceneB.camera );
+		val = getValueForCam( renderer.scene.sceneA.camera );
+		val = val + (val1 - val) * t;
+		
+	} else if ( optCamera ) {
+	
+		val = getValueForCam( optCamera );
+		
+	} else if ( renderer.currentScene && renderer.currentScene.camera ) {
+	
+		val = getValueForCam( renderer.currentScene.camera );
+		
+	}
+	
+	THREE.PixelBoxUtil.material.uniforms.viewPortScale.value = val;
+	
 };
 
-THREE.PixelBoxUtil.dispose = function(data){
-	if(data && data.frameData){
+THREE.PixelBoxUtil.dispose = function ( data ) {
+
+	if ( data && data.frameData ) {
+	
 		var _gl = renderer.webgl.context;
-		for(var f = 0; f < data.frameData.length; f++){
-			if(!data.frameData[f]['p']) continue; // skip empty
-			for ( var key in data.frameData[f] ) {
-				if ( data.frameData[f][key].buffer !== undefined ) {
-					_gl.deleteBuffer(data.frameData[f][key].buffer);
-					delete data.frameData[f][key];
+		
+		for ( var f = 0; f < data.frameData.length; f++ ) {
+		
+			if ( !data.frameData[ f ][ 'p' ] ) continue; // skip empty
+			
+			for ( var key in data.frameData[ f ] ) {
+			
+				if ( data.frameData[ f ][ key ].buffer !== undefined ) {
+				
+					_gl.deleteBuffer( data.frameData[ f ][ key ].buffer );
+					delete data.frameData[ f ][ key ];
+					
 				}
+				
 			}
+			
 		}
+		
 		delete data.frameData;
+		
 	}
+	
 };
 
 /*
@@ -2862,49 +3293,69 @@ THREE.PixelBoxUtil.dispose = function(data){
 	Alters data object itself
 */
 
-THREE.PixelBoxUtil.processPixelBoxFrames = function(data){
-	if(data.frames === null || data.particles !== undefined){
+THREE.PixelBoxUtil.processPixelBoxFrames = function ( data ) {
+
+	if ( data.frames === null || data.particles !== undefined ) {
 	
 		// special case for PixelBox editor or particle systems
 		data.frameData = [];
-		
 		return true;
+		
 	// parse data for the first time (modifies data object)
-	} else if(data.frames){
-		if(!data.frames.length) return false;
+	} else if ( data.frames ) {
+	
+		if ( !data.frames.length ) return false;
 	
 		// pivot
 		var pivot = new THREE.Vector3();
-		if(data.anchors && data.anchors['PIVOT']){
-			pivot.set(data.anchors['PIVOT'][0].x, data.anchors['PIVOT'][0].y, data.anchors['PIVOT'][0].z);
+		
+		if ( data.anchors && data.anchors[ 'PIVOT' ] ) {
+		
+			pivot.set( data.anchors[ 'PIVOT' ][ 0 ].x, data.anchors[ 'PIVOT' ][ 0 ].y, data.anchors[ 'PIVOT' ][ 0 ].z );
+			
 		} else {
-			pivot.set(data.width * 0.5, data.height * 0.5, data.depth * 0.5);
+		
+			pivot.set( data.width * 0.5, data.height * 0.5, data.depth * 0.5 );
+			
 		}		
 	
 		// decode frames
-		if(!data.frameData){
-			data.frameData = new Array(data.frames.length);
-			for(var f = 0; f < data.frames.length; f++){
-				data.frameData[f] = THREE.PixelBoxUtil.decodeFrame(data, f);
+		if ( !data.frameData ) {
+		
+			data.frameData = new Array( data.frames.length );
+			
+			for ( var f = 0; f < data.frames.length; f++ ) {
+			
+				data.frameData[ f ] = THREE.PixelBoxUtil.decodeFrame( data, f );
+				
 			}
-			THREE.PixelBoxUtil.finalizeFrames(data, pivot);
+			
+			THREE.PixelBoxUtil.finalizeFrames( data, pivot );
+			
 		}
 		
 		// change anims to an object
-		if(_.isArray(data.anims)){
+		if ( _.isArray( data.anims ) ) {
+		
 			var anims = {};
-			for(var i = 0; i < data.anims.length; i++){
-				anims[data.anims[i].name] = data.anims[i];
+			for ( var i = 0; i < data.anims.length; i++ ) {
+			
+				anims[ data.anims[ i ].name ] = data.anims[ i ];
+				
 			}
+			
 			data.anims = anims;
+			
 		}
 		
 		// clean up
 		delete data.frames;
 		return true;
+		
 	}
 	
 	return false;
+	
 };
 
 /* 	
@@ -2915,7 +3366,7 @@ THREE.PixelBoxUtil.processPixelBoxFrames = function(data){
 	to generate better shadows
 */
 
-THREE.PixelBoxUtil.updateLights = function(scene, updateAllMaterials){	
+THREE.PixelBoxUtil.updateLights = function ( scene, updateAllMaterials ) {	
 	
 	var uniforms = THREE.PixelBoxUtil.material.uniforms;
 	uniforms.actualHemiLights.value = 0;
@@ -2927,34 +3378,58 @@ THREE.PixelBoxUtil.updateLights = function(scene, updateAllMaterials){
 
 	var shadowMapIndex = 0;
 	
-	scene.traverse(function(obj){
-		if(obj.visible){
-			if (obj instanceof THREE.SpotLight){
+	scene.traverse( function ( obj ) {
+	
+		if ( obj.visible ) {
+		
+			if ( obj instanceof THREE.SpotLight ) {
+			
 				uniforms.actualSpotLights.value++;
-				if(obj.castShadow && renderer.webgl.shadowMapEnabled) { 
-					uniforms.spotLightShadowMap.value.push(++shadowMapIndex);
-				} else uniforms.spotLightShadowMap.value.push(0);
-			} else if(obj instanceof THREE.DirectionalLight){
+				
+				if ( obj.castShadow && renderer.webgl.shadowMapEnabled ) {
+				
+					uniforms.spotLightShadowMap.value.push( ++shadowMapIndex );
+					
+				} else uniforms.spotLightShadowMap.value.push( 0 );
+				
+			} else if ( obj instanceof THREE.DirectionalLight ) {
+			
 				uniforms.actualDirLights.value++;
-				if(obj.castShadow && renderer.webgl.shadowMapEnabled) { 
-					uniforms.directionalLightShadowMap.value.push(++shadowMapIndex);
-				} else uniforms.directionalLightShadowMap.value.push(0);
-			} else if(obj instanceof THREE.HemisphereLight){
+				
+				if ( obj.castShadow && renderer.webgl.shadowMapEnabled ) { 
+				
+					uniforms.directionalLightShadowMap.value.push( ++shadowMapIndex );
+					
+				} else uniforms.directionalLightShadowMap.value.push( 0 );
+				
+			} else if ( obj instanceof THREE.HemisphereLight ) {
+			
 				uniforms.actualHemiLights.value++;
-			} else if(obj instanceof THREE.PointLight){
+				
+			} else if ( obj instanceof THREE.PointLight ) {
+			
 				uniforms.actualPointLights.value++;
+				
 			}
+			
 		}
 		
-		if(updateAllMaterials && obj.material) obj.material.needsUpdate = true;
-	});
+		if ( updateAllMaterials && obj.material ) obj.material.needsUpdate = true;
+		
+	} );
 	
-	if(!uniforms.directionalLightShadowMap.value.length){
-		uniforms.spotLightShadowMap.value.push(0);
+	if ( !uniforms.directionalLightShadowMap.value.length ) {
+	
+		uniforms.spotLightShadowMap.value.push( 0 );
+		
 	}
-	if(!uniforms.spotLightShadowMap.value.length){
-		uniforms.spotLightShadowMap.value.push(0);
+	
+	if ( !uniforms.spotLightShadowMap.value.length ) {
+	
+		uniforms.spotLightShadowMap.value.push( 0 );
+		
 	}
+	
 };
 
 /* 
@@ -2992,8 +3467,8 @@ THREE.PixelBoxUtil.updateLights = function(scene, updateAllMaterials){
 		
 */
 
-THREE.PixelBoxUtil.decodeFrame = function(dataObject, frameIndex){
-	//var startTime = new Date();
+THREE.PixelBoxUtil.decodeFrame = function ( dataObject, frameIndex ) {
+
 	var smoothNormals = dataObject.smoothNormals != undefined ? dataObject.smoothNormals : 1.0;
 	var floor = dataObject.floor != undefined ? dataObject.floor : false;
 	var optimize = dataObject.optimize != undefined ? dataObject.optimize : true;
@@ -3005,261 +3480,308 @@ THREE.PixelBoxUtil.decodeFrame = function(dataObject, frameIndex){
 	var width = dataObject.width, height = dataObject.height, depth = dataObject.depth;
 	var hw = width * 0.5, hh = height * 0.5, hd = depth * 0.5;
 
-	var frameData = dataObject.frames[frameIndex];
+	var frameData = dataObject.frames[ frameIndex ];
 	var prevFrameData = null;
 	var assembledFrameData = [];
-	var isRaw = (typeof(dataObject.frames[0]) == 'object' && dataObject.frames[0]['p'] != undefined);
+	var isRaw = (typeof( dataObject.frames[ 0 ] ) == 'object' && dataObject.frames[ 0 ][ 'p' ] != undefined);
 	var isDeltaFormat = frameIndex > 0;
 	
-	if(isRaw){
+	if ( isRaw ) {
+	
 		positions = frameData.p;
 		colors = frameData.c;
 		normals = frameData.n;
-		occlusion = frameData.o;		
+		occlusion = frameData.o;
+		
 	} else {
-		if(isDeltaFormat){
-			frameData = frameData.match(/.{14}/g);
+	
+		if ( isDeltaFormat ) {
+		
+			frameData = frameData.match( /.{14}/g );
 			var pi = frameIndex - 1;
-			while(!prevFrameData){
-				prevFrameData = dataObject.frames[pi];
+			
+			while ( !prevFrameData ) {
+			
+				prevFrameData = dataObject.frames[ pi ];
 				pi--;
+				
 			}
+			
 		} else {
-			frameData = frameData.match(/.{8}/g);
+		
+			frameData = frameData.match( /.{8}/g );
+			
 		}
 		
 		// no changes from prev frame 
 		var sameAsLast = false;
-		if(frameData === null) { 
+		
+		if ( frameData === null ) { 
+		
 			frameData = [];
 			sameAsLast = true;
-			//return dataObject.frameData[frameIndex - 1];
+			
 		}
 		var chunk, temp, pixel, optimizeRemoved = 0, index = 0;
 		var colorObj = new THREE.Color();
 		var perp = new THREE.Vector3(), normal = new THREE.Vector3(), tilted = new THREE.Vector3();
 	
 		// decode and assemble current frame
-		for(var x = 0; x < width; x++){
-		for(var y = 0; y < height; y++){
-		for(var z = 0; z < depth; z++){
+		for ( var x = 0; x < width; x++ ) {
+		for ( var y = 0; y < height; y++ ) {
+		for ( var z = 0; z < depth; z++ ) {
+		
 			// delta
-			if(isDeltaFormat){
-				pixel = prevFrameData[index];
+			if ( isDeltaFormat ) {
+			
+				pixel = prevFrameData[ index ];
 				pixel = { c: pixel.c, a: pixel.a, b: pixel.b }; // copied
-				assembledFrameData.push(pixel);
+				assembledFrameData.push( pixel );
+				
 			// full format	
 			} else {
+			
 				// parse pixel
-				chunk = frameData[index];
+				chunk = frameData[ index ];
 				pixel = { 
-					c: parseInt(chunk.substr(0, 6), 16), 
-					a: parseInt(chunk.substr(6, 1), 16) / 15.0, 
-					b: parseInt(chunk.substr(7, 1), 16) / 15.0
+					c: parseInt( chunk.substr( 0, 6 ), 16 ), 
+					a: parseInt( chunk.substr( 6, 1 ), 16 ) / 15.0, 
+					b: parseInt( chunk.substr( 7, 1 ), 16 ) / 15.0
 				};
-				assembledFrameData.push(pixel);
+				assembledFrameData.push( pixel );
+				
 			}
 		
 			index++;
+			
 		}}}
 		
-		if(isDeltaFormat){
-			for(index = 0; index < frameData.length; index++){
-				chunk = frameData[index];
-				temp = parseInt(chunk.substr(0,6), 16);
-				assembledFrameData[temp] = {
-					c: parseInt(chunk.substr(6,6), 16),
-					a: parseInt(chunk.substr(12,1), 16) / 15.0,
-					b: parseInt(chunk.substr(13,1), 16) / 15.0
-				};						
+		if ( isDeltaFormat ) {
+		
+			for ( index = 0; index < frameData.length; index++ ) {
+			
+				chunk = frameData[ index ];
+				temp = parseInt( chunk.substr( 0,6 ), 16 );
+				assembledFrameData[ temp ] = {
+					c: parseInt( chunk.substr( 6,6 ), 16 ),
+					a: parseInt( chunk.substr( 12,1 ), 16 ) / 15.0,
+					b: parseInt( chunk.substr( 13,1 ), 16 ) / 15.0
+				};
+				
 			}
+			
 		}
 		
 		// update dataObject with decoded frame data
-		if(!sameAsLast) dataObject.frames[frameIndex] = assembledFrameData;
+		if ( !sameAsLast ) dataObject.frames[ frameIndex ] = assembledFrameData;
 		
-		if(sameAsLast){
-			return null; //dataObject.frameData[frameIndex - 1];
-		}
+		if (sameAsLast) return null;
 	
 		// helper
-		function getNorm(x, y, z, dx, dy, dz){
+		function getNorm ( x, y, z, dx, dy, dz ) {
+		
 			x += dx; y += dy; z += dz;
 			var oobxz = (x < 0 || z < 0 || x >= width || z >= depth);
 			var ooby = (y < 0 || y >= height);
-			if(floor && oobxz) return new THREE.Vector3(0,0,0);
-			if(oobxz || ooby ||
-				assembledFrameData[(x * depth * height) + (y * depth) + z].a == 0.0) return new THREE.Vector3(dx,dy,dz);
-			return new THREE.Vector3(0,0,0);
+			if ( floor && oobxz ) return new THREE.Vector3( 0, 0, 0 );
+			if ( oobxz || ooby || assembledFrameData[ (x * depth * height) + (y * depth) + z ].a == 0.0 ) return new THREE.Vector3( dx, dy, dz );
+			return new THREE.Vector3( 0, 0, 0 );
 		}
 	
 		// helper
-		function getAlpha(x, y, z){
+		function getAlpha ( x, y, z ) {
+		
 			var ii = (x * depth * height) + (y * depth) + z;
 			
-			if(x < 0 || y < 0 || z < 0 || x >= width || y >= height || z >= depth) return 0;
+			if (x < 0 || y < 0 || z < 0 || x >= width || y >= height || z >= depth) return 0;
 			
-			return assembledFrameData[ii].a;
+			return assembledFrameData[ ii ].a;
+			
 		}
 		
 		// ready to populate buffers
 		index = 0;
 		var neighbors;
 		
-		for(var x = 0; x < width; x++){
-		for(var y = 0; y < height; y++){
-		for(var z = 0; z < depth; z++){
+		for ( var x = 0; x < width; x++ ) {
+		for ( var y = 0; y < height; y++ ) {
+		for ( var z = 0; z < depth; z++ ) {
 		
-			if(assembledFrameData[index].a == 0.0) { 
+			if ( assembledFrameData[ index ].a == 0.0 ) { 
+			
 				index++;
 				continue;
+				
 			}
 			
 			// collect nearest neighbors
-			neighbors = [getAlpha(x - 1, y, z), getAlpha(x + 1, y, z), getAlpha(x, y - 1, z), getAlpha(x, y + 1, z), getAlpha(x, y, z - 1), getAlpha(x, y, z + 1)];
-			var numNeighbors = 	Math.floor(neighbors[0]) + Math.floor(neighbors[1]) + Math.floor(neighbors[2]) +
-								Math.floor(neighbors[3]) + Math.floor(neighbors[4]) + Math.floor(neighbors[5]);
+			neighbors = [ getAlpha( x - 1, y, z ), getAlpha( x + 1, y, z ), getAlpha( x, y - 1, z ), getAlpha( x, y + 1, z ), getAlpha( x, y, z - 1 ), getAlpha( x, y, z + 1 ) ];
+			var numNeighbors = 	Math.floor( neighbors[ 0 ] ) + Math.floor( neighbors[ 1 ] ) + Math.floor( neighbors[ 2 ] ) +
+								Math.floor( neighbors[ 3 ] ) + Math.floor( neighbors[ 4 ] ) + Math.floor( neighbors[ 5 ] );
 								
 			// optimize - discard pixel if can't be seen inside the cloud
-			if(optimize && numNeighbors == 6 && // <- nearest neighbors
-				getAlpha(x - 2, y, z) + getAlpha(x + 2, y, z) + getAlpha(x, y - 2, z) +
-				getAlpha(x, y + 2, z) + getAlpha(x, y, z - 2) + getAlpha(x, y, z + 2) == 6 // <- extended neighbors
-			){
+			if ( optimize && numNeighbors == 6 && // <- nearest neighbors
+				getAlpha( x - 2, y, z ) + getAlpha( x + 2, y, z ) + getAlpha( x, y - 2, z ) +
+				getAlpha( x, y + 2, z ) + getAlpha( x, y, z - 2 ) + getAlpha( x, y, z + 2 ) == 6 // <- extended neighbors
+			) {
+			
 				// if pixel is surrounded by completely opaque pixels, it can be discarded
 				optimizeRemoved++;
 				index++;
 				continue;
+				
 			}
 			
 			// start normal
-			if(numNeighbors > 2){
-				normal = !floor ? (new THREE.Vector3(x - hw, y - hh, z - hd)) : (new THREE.Vector3(0, 1, 0));
-				normal.normalize().multiplyScalar(0.1);
+			if ( numNeighbors > 2 ) {
+			
+				normal = !floor ? (new THREE.Vector3( x - hw, y - hh, z - hd )) : (new THREE.Vector3( 0, 1, 0 ));
+				normal.normalize().multiplyScalar( 0.1 );
+				
 			} else {
-				normal = new THREE.Vector3(0, 1, 0);
+			
+				normal = new THREE.Vector3( 0, 1, 0 );
+				
 			}
 			
 			// direct
-			normal.add(getNorm(x,y,z, 1, 0, 0));
-			normal.add(getNorm(x,y,z, -1, 0, 0));
-			normal.add(getNorm(x,y,z, 0, 1, 0));
-			normal.add(getNorm(x,y,z, 0, -1, 0));
-			normal.add(getNorm(x,y,z, 0, 0, 1));
-			normal.add(getNorm(x,y,z, 0, 0, -1));
+			normal.add( getNorm( x, y, z, 1, 0, 0 ) );
+			normal.add( getNorm( x, y, z, -1, 0, 0 ) );
+			normal.add( getNorm( x, y, z, 0, 1, 0 ) );
+			normal.add( getNorm( x, y, z, 0, -1, 0 ) );
+			normal.add( getNorm( x, y, z, 0, 0, 1 ) );
+			normal.add( getNorm( x, y, z, 0, 0, -1 ) );
 			
 			var weight;
-			if(smoothNormals > 0.0){
+			
+			if ( smoothNormals > 0.0 ) {
+			
 				// two over
 				weight = 0.25 * smoothNormals;
-				normal.add(getNorm(x,y,z, 2, 0, 0).multiplyScalar(weight));
-				normal.add(getNorm(x,y,z, -2, 0, 0).multiplyScalar(weight));
-				normal.add(getNorm(x,y,z, 0, 2, 0).multiplyScalar(weight));
-				normal.add(getNorm(x,y,z, 0, -2, 0).multiplyScalar(weight));
-				normal.add(getNorm(x,y,z, 0, 0, 2).multiplyScalar(weight));
-				normal.add(getNorm(x,y,z, 0, 0, -2).multiplyScalar(weight));
+				normal.add(getNorm( x, y, z, 2, 0, 0 ).multiplyScalar( weight ) );
+				normal.add(getNorm( x, y, z, -2, 0, 0 ).multiplyScalar( weight ) );
+				normal.add(getNorm( x, y, z, 0, 2, 0 ).multiplyScalar( weight ) );
+				normal.add(getNorm( x, y, z, 0, -2, 0 ).multiplyScalar( weight ) );
+				normal.add(getNorm( x, y, z, 0, 0, 2 ).multiplyScalar( weight ) );
+				normal.add(getNorm( x, y, z, 0, 0, -2 ).multiplyScalar( weight ) );
 		
 				// diagonals
 				weight = 0.4 * smoothNormals;
-				normal.add(getNorm(x,y,z, 1, 1, 0).multiplyScalar(weight));
-				normal.add(getNorm(x,y,z, 0, 1, 1).multiplyScalar(weight));
-				normal.add(getNorm(x,y,z, 1, 1, 1).multiplyScalar(weight));
-				normal.add(getNorm(x,y,z, -1, -1, 0).multiplyScalar(weight));
-				normal.add(getNorm(x,y,z, 0, -1, -1).multiplyScalar(weight));
-				normal.add(getNorm(x,y,z, -1, -1, -1).multiplyScalar(weight));
+				normal.add(getNorm( x, y, z, 1, 1, 0 ).multiplyScalar( weight ) );
+				normal.add(getNorm( x, y, z, 0, 1, 1 ).multiplyScalar( weight ) );
+				normal.add(getNorm( x, y, z, 1, 1, 1 ).multiplyScalar( weight ) );
+				normal.add(getNorm( x, y, z, -1, -1, 0 ).multiplyScalar( weight ) );
+				normal.add(getNorm( x, y, z, 0, -1, -1 ).multiplyScalar( weight ) );
+				normal.add(getNorm( x, y, z, -1, -1, -1 ).multiplyScalar( weight ) );
+				
 			}
 			
 			// normalize
-			if(normal.length() == 0) normal.set(0, 1, 0);
+			if ( normal.length() == 0 ) normal.set( 0, 1, 0 );
 			else normal.normalize();
 			
 			// occlusion
 			// sample neighbors first
 			var occ = 0.0;
-			if(numNeighbors > 2){
+			
+			if ( numNeighbors > 2 ) {
+			
 				weight = 0.125;
 				
 				// add direct neighbors
-				for(var n = 0; n < 6; n++) occ += neighbors[n];
+				for ( var n = 0; n < 6; n++ ) occ += neighbors[ n ];
 				occ *= 0.25 / 6.0;
 				
 				// sample in direction of the normal		
-				occ += 1.0 * getAlpha(Math.round(x + normal.x), Math.round(y + normal.y), Math.round(z + normal.z));
+				occ += 1.0 * getAlpha( Math.round( x + normal.x ), Math.round( y + normal.y ), Math.round( z + normal.z ) );
 				
 				// find a perpendicular vector
-				ax = Math.abs(normal.x); ay = Math.abs(normal.y); az = Math.abs(normal.z);
-				mv = Math.min(ax, ay, az);
-				if(mv == ax){
-					perp.set(1, 0, 0);
-				} else if(mv == ay){
-					perp.set(0, 1, 0);
+				ax = Math.abs( normal.x ); ay = Math.abs( normal.y ); az = Math.abs( normal.z );
+				mv = Math.min( ax, ay, az );
+				if ( mv == ax ) {
+				
+					perp.set( 1, 0, 0 );
+					
+				} else if ( mv == ay ) {
+				
+					perp.set( 0, 1, 0 );
+					
 				} else {
-					perp.set(0, 0, 1);
+				
+					perp.set( 0, 0, 1 );
+					
 				}
-				perp.cross(normal).normalize();
+				
+				perp.cross( normal ).normalize();
 				
 				// narrow cone
-				tilted.copy(normal).applyAxisAngle(perp, Math.PI * 0.2).normalize().multiplyScalar(2);
-				occ += weight * getAlpha(Math.round(x + tilted.x), Math.round(y + tilted.y), Math.round(z + tilted.z));
-				tilted.applyAxisAngle(normal, Math.PI * 0.25);
-				occ += weight * getAlpha(Math.round(x + tilted.x), Math.round(y + tilted.y), Math.round(z + tilted.z));
-				tilted.applyAxisAngle(normal, Math.PI * 0.25);
-				occ += weight * getAlpha(Math.round(x + tilted.x), Math.round(y + tilted.y), Math.round(z + tilted.z));
-				tilted.applyAxisAngle(normal, Math.PI * 0.25);
-				occ += weight * getAlpha(Math.round(x + tilted.x), Math.round(y + tilted.y), Math.round(z + tilted.z));
-				tilted.applyAxisAngle(normal, Math.PI * 0.25);
-				occ += weight * getAlpha(Math.round(x + tilted.x), Math.round(y + tilted.y), Math.round(z + tilted.z));
-				tilted.applyAxisAngle(normal, Math.PI * 0.25);
-				occ += weight * getAlpha(Math.round(x + tilted.x), Math.round(y + tilted.y), Math.round(z + tilted.z));
-				tilted.applyAxisAngle(normal, Math.PI * 0.25);
-				occ += weight * getAlpha(Math.round(x + tilted.x), Math.round(y + tilted.y), Math.round(z + tilted.z));
-				tilted.applyAxisAngle(normal, Math.PI * 0.25);
-				occ += weight * getAlpha(Math.round(x + tilted.x), Math.round(y + tilted.y), Math.round(z + tilted.z));
+				tilted.copy( normal ).applyAxisAngle( perp, Math.PI * 0.2 ).normalize().multiplyScalar( 2 );
+				occ += weight * getAlpha( Math.round( x + tilted.x ), Math.round( y + tilted.y ), Math.round( z + tilted.z ) );
+				tilted.applyAxisAngle( normal, Math.PI * 0.25 );
+				occ += weight * getAlpha( Math.round( x + tilted.x ), Math.round( y + tilted.y ), Math.round( z + tilted.z ) );
+				tilted.applyAxisAngle( normal, Math.PI * 0.25 );
+				occ += weight * getAlpha( Math.round( x + tilted.x ), Math.round( y + tilted.y ), Math.round( z + tilted.z ) );
+				tilted.applyAxisAngle( normal, Math.PI * 0.25 );
+				occ += weight * getAlpha( Math.round( x + tilted.x ), Math.round( y + tilted.y ), Math.round( z + tilted.z ) );
+				tilted.applyAxisAngle( normal, Math.PI * 0.25 );
+				occ += weight * getAlpha( Math.round( x + tilted.x ), Math.round( y + tilted.y ), Math.round( z + tilted.z ) );
+				tilted.applyAxisAngle( normal, Math.PI * 0.25 );
+				occ += weight * getAlpha( Math.round( x + tilted.x ), Math.round( y + tilted.y ), Math.round( z + tilted.z ) );
+				tilted.applyAxisAngle( normal, Math.PI * 0.25 );
+				occ += weight * getAlpha( Math.round( x + tilted.x ), Math.round( y + tilted.y ), Math.round( z + tilted.z ) );
+				tilted.applyAxisAngle( normal, Math.PI * 0.25 );
+				occ += weight * getAlpha( Math.round( x + tilted.x ), Math.round( y + tilted.y ), Math.round( z + tilted.z ) );
 	
 				// wider cone
 				tilted.copy(normal).applyAxisAngle(perp, Math.PI * 0.35).normalize().multiplyScalar(3.5);
-				occ += weight * 0.5 * getAlpha(Math.round(x + tilted.x), Math.round(y + tilted.y), Math.round(z + tilted.z));
-				tilted.applyAxisAngle(normal, Math.PI * 0.25);
-				occ += weight * 0.5 *getAlpha(Math.round(x + tilted.x), Math.round(y + tilted.y), Math.round(z + tilted.z));
-				tilted.applyAxisAngle(normal, Math.PI * 0.25);
-				occ += weight * 0.5 *getAlpha(Math.round(x + tilted.x), Math.round(y + tilted.y), Math.round(z + tilted.z));
-				tilted.applyAxisAngle(normal, Math.PI * 0.25);
-				occ += weight * 0.5 *getAlpha(Math.round(x + tilted.x), Math.round(y + tilted.y), Math.round(z + tilted.z));
-				tilted.applyAxisAngle(normal, Math.PI * 0.25);
-				occ += weight * 0.5 *getAlpha(Math.round(x + tilted.x), Math.round(y + tilted.y), Math.round(z + tilted.z));
-				tilted.applyAxisAngle(normal, Math.PI * 0.25);
-				occ += weight * 0.5 *getAlpha(Math.round(x + tilted.x), Math.round(y + tilted.y), Math.round(z + tilted.z));
-				tilted.applyAxisAngle(normal, Math.PI * 0.25);
-				occ += weight * 0.5 *getAlpha(Math.round(x + tilted.x), Math.round(y + tilted.y), Math.round(z + tilted.z));
-				tilted.applyAxisAngle(normal, Math.PI * 0.25);
-				occ += weight * 0.5 *getAlpha(Math.round(x + tilted.x), Math.round(y + tilted.y), Math.round(z + tilted.z));
+				occ += weight * 0.5 * getAlpha( Math.round( x + tilted.x ), Math.round( y + tilted.y ), Math.round( z + tilted.z ) );
+				tilted.applyAxisAngle( normal, Math.PI * 0.25 );
+				occ += weight * 0.5 * getAlpha( Math.round( x + tilted.x ), Math.round( y + tilted.y ), Math.round( z + tilted.z ) );
+				tilted.applyAxisAngle( normal, Math.PI * 0.25 );
+				occ += weight * 0.5 * getAlpha( Math.round( x + tilted.x ), Math.round( y + tilted.y ), Math.round( z + tilted.z ) );
+				tilted.applyAxisAngle( normal, Math.PI * 0.25 );
+				occ += weight * 0.5 * getAlpha( Math.round( x + tilted.x ), Math.round( y + tilted.y ), Math.round( z + tilted.z ) );
+				tilted.applyAxisAngle( normal, Math.PI * 0.25 );
+				occ += weight * 0.5 * getAlpha( Math.round( x + tilted.x ), Math.round( y + tilted.y ), Math.round( z + tilted.z ) );
+				tilted.applyAxisAngle( normal, Math.PI * 0.25 );
+				occ += weight * 0.5 * getAlpha( Math.round( x + tilted.x ), Math.round( y + tilted.y ), Math.round( z + tilted.z ) );
+				tilted.applyAxisAngle( normal, Math.PI * 0.25 );
+				occ += weight * 0.5 * getAlpha( Math.round( x + tilted.x ), Math.round( y + tilted.y ), Math.round( z + tilted.z ) );
+				tilted.applyAxisAngle( normal, Math.PI * 0.25 );
+				occ += weight * 0.5 * getAlpha( Math.round( x + tilted.x ), Math.round( y + tilted.y ), Math.round( z + tilted.z ) );
 	
 				occ /= 3;
+				
 			} else {
+			
 				occ = -numNeighbors * 0.25;
+				
 			}
 			
-			occlusion.push(occ);//THREE.Math.smoothstep(occ, 0.3, 1.2));
+			occlusion.push( occ );
 		
 			// store brightness in normal length, after occlusion step
-			normal.multiplyScalar(1.0 + assembledFrameData[index].b);
+			normal.multiplyScalar( 1.0 + assembledFrameData[ index ].b );
 				
 			// color
-			colorObj.set(assembledFrameData[index].c);
-			colors.push(colorObj.r, colorObj.g, colorObj.b, assembledFrameData[index].a);
+			colorObj.set( assembledFrameData[ index ].c );
+			colors.push( colorObj.r, colorObj.g, colorObj.b, assembledFrameData[ index ].a );
 			
 			// position
-			positions.push(x, y, z);
+			positions.push( x, y, z );
 			
 			// normal
-			normals.push(normal.x, normal.y, normal.z); 
+			normals.push( normal.x, normal.y, normal.z ); 
 					
-			index++;	
+			index++;
+			
 		}}}
 
 	}
 	
-	return {p:positions, c:colors, n:normals, o:occlusion};
-}
+	return { p: positions, c: colors, n: normals, o: occlusion };
+	
+};
 
 /*
 	Finalizes loaded frames by concatenating frameData entries and creating BufferAttribute 
@@ -3273,48 +3795,63 @@ THREE.PixelBoxUtil.decodeFrame = function(dataObject, frameIndex){
 
 */
 
-THREE.PixelBoxUtil.finalizeFrames = function(dataObject, pivot){
-	var ffd = dataObject.frameData[0];
+THREE.PixelBoxUtil.finalizeFrames = function ( dataObject, pivot ) {
+
+	var ffd = dataObject.frameData[ 0 ];
 	var curOffset = 0;
 	var lastNonEmpty = 0;
-	for(var f = 0; f < dataObject.frameData.length; f++){
-		var fd = dataObject.frameData[f];
+	for ( var f = 0; f < dataObject.frameData.length; f++ ) {
+	
+		var fd = dataObject.frameData[ f ];
+		
 		// store offset
 		// non-empty
-		if(fd){
+		if ( fd ) {
+		
 			lastNonEmpty = f;
 			fd.s = curOffset;
 			fd.l = fd.o.length;
 			curOffset += fd.o.length;
+			
 		// empty (same as previous)
 		} else {
-			dataObject.frameData[f] = dataObject.frameData[lastNonEmpty];
+		
+			dataObject.frameData[ f ] = dataObject.frameData[ lastNonEmpty ];
+			
 		}
+		
 		// concat arrays
-		if(f && fd){
-			ffd.p = ffd.p.concat(fd.p);
-			ffd.c = ffd.c.concat(fd.c);
-			ffd.n = ffd.n.concat(fd.n);
-			ffd.o = ffd.o.concat(fd.o);
+		if ( f && fd ) {
+		
+			ffd.p = ffd.p.concat( fd.p );
+			ffd.c = ffd.c.concat( fd.c );
+			ffd.n = ffd.n.concat( fd.n );
+			ffd.o = ffd.o.concat( fd.o );
 			delete fd.p;
 			delete fd.c;
 			delete fd.n;
 			delete fd.o;
+			
 		}
+		
 	}
+	
 	// offset by pivot
-	for(var i = 0, l = ffd.p.length; i < l; i+=3){
-		ffd.p[i] -= pivot.x;
-		ffd.p[i + 1] -= pivot.y;
-		ffd.p[i + 2] -= pivot.z;
+	for ( var i = 0, l = ffd.p.length; i < l; i += 3 ) {
+	
+		ffd.p[ i ] -= pivot.x;
+		ffd.p[ i + 1 ] -= pivot.y;
+		ffd.p[ i + 2 ] -= pivot.z;
+		
 	}
 	
 	// create buffers
-	ffd.p = new THREE.BufferAttribute(new Float32Array(ffd.p), 3);
-	ffd.c = new THREE.BufferAttribute(new Float32Array(ffd.c), 4);
-	ffd.n = new THREE.BufferAttribute(new Float32Array(ffd.n), 3);
-	ffd.o = new THREE.BufferAttribute(new Float32Array(ffd.o), 1);
-}
+	ffd.p = new THREE.BufferAttribute( new Float32Array( ffd.p ), 3 );
+	ffd.c = new THREE.BufferAttribute( new Float32Array( ffd.c ), 4 );
+	ffd.n = new THREE.BufferAttribute( new Float32Array( ffd.n ), 3 );
+	ffd.o = new THREE.BufferAttribute( new Float32Array( ffd.o ), 1 );
+	
+};
 
 /* 
 	Encodes/appends a single frame into dataObject
@@ -3333,54 +3870,70 @@ THREE.PixelBoxUtil.finalizeFrames = function(dataObject, pivot){
 	after finishing encoding all frames, delete dataObject.assembledFrames property (used while encoding for delta lookups)
 */
 
-THREE.PixelBoxUtil.encodeFrame = function(frameData, dataObject){
+THREE.PixelBoxUtil.encodeFrame = function ( frameData, dataObject ) {
+
 	// current frame number
 	var frameIndex = dataObject.frames.length;
 
 	// add assembledFrame
-	if(dataObject.assembledFrames === undefined) dataObject.assembledFrames = [];
-	dataObject.assembledFrames.push(frameData);
+	if ( dataObject.assembledFrames === undefined ) dataObject.assembledFrames = [];
+	
+	dataObject.assembledFrames.push( frameData );
 	
 	var combine = [];
 	var prevFramePixel;
 	
 	// begin encode	
 	var index = 0;	
-	for(var x = 0; x < dataObject.width; x++){
-	for(var y = 0; y < dataObject.height; y++){
-	for(var z = 0; z < dataObject.depth; z++){
+	for ( var x = 0; x < dataObject.width; x++ ) {
+	for ( var y = 0; y < dataObject.height; y++ ) {
+	for ( var z = 0; z < dataObject.depth; z++ ) {
+	
 		// pixel
-		var fd = frameData[index];
-		fd = fd ? fd : {c:0, a:0, b:0};
-		var c = ('00000'+(new Number(fd.c)).toString(16)).substr(-6);
-		var a = (new Number(Math.floor(fd.a * 15.0))).toString(16);
-		var b = (new Number(Math.floor(fd.b * 15.0))).toString(16);
+		var fd = frameData[ index ];
+		fd = fd ? fd : { c:0, a:0, b:0 };
+		var c = ('00000' + (new Number( fd.c )).toString( 16 )).substr( -6 );
+		var a = (new Number(Math.floor( fd.a * 15.0 ))).toString( 16 );
+		var b = (new Number(Math.floor( fd.b * 15.0 ))).toString( 16 );
+		
 		// delta
-		if(frameIndex){
+		if ( frameIndex ) {
+		
 			// compare with previous
-			prevFramePixel = dataObject.assembledFrames[frameIndex - 1][index];
-			prevFramePixel = prevFramePixel ? prevFramePixel : {c:0, a:0, b:0};
-			if(prevFramePixel.c != fd.c || prevFramePixel.a != fd.a || prevFramePixel.b != fd.b){
-				combine.push(('00000'+(new Number(index)).toString(16)).substr(-6) + c+a+b);
+			prevFramePixel = dataObject.assembledFrames[ frameIndex - 1 ][ index ];
+			prevFramePixel = prevFramePixel ? prevFramePixel : { c:0, a:0, b:0 };
+			
+			if ( prevFramePixel.c != fd.c || prevFramePixel.a != fd.a || prevFramePixel.b != fd.b ) {
+			
+				combine.push( ('00000' + (new Number( index )).toString( 16 )).substr( -6 ) + c + a + b );
+				
 			}
+			
 		// full
 		} else {
-			combine.push(c+a+b);
+		
+			combine.push( c + a + b );
+			
 		}
+		
 		index++;
+		
 	}}}
 	
-	dataObject.frames.push(combine.join(''));
-}
+	dataObject.frames.push( combine.join( '' ) );
+	
+};
 
 
 /*
-
-	Used in conjunction with THREE.PixelBox and THREE.PixelBoxScene
-
+ * @author Kirill Edelman
+ * @source https://github.com/kirilledelman/pixelbox
+ * @documentation https://github.com/kirilledelman/pixelbox/wiki
+ * @license MIT
 */
 
-THREE.PixelBoxRenderer = function(){
+
+THREE.PixelBoxRenderer = function () {
 
 	this.scene = null;
 	this.webgl = null;
@@ -3388,24 +3941,28 @@ THREE.PixelBoxRenderer = function(){
 	this.paused = false;
 	
 	/* init */
-	this.init = function(scale, stats){
+	this.init = function ( scale, stats ) {
 		// check webgl support
 		var webgl = false;
 		var canvas;
-		try { 
-			canvas = document.createElement('canvas'); 
-			webgl = !! window.WebGLRenderingContext && ( canvas.getContext( 'webgl' ) || canvas.getContext( 'experimental-webgl' ) );
-		} catch(e) {}
-		if(!webgl) return false;
+		try {
+		
+			canvas = document.createElement( 'canvas' );
+			webgl = !!window.WebGLRenderingContext && (canvas.getContext( 'webgl' ) || canvas.getContext( 'experimental-webgl' ));
+			
+		} catch( e ) {};
+		
+		if ( !webgl ) return false;
 	
 		this.scale = 1.0 / (scale != undefined ? scale : 1.0);
 		
 		// create renderer
 		this.webgl = webgl = new THREE.WebGLRenderer( {	devicePixelRatio: 1.0, antialias: false, autoClear: false, 
-														alpha: false, maxLights: 16, preserveDrawingBuffer: false, precision: 'highp' });
-		document.body.insertBefore(webgl.domElement, document.body.firstChild);
+														alpha: false, maxLights: 16, preserveDrawingBuffer: false, precision: 'highp' } );
+														
+		document.body.insertBefore( webgl.domElement, document.body.firstChild );
 		webgl.updateStyle = false;
-		webgl.setSize(window.innerWidth * this.scale, window.innerHeight * this.scale);
+		webgl.setSize( window.innerWidth * this.scale, window.innerHeight * this.scale );
 		
 	    // shadowing
 	    webgl.shadowMapEnabled = true;
@@ -3421,7 +3978,8 @@ THREE.PixelBoxRenderer = function(){
 		}
 		
 		// stats
-		if(stats){
+		if ( stats ) {
+		
 			var stats = this.stats = new Stats();
 			stats.domElement.style.position = 'absolute';
 			stats.domElement.style.bottom = '0px';
@@ -3429,10 +3987,11 @@ THREE.PixelBoxRenderer = function(){
 			stats.domElement.style.zIndex = 100;
 			document.body.appendChild( stats.domElement );
 			this.stats = stats;
+			
 		}
 		
 		// window resized listener
-		window.addEventListener('resize', this._windowResized);
+		window.addEventListener( 'resize', this._windowResized );
 		canvas.style.width = window.innerWidth + 'px';
 		canvas.style.height = window.innerHeight + 'px';
 			
@@ -3440,6 +3999,7 @@ THREE.PixelBoxRenderer = function(){
 		this._render();
 		
 		return true;
+		
 	}
 
 	/* 
@@ -3456,103 +4016,136 @@ THREE.PixelBoxRenderer = function(){
 							
 			(Number) duration - (optional) duration of the transition - default is 1 sec
 	*/
-	this.setScene = function(newScene, transType, duration){
+	this.setScene = function ( newScene, transType, duration ) {
+	
 		this.currentScene = newScene;
 		
 		// ignore if the same scene
-		if(transType != undefined && (((this.scene instanceof THREE.PixelBoxSceneTransition) && this.scene.sceneB == newScene && transType != 0) || this.scene == newScene)) { 
-			console.log("Same scene");
+		if ( transType != undefined && (((this.scene instanceof THREE.PixelBoxSceneTransition) && this.scene.sceneB == newScene && transType != 0) || this.scene == newScene) ) { 
+		
+			console.log( "Same scene" );
 			return;
+			
 		}
 	
 		// check if size changed
-		if(newScene.fbo && 
+		if ( newScene.fbo && 
 			(newScene.fbo.width != window.innerWidth * this.scale || newScene.fbo.height != window.innerHeight * this.scale) &&
-			newScene.onResized) newScene.onResized();
+			newScene.onResized ) { 
+				
+				newScene.onResized();
+				
+		}
 	
 		// with transition
-		if(transType != undefined && transType !== 0){
-			if(newScene['addResizeListener']) newScene.addResizeListener();
-			if(newScene['onWillAdd']) newScene.onWillAdd();
+		if ( transType != undefined && transType !== 0 ) {
+		
+			if ( newScene[ 'addResizeListener' ] ) newScene.addResizeListener();
+			if ( newScene[ 'onWillAdd' ] ) newScene.onWillAdd();
 			
 			// add a blank scene if was empty
-			if(!this.scene) this.scene = new THREE.PixelBoxEmptyScene( newScene.clearColor );
+			if ( !this.scene ) this.scene = new THREE.PixelBoxEmptyScene( newScene.clearColor );
+			
 			// if transition is in progress finish current first
-			else if(this.scene instanceof THREE.PixelBoxSceneTransition){
-				this.setScene(this.scene.sceneB, 0);
+			else if ( this.scene instanceof THREE.PixelBoxSceneTransition ) {
+			
+				this.setScene( this.scene.sceneB, 0 );
+				
 			}
 			
 			// notify scene that it will be removed
-			if(this.scene['onWillRemove']){
+			if ( this.scene[ 'onWillRemove' ] ) {
+			
 				this.scene.onWillRemove();
+				
 			}
 			
 			// do a transition
-			if(this.transitionScene){
-				this.transitionScene.init(this.scene, newScene);
+			if ( this.transitionScene ) {
+			
+				this.transitionScene.init( this.scene, newScene );
+				
 			} else {
-				this.transitionScene = new THREE.PixelBoxSceneTransition(this.scene, newScene);
+			
+				this.transitionScene = new THREE.PixelBoxSceneTransition( this.scene, newScene );
+				
 			}
 			
-			if(duration != undefined) this.transitionParams.transitionDuration = duration;
+			if ( duration != undefined ) this.transitionParams.transitionDuration = duration;
 			else this.transitionParams.transitionDuration = 1;
 			
-			if(transType instanceof THREE.Texture){
-				this.transitionScene.setTexture(transType);
-				this.transitionScene.useTexture(true);
+			if ( transType instanceof THREE.Texture ) {
+			
+				this.transitionScene.setTexture( transType );
+				this.transitionScene.useTexture( true );
+				
 			} else {
-				this.transitionScene.useTexture(false);
+			
+				this.transitionScene.useTexture( false );
+				
 			}
 			
-			this.transitionScene.setTextureThreshold(this.transitionParams.textureThreshold);
-			this.transitionScene.onTransitionComplete = function(s){ renderer.setScene(s, 0); }
+			this.transitionScene.setTextureThreshold( this.transitionParams.textureThreshold );
+			this.transitionScene.onTransitionComplete = function ( s ) { renderer.setScene( s, 0 ); }
 			this.scene = this.transitionScene;
 			
 		// without transition
 		} else {
+		
 			// notify old scene that it's removed
-			if((this.scene instanceof THREE.PixelBoxSceneTransition) && this.scene.sceneA && this.scene.sceneA['onRemoved']){
-				if(this.scene.sceneA['removeResizeListener']) this.scene.sceneA.removeResizeListener();
+			if ( (this.scene instanceof THREE.PixelBoxSceneTransition) && this.scene.sceneA && this.scene.sceneA[ 'onRemoved' ] ) {
+			
+				if ( this.scene.sceneA[ 'removeResizeListener' ]) this.scene.sceneA.removeResizeListener();
 				this.scene.sceneA.onRemoved();
 				this.scene.sceneA = undefined;
-			} else if(this.scene && this.scene['onRemoved']){
-				if(transType == undefined && this.scene['onWillRemove']) this.scene.onWillRemove();
-				if(this.scene['removeResizeListener']) this.scene.removeResizeListener();
+				
+			} else if ( this.scene && this.scene[ 'onRemoved' ] ) {
+			
+				if ( transType == undefined && this.scene[ 'onWillRemove' ] ) this.scene.onWillRemove();
+				if ( this.scene[ 'removeResizeListener' ] ) this.scene.removeResizeListener();
 				this.scene.onRemoved();
+				
 			}
 		
 			// set new scene
 			this.scene = newScene;
 			
 			// callback when scene transition is complete
-			if(transType == undefined){ 
-				if(newScene['addResizeListener']) newScene.addResizeListener();
-				if(newScene['onWillAdd']) newScene.onWillAdd();
-			} 
-			if(newScene['onAdded']) newScene.onAdded();
+			if ( transType == undefined ) { 
+			
+				if ( newScene[ 'addResizeListener' ] ) newScene.addResizeListener();
+				if ( newScene[ 'onWillAdd' ] ) newScene.onWillAdd();
+				
+			}
+			if ( newScene[ 'onAdded' ] ) newScene.onAdded();
 		}
 		
-		window.dispatchEvent(new Event('resize'));
+		window.dispatchEvent( new Event( 'resize' ) );
+		
 	}
 
 	/* render */
-	this._render = function() {
-		//renderer.stats.update();
-		if(!renderer.paused) requestAnimationFrame(renderer._render);
+	this._render = function () {
+	
+		if ( !renderer.paused ) requestAnimationFrame( renderer._render );
 		
 		var deltaTime = renderer.clock.getDelta();
 		
-		if(renderer.scene){ // assumes Transition or Scene
-			renderer.scene.render(deltaTime);
+		if ( renderer.scene ) { // assumes Transition or Scene
+		
+			renderer.scene.render( deltaTime );
+			
 		}
 		
-		if(renderer.stats) renderer.stats.update();
+		if ( renderer.stats ) renderer.stats.update();
+		
 	}
 
 	/* window resized callback */
-	this._windowResized = function(){
+	this._windowResized = function () {
+	
 		// notify the renderer of the size change
-		renderer.webgl.setSize(window.innerWidth * renderer.scale, window.innerHeight * renderer.scale);
+		renderer.webgl.setSize( window.innerWidth * renderer.scale, window.innerHeight * renderer.scale );
 		
 		// fill screen
 		renderer.webgl.domElement.style.width = window.innerWidth + 'px';
@@ -3560,38 +4153,48 @@ THREE.PixelBoxRenderer = function(){
 
 		// update PixelBox viewport uniform
 		THREE.PixelBoxUtil.updateViewPortUniform();
+		
 	};
 
 	/* pause rendering when app is inactive */
-	this.pause = function(p){
+	this.pause = function ( p ) {
+	
 		this.paused = p;
 		this.clock.getDelta();
 		this._render();
+		
 	};
+	
 }
 
 /* empty generic scene for transition */
-THREE.PixelBoxEmptyScene = function(clearColor){
+THREE.PixelBoxEmptyScene = function ( clearColor ) {
+
 	this.clearColor = clearColor != undefined ? clearColor : 0x0;
-	this.camera = new THREE.PerspectiveCamera(70, 1.0, 0.1, 10000 );
+	this.camera = new THREE.PerspectiveCamera( 70, 1.0, 0.1, 10000 );
+	
 	// setup scene
 	this.scene = new THREE.Scene();
+	
 	// create render target
 	var renderTargetParameters = { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, format: THREE.RGBFormat, stencilBuffer: false };
 	this.fbo = new THREE.WebGLRenderTarget( renderer.webgl.domElement.width, renderer.webgl.domElement.height, renderTargetParameters );
+	
 }
 
 THREE.PixelBoxEmptyScene.prototype = {
-	constructor:THREE.PixelBoxEmptyScene,
-	onWillAdd:function(){},
-	onAdded:function(){},
-	onWillRemove:function(){}, // called before this scene will be transitioned away
-	onRemoved:function(){}, // called before the scene is destroyed
-	onResized:function(){},// called by renderer's window resize callback
-	render:function( delta, rtt ) {
+	constructor: THREE.PixelBoxEmptyScene,
+	onWillAdd: function () {},
+	onAdded: function () {},
+	onWillRemove: function () {}, // called before this scene will be transitioned away
+	onRemoved: function () {}, // called before the scene is destroyed
+	onResized: function () {},// called by renderer's window resize callback
+	render: function ( delta, rtt ) {
+	
 		renderer.webgl.setClearColor( this.clearColor, 1 );
-		if (rtt) renderer.webgl.render( this.scene, this.camera, this.fbo, true );
+		if ( rtt ) renderer.webgl.render( this.scene, this.camera, this.fbo, true );
 		else renderer.webgl.render( this.scene, this.camera );
+		
 	}
 };
 
@@ -3600,13 +4203,13 @@ THREE.PixelBoxSceneTransition = function ( sa, sb ) {
 
 	this.scene = new THREE.Scene();
 	
-	this.cameraOrtho = new THREE.OrthographicCamera(renderer.webgl.domElement.width / -2, renderer.webgl.domElement.width / 2,
-													renderer.webgl.domElement.height / 2, renderer.webgl.domElement.height / -2, -1, 1);
+	this.cameraOrtho = new THREE.OrthographicCamera( renderer.webgl.domElement.width / -2, renderer.webgl.domElement.width / 2,
+													 renderer.webgl.domElement.height / 2, renderer.webgl.domElement.height / -2, -1, 1 );
 	
-	this.quadmaterial = new THREE.ShaderMaterial({
+	this.quadmaterial = new THREE.ShaderMaterial( {
 
 		uniforms: {
-			tScale: { type: "v2", value: new THREE.Vector2(1, 1) },
+			tScale: { type: "v2", value: new THREE.Vector2( 1, 1 ) },
 			
 			tDiffuse1: {
 				type: "t",
@@ -3633,6 +4236,7 @@ THREE.PixelBoxSceneTransition = function ( sa, sb ) {
 				value: null
 			}
 		},
+		
 		vertexShader: [
 
 			"varying vec2 vUv;",
@@ -3644,7 +4248,8 @@ THREE.PixelBoxSceneTransition = function ( sa, sb ) {
 
 			"}"
 
-		].join("\n"),
+		].join( "\n" ),
+		
 		fragmentShader: [
 
 			"uniform float mixRatio;",
@@ -3678,16 +4283,17 @@ THREE.PixelBoxSceneTransition = function ( sa, sb ) {
 			"}",
 		"}"
 
-		].join("\n")
+		].join( "\n" )
 
-	});		
+	} );		
 
-	quadgeometry = new THREE.PlaneBufferGeometry(renderer.webgl.domElement.width, renderer.webgl.domElement.height);
+	quadgeometry = new THREE.PlaneBufferGeometry( renderer.webgl.domElement.width, renderer.webgl.domElement.height );
 	
-	this.quad = new THREE.Mesh(quadgeometry, this.quadmaterial);
-	this.scene.add(this.quad);
+	this.quad = new THREE.Mesh( quadgeometry, this.quadmaterial );
+	this.scene.add( this.quad );
 
-	this.init = function(fromScene, toScene){
+	this.init = function ( fromScene, toScene ) {
+	
 		this.onTransitionComplete = null;
 		this.smoothTime = this.time = 0;
 		
@@ -3701,42 +4307,58 @@ THREE.PixelBoxSceneTransition = function ( sa, sb ) {
 		var ww = renderer.webgl.domElement.width;
 		var hh = renderer.webgl.domElement.height;
 		this.quadmaterial.uniforms.tScale.value.set(
-			Math.min(ww / hh, 1),
-			Math.min(hh / ww, 1)			
+			Math.min( ww / hh, 1 ),
+			Math.min( hh / ww, 1 )			
 		);
+		
 	}
+	
 	this.init(sa, sb);
 	
 	this.setTextureThreshold = function ( value ) {
-		this.quadmaterial.uniforms.threshold.value=value;
+	
+		this.quadmaterial.uniforms.threshold.value = value;
+		
 	}
 	
 	this.useTexture = function ( value ) {
-		this.quadmaterial.uniforms.useTexture.value = value?1:0;
+	
+		this.quadmaterial.uniforms.useTexture.value = value ? 1 : 0;
+		
 	}
 	
 	this.setTexture = function ( tex ) {
+	
 		this.quadmaterial.uniforms.tMixTexture.value = tex;
+		
 	}
 	
-	this.render = function( delta ) {
+	this.render = function (  delta ) {
+	
 		var transitionParams = renderer.transitionParams;
 		
 		// Transition animation
 		this.time += delta;
-		this.smoothTime = THREE.Math.smoothstep(this.time, 0, transitionParams.transitionDuration);
+		this.smoothTime = THREE.Math.smoothstep( this.time, 0, transitionParams.transitionDuration );
 		this.quadmaterial.uniforms.mixRatio.value = this.smoothTime;
 
-		// Prevent render both scenes when it's not necessary
-		if (this.smoothTime == 0) {
+		if ( this.smoothTime == 0 ) {
+		
 			this.sceneA.render( delta, false );
-		} else if (this.smoothTime == 1) {
+			
+		} else if ( this.smoothTime == 1 ) {
+		
 			this.sceneB.render( delta, false );
+			
 			// on complete
-			if(this.onTransitionComplete){
-				this.onTransitionComplete(this.sceneB);
+			if ( this.onTransitionComplete ) {
+			
+				this.onTransitionComplete( this.sceneB );
+				
 			}
+			
 		} else {
+			
 			// When 0<transition<1 render transition between two scenes
 			this.quadmaterial.uniforms.tDiffuse1.value = this.sceneA.fbo;
 			this.quadmaterial.uniforms.tDiffuse2.value = this.sceneB.fbo;
@@ -3747,33 +4369,37 @@ THREE.PixelBoxSceneTransition = function ( sa, sb ) {
 			THREE.PixelBoxUtil.updateViewPortUniform();
 			
 			renderer.webgl.render( this.scene, this.cameraOrtho, null, true );
+			
 		}
 
 	}
+	
 }
 
 var renderer = new THREE.PixelBoxRenderer();
 
 /*
-
-
+ * @author Kirill Edelman
+ * @source https://github.com/kirilledelman/pixelbox
+ * @documentation https://github.com/kirilledelman/pixelbox/wiki
+ * @license MIT
 */
 
 /* scene constructor */
-THREE.PixelBoxScene = function(){
+THREE.PixelBoxScene = function () {
 	
-	THREE.Scene.call(this);
+	THREE.Scene.call( this );
 
 	// setup scene
 	this.clearColor = 0x0;
 	this.scene = this; // compat. with editor
 	
 	// add fog
-	this.fog = new THREE.Fog(0x0, 100000, 10000000);
+	this.fog = new THREE.Fog( 0x0, 100000, 10000000 );
 	
 	// add ambient
-	this.ambientLight = new THREE.AmbientLight(0x0);
-	this.add(this.ambientLight);
+	this.ambientLight = new THREE.AmbientLight( 0x0 );
+	this.add( this.ambientLight );
 	
 	// flag to call PixelBoxUtil.updateLights
 	this.updateLights = true;
@@ -3782,44 +4408,53 @@ THREE.PixelBoxScene = function(){
 	this.updateMaterials = true; 
 	
 	// default camera
-	this._camera = new THREE.PerspectiveCamera(60, renderer.webgl.domElement.width / renderer.webgl.domElement.height, 1, 2000000 );
+	this._camera = new THREE.PerspectiveCamera( 60, renderer.webgl.domElement.width / renderer.webgl.domElement.height, 1, 2000000 );
 	this._camera.name = 'camera';
-	this._camera.position.set(70,70,70);
-	this._camera.lookAt(0,0,0);
-	this.add(this._camera);
+	this._camera.position.set( 70, 70, 70 );
+	this._camera.lookAt( 0, 0, 0 );
+	this.add( this._camera );
 
-	Object.defineProperty(this, 'camera', {
-		get: function(){ return this._camera; },
-		set: function(v){ 
+	Object.defineProperty( this, 'camera', {
+		get: function () { return this._camera; },
+		set: function ( v ) { 
+		
 			this._camera = v;
+			
 			// switch camera in renderPass of composer
-			if(this.useComposer && this.composer && this.composer.renderPass){
+			if ( this.useComposer && this.composer && this.composer.renderPass ) {
+			
 				this.composer.renderPass.camera = v;
+				
 			}
-		},
-	});	
+			
+		}
+	} );	
 	
 	// create render target / frame buffer
 	var renderTargetParameters = { 
 		minFilter: THREE.NearestFilter,
 		magFilter: THREE.NearestFilter,
 		format: THREE.RGBFormat, 
-		stencilBuffer: false };
+		stencilBuffer: false 
+	};
+	
 	this.fbo = new THREE.WebGLRenderTarget( renderer.webgl.domElement.width, renderer.webgl.domElement.height, renderTargetParameters );
 	
 	// create composer if necessary
-	if(this.useComposer){
-		/* Composer requires the following classes / includes:
-			<script src="js/lib/postprocessing/shaders/CopyShader.js"></script>
-			<script src="js/lib/postprocessing/EffectComposer.js"></script>
-			<script src="js/lib/postprocessing/RenderPass.js"></script>
-			<script src="js/lib/postprocessing/ShaderPass.js"></script>
-			<script src="js/lib/postprocessing/MaskPass.js"></script>
-			<script src="js/lib/screenShader.js"></script>
+	if ( this.useComposer ) {
+	
+		/* 
+			Composer requires the following classes / includes:
+			<script src="js/postprocessing/CopyShader.js"></script>
+			<script src="js/postprocessing/EffectComposer.js"></script>
+			<script src="js/postprocessing/RenderPass.js"></script>
+			<script src="js/postprocessing/ShaderPass.js"></script>
+			<script src="js/postprocessing/MaskPass.js"></script>
+			<script src="js/postprocessing/ScreenShader.js"></script>
 		*/			
 	
 		// composer
-		this.composer =  new THREE.EffectComposer(renderer.webgl, this.fbo);
+		this.composer =  new THREE.EffectComposer( renderer.webgl, this.fbo );
 		
 		// render pass
 	    this.composer.renderPass = new THREE.RenderPass( this, this.camera );
@@ -3828,11 +4463,12 @@ THREE.PixelBoxScene = function(){
 	    // last pass - ScreenPass is an example shader in js/lib/screenShader.js
 	    this.composer.screenPass = new THREE.ScreenPass();
 		this.composer.addPass( this.composer.screenPass );
+		
 	}
 	
 	// raycaster for mouse picking
 	this.raycaster = new THREE.Raycaster( new THREE.Vector3(), new THREE.Vector3(), 0.01, this.camera.far ) ;
-	this.floorPlane = new THREE.Plane(new THREE.Vector3(0,1,0), 0);
+	this.floorPlane = new THREE.Plane( new THREE.Vector3( 0, 1, 0 ), 0 );
 	
 	// object recycling pool
 	this.objectPool = {};
@@ -3840,28 +4476,27 @@ THREE.PixelBoxScene = function(){
 	return this;
 }
 
-THREE.PixelBoxScene.prototype = Object.create(THREE.Scene.prototype);
+THREE.PixelBoxScene.prototype = Object.create( THREE.Scene.prototype );
 THREE.PixelBoxScene.prototype.constructor = THREE.PixelBoxScene;
-
 
 /* ================================================================================ THREE.PixelBoxRenderer callbacks */
 	
 /* called by THREE.PixelBoxRenderer after scene transition has finished */
-THREE.PixelBoxScene.prototype.onAdded = function(){  };
+THREE.PixelBoxScene.prototype.onAdded = function () {};
 
 /* 	called by THREE.PixelBoxRenderer before scene transition begins  */	
-THREE.PixelBoxScene.prototype.onWillAdd = function(){  };
+THREE.PixelBoxScene.prototype.onWillAdd = function () {};
 
 /* 	called by THREE.PixelBoxRenderer after transition has finished */	
-THREE.PixelBoxScene.prototype.onWillRemove = function(){  };
+THREE.PixelBoxScene.prototype.onWillRemove = function () {};
 
 /* 	called by THREE.PixelBoxRenderer after scene has been removed */
-THREE.PixelBoxScene.prototype.onRemoved = function(){  };
+THREE.PixelBoxScene.prototype.onRemoved = function () {};
 	
 /* ================================================================================ Scene tick */
 
 /* scene think function */
-THREE.PixelBoxScene.prototype.tick = function(delta){  };
+THREE.PixelBoxScene.prototype.tick = function ( delta ) {};
 
 /* ================================================================================ Instantiate a template */
 
@@ -3872,23 +4507,32 @@ THREE.PixelBoxScene.prototype.tick = function(delta){  };
 		(Object) options - (optional) object to pass to populateObject function (see populateObject function for info)
 */
 
-THREE.PixelBoxScene.prototype.instantiate = function(templateName, options){
-	var def = this.templates[templateName];
+THREE.PixelBoxScene.prototype.instantiate = function ( templateName, options ) {
+
+	var def = this.templates[ templateName ];
 	
-	if(def) {
+	if ( def ) {
+	
 		options = options ? options : {};
 		options.templates = this.templates;
-		var objs = this.populateObject(null, [def], options);
-		if(objs.length) {
-			var obj = objs[0];
-			this.linkObjects(objs, obj);
+		
+		var objs = this.populateObject( null, [ def ], options );
+		
+		if ( objs.length ) {
+		
+			var obj = objs[ 0 ];
+			this.linkObjects( objs, obj );
 			return obj;
+			
 		}
-		console.log("Instantiate "+templateName+" failed");
+		
+		console.log( "Instantiate " + templateName + " failed" );
 		return null;
+		
 	}
 	
-	console.log("Template "+templateName+" not found in scene definiton");
+	console.log( "Template " + templateName + " not found in scene definiton" );
+	
 };
 	
 /* ================================================================================ Object recycling */
@@ -3912,63 +4556,107 @@ THREE.PixelBoxScene.prototype.instantiate = function(templateName, options){
 
 */
 
-THREE.PixelBoxScene.prototype.recycle = function(scrap){
+THREE.PixelBoxScene.prototype.recycle = function ( scrap ) {
+
 	// accept object or an array of objects
-	if(!_.isArray(scrap)) scrap = [ scrap ];
+	if ( !_.isArray( scrap ) ) scrap = [ scrap ];
 	
 	var objs, obj, containsLights = false;
-	for(var si = 0, sl = scrap.length; si < sl; si++){
-		var obj = scrap[si];
-		objs = obj.recursiveRemoveChildren();
-		if(obj.parent) { 
-			if(obj['name']){
-				if(obj.anchored && obj.parent.parent && obj.parent.parent[obj.name] == obj) {
-					delete obj.parent.parent[obj.name];
-				} else if(obj.parent[obj.name] == obj){
-					delete obj.parent[obj.name];
-				}
-			}
-			obj.parent.remove(obj);
-		}
-		objs.push(obj);
+	for ( var si = 0, sl = scrap.length; si < sl; si++ ) {
 	
-		for(var i = 0, l = objs.length; i < l; i++){
-			obj = objs[i];
-			var typeName = null;
-			if(obj instanceof THREE.PixelBox){
-				typeName = obj.geometry.data.name;
-			} else if(obj instanceof THREE.DirectionalLight){
-				typeName = 'DirectionalLight'; containsLights = true;
-			} else if(obj instanceof THREE.HemisphereLight){
-				typeName = 'HemisphereLight'; containsLights = true;
-			} else if(obj instanceof THREE.PointLight){
-				typeName = 'PointLight'; containsLights = true;
-			} else if(obj instanceof THREE.SpotLight){
-				typeName = 'SpotLight'; containsLights = true;
-			} else if(obj instanceof THREE.Mesh){
-				typeName = 'Geometry';
-			} else if(obj instanceof THREE.PerspectiveCamera){
-				typeName = 'Camera';
-			} else if(obj instanceof THREE.OrthographicCamera){
-				typeName = 'OrthographicCamera';
-			} else if(obj instanceof THREE.LinePath){
-				typeName = 'LinePath';
-			} else if(obj instanceof THREE.Object3D && obj.isContainer){
-				typeName = 'Object3D';
+		var obj = scrap[ si ];
+		objs = obj.recursiveRemoveChildren();
+		
+		if ( obj.parent ) { 
+		
+			if ( obj[ 'name' ] ) {
+			
+				if ( obj.anchored && obj.parent.parent && obj.parent.parent[ obj.name ] == obj ) {
+				
+					delete obj.parent.parent[ obj.name ];
+					
+				} else if ( obj.parent[ obj.name ] == obj ) {
+				
+					delete obj.parent[ obj.name ];
+					
+				}
+				
 			}
 			
-			if(typeName){
-				// store
-				if(!this.objectPool[typeName]) { 
-					this.objectPool[typeName] = [ obj ];
-				} else {
-					this.objectPool[typeName].push(obj);
-				}
+			obj.parent.remove( obj );
+			
+		}
+		
+		objs.push( obj );
+	
+		for ( var i = 0, l = objs.length; i < l; i++ ) {
+		
+			obj = objs[ i ];
+			var typeName = null;
+			
+			if ( obj instanceof THREE.PixelBox ) {
+			
+				typeName = obj.geometry.data.name;
+				
+			} else if ( obj instanceof THREE.DirectionalLight ) {
+			
+				typeName = 'DirectionalLight'; containsLights = true;
+				
+			} else if ( obj instanceof THREE.HemisphereLight ) {
+			
+				typeName = 'HemisphereLight'; containsLights = true;
+				
+			} else if ( obj instanceof THREE.PointLight ) {
+			
+				typeName = 'PointLight'; containsLights = true;
+				
+			} else if ( obj instanceof THREE.SpotLight ) {
+			
+				typeName = 'SpotLight'; containsLights = true;
+				
+			} else if ( obj instanceof THREE.Mesh ) {
+			
+				typeName = 'Geometry';
+				
+			} else if ( obj instanceof THREE.PerspectiveCamera ) {
+			
+				typeName = 'Camera';
+				
+			} else if ( obj instanceof THREE.OrthographicCamera ) {
+			
+				typeName = 'OrthographicCamera';
+				
+			} else if ( obj instanceof THREE.LinePath ) {
+			
+				typeName = 'LinePath';
+				
+			} else if ( obj instanceof THREE.Object3D && obj.isContainer ) {
+			
+				typeName = 'Object3D';
+				
 			}
-		}	
+			
+			if ( typeName ) {
+			
+				// store
+				if ( !this.objectPool[ typeName ] ) { 
+				
+					this.objectPool[ typeName ] = [ obj ];
+					
+				} else {
+				
+					this.objectPool[ typeName ].push( obj );
+					
+				}
+				
+			}
+			
+		}
+		
 	}
 	
-	if(containsLights) this.updateLights = true;
+	if ( containsLights ) this.updateLights = true;
+	
 };
 
 /* 
@@ -3977,13 +4665,19 @@ THREE.PixelBoxScene.prototype.recycle = function(scrap){
 	used by populateObject function	
 */
 
-THREE.PixelBoxScene.prototype.upcycle = function(objType){
+THREE.PixelBoxScene.prototype.upcycle = function ( objType ) {
+
 	var obj = null;
-	if(this.objectPool[objType] && this.objectPool[objType].length){
-		obj = this.objectPool[objType][this.objectPool[objType].length - 1];
-		this.objectPool[objType].pop();
+	
+	if ( this.objectPool[ objType ] && this.objectPool[ objType ].length ) {
+	
+		obj = this.objectPool[ objType ][ this.objectPool[ objType ].length - 1 ];
+		this.objectPool[ objType ].pop();
+		
 	}
+	
 	return obj;
+	
 };
 
 /* ================================================================================ Scene loading / populating */
@@ -3997,80 +4691,107 @@ THREE.PixelBoxScene.prototype.upcycle = function(objType){
 	
 */
 
-THREE.PixelBoxScene.prototype.populateWith = function(sceneDef, options){
-	if(!sceneDef){
-		console.log("PixelBoxScene.populateWith called with sceneDef = ",sceneDef);
-		console.log("Make sure that the name of scene in sceneDef matches the name of the file loaded with PixelBoxAssets.loadAssets(...)\nCurrently loaded assets: ", assets.cache.files);
+THREE.PixelBoxScene.prototype.populateWith = function ( sceneDef, options ) {
+
+	if ( !sceneDef ) {
+	
+		console.log( "PixelBoxScene.populateWith called with sceneDef = ", sceneDef );
+		console.log( "Make sure that the name of scene in sceneDef matches the name of the file loaded with PixelBoxAssets.loadAssets(...)\nCurrently loaded assets: ", assets.cache.files );
 		return;
+		
 	}
 
-	function value(obj, name, defaultVal){ if(!obj || obj[name] === undefined) return defaultVal; return obj[name]; }
+	function value( obj, name, defaultVal ) { if ( !obj || obj[ name ] === undefined) return defaultVal; return obj[ name ]; }
 
 	// config
-	this.clearColor = parseInt(value(sceneDef, 'clearColor', '0'), 16);
+	this.clearColor = parseInt( value( sceneDef, 'clearColor', '0' ), 16 );
 	
-	this.fog.color.set(parseInt(value(sceneDef, 'fogColor', '0'), 16));
-	this.fog.near = value(sceneDef, 'fogNear', 100000);
-	this.fog.far = value(sceneDef, 'fogFar', 10000000);
+	this.fog.color.set( parseInt( value( sceneDef, 'fogColor', '0' ), 16 ) );
+	this.fog.near = value( sceneDef, 'fogNear', 100000 );
+	this.fog.far = value( sceneDef, 'fogFar', 10000000 );
 	
-	this.ambientLight.color.set(parseInt(value(sceneDef, 'ambient', '0'), 16));
+	this.ambientLight.color.set( parseInt( value( sceneDef, 'ambient', '0' ), 16 ) );
 	
 	// add assets to cache if needed
-	for(var i in sceneDef.assets){
-		var asset = sceneDef.assets[i];
+	for ( var i in sceneDef.assets ) {
+	
+		var asset = sceneDef.assets[ i ];
+		
 		// compressed PixelBox asset
-		if(typeof(asset) == 'string'){
-			var json = LZString.decompressFromBase64(asset);
-			if(!json){
-				console.error("Failed to LZString decompressFromBase64: ", asset);
+		if ( typeof( asset ) == 'string' ) {
+		
+			var json = LZString.decompressFromBase64( asset );
+			
+			if ( !json ) {
+			
+				console.error( "Failed to LZString decompressFromBase64: ", asset );
 				continue;
+				
 			}
+			
 			try {
-				asset = JSON.parse(json);
-			} catch(e){
-				console.error("Failed to parse JSON ",e,json);
+			
+				asset = JSON.parse( json );
+				
+			} catch( e ) {
+			
+				console.error( "Failed to parse JSON ", e, json );
+				
 			}
+			
 		} else {
-			asset = _deepClone(asset, 100);
+		
+			asset = _deepClone( asset, 100 );
+			
 		}
 		
 		// already loaded
-		if(assets.cache.get(asset.name)) continue;
+		if ( assets.cache.get( asset.name ) ) continue;
 		
 		// save reference
 		asset.includedWithScene = this;
 		
 		// add asset to cache if needed
-		assets.cache.add(asset.name, asset);
+		assets.cache.add( asset.name, asset );
+		
 	}
 	
 	options = options ? options : {};
 	this.templates = options.templates = sceneDef.templates;
 
 	// populate scene
-	var addedObjects = this.populateObject(this, sceneDef.layers ? sceneDef.layers : [], options);
+	var addedObjects = this.populateObject( this, sceneDef.layers ? sceneDef.layers : [], options );
 
 	// prepare maxShadows placeholders
 	var numShadows = 0;
-	for(var i = 0, l = addedObjects.length; i < l; i++){
-		var obj = addedObjects[i];
-		if((obj instanceof THREE.DirectionalLight || obj instanceof THREE.SpotLight) && obj.castShadow) numShadows++;
+	for ( var i = 0, l = addedObjects.length; i < l; i++ ) {
+	
+		var obj = addedObjects[ i ];
+		if ( (obj instanceof THREE.DirectionalLight || obj instanceof THREE.SpotLight) && obj.castShadow ) numShadows++;
+		
 	}
-	var maxShadows = Math.max(0, sceneDef.maxShadows - numShadows);
+	
+	var maxShadows = Math.max( 0, sceneDef.maxShadows - numShadows );
 	this.placeHolderLights = [];
-	while(maxShadows){
-		var sun;
-		if(this.placeHolderLights.length) sun = new THREE.SpotLight(0x0, 1);
-		sun = new THREE.DirectionalLight(0x0, 1);
-		sun.castShadow = true;
-		sun.shadowMapWidth = sun.shadowMapHeight = 128;
-		this.add(sun);
-		this.placeHolderLights.push(sun);
+	
+	var light;
+	
+	while ( maxShadows ) {
+	
+		if ( this.placeHolderLights.length ) light = new THREE.SpotLight( 0x0, 1 );
+		else light = new THREE.DirectionalLight( 0x0, 1 );
+		
+		light.castShadow = true;
+		light.shadowMapWidth = light.shadowMapHeight = 128;
+		this.add( light );
+		this.placeHolderLights.push( light );
 		maxShadows--;
+		
 	}
 	
 	// link up objects targets
-	this.linkObjects(addedObjects, this);
+	this.linkObjects( addedObjects, this );
+	
 };
 
 /* 
@@ -4108,114 +4829,156 @@ THREE.PixelBoxScene.prototype.populateWith = function(sceneDef, options){
 	
 */
 
-THREE.PixelBoxScene.prototype.populateObject = function(object, layers, options){
+THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, options ) {
+
 	var degToRad = Math.PI / 180;
 	var objectsCreated = [];
 	options = options ? options : {};
 	
 	// create layers
-	for(var i = 0; i < layers.length; i++){
-		var layer = layers[i];
+	for ( var i = 0; i < layers.length; i++ ) {
+	
+		var layer = layers[ i ];
+		
 		// construct object
 		var obj3d = null;
-		//var prevObj3d = null;
 		var helper = null;
 		
 		// try to get an object of the same type from pool
-		if(options.makeObject) obj3d = options.makeObject(layer);
-		if(obj3d === -1) continue;
-		if(!obj3d && layer.asset != 'Instance') obj3d = this.upcycle(layer.asset);
-		//prevObj3d = obj3d;
+		if ( options.makeObject ) obj3d = options.makeObject( layer );
+		if ( obj3d === -1 ) continue;
+		if ( !obj3d && layer.asset != 'Instance' ) obj3d = this.upcycle( layer.asset );
 		
 		// Layer types
-		switch(layer.asset){
+		switch( layer.asset ) {
 		
 		case 'Instance':
-			if(!obj3d){
+		
+			if ( !obj3d ) {
+			
 				// no helpers in instances
-				options = _.clone(options);
+				options = _.clone( options );
 				options.helpers = false;
 
-				if(options.templates && options.templates[layer.template]){
+				if ( options.templates && options.templates[ layer.template ] ) {
+				
 					var objs;
-					var templateDef = options.templates[layer.template];
-					if(options.wrapTemplates){
+					var templateDef = options.templates[ layer.template ];
+					
+					if ( options.wrapTemplates ) {
+					
 						obj3d = new THREE.Object3D();
 						obj3d.isInstance = true;
 						obj3d.isTemplate = false;
-						objs = this.populateObject(obj3d, [ templateDef ], options);
-						var topmost = objs[0];
-						this.linkObjects(objs, topmost, !!options.skipProps);
+						objs = this.populateObject( obj3d, [ templateDef ], options );
+						var topmost = objs[ 0 ];
+						this.linkObjects( objs, topmost, !!options.skipProps );
 						topmost.omit = true;
-						topmost.position.set(0,0,0);
-						topmost.rotation.set(0,0,0);
-						topmost.scale.set(1,1,1);
+						topmost.position.set( 0, 0, 0 );
+						topmost.rotation.set( 0, 0, 0 );
+						topmost.scale.set( 1, 1, 1 );
 						topmost.visible = true;							
-						objectsCreated = objectsCreated.concat(objs);
+						objectsCreated = objectsCreated.concat( objs );
+						
 					} else {
-						objs = this.populateObject(object, [ templateDef ], options);
-						obj3d = objs[0];
+					
+						objs = this.populateObject( object, [ templateDef ], options );
+						obj3d = objs[ 0 ];
 						obj3d.isInstance = true;
 						obj3d.isTemplate = false;
-						objs.splice(0, 1);
-						this.linkObjects(objs, obj3d, !!options.skipProps);
-						objectsCreated = objectsCreated.concat(objs);
+						objs.splice( 0, 1 );
+						this.linkObjects( objs, obj3d, !!options.skipProps );
+						objectsCreated = objectsCreated.concat( objs );
+						
 					}
+					
 					// copy some props from template
 					obj3d.castShadow = (templateDef.castShadow != undefined ? templateDef.castShadow : true);
 					obj3d.receiveShadow = (templateDef.receiveShadow != undefined ? templateDef.receiveShadow : true);
+					
 				} else {
-					console.log('Template '+layer.template+' not found');
-					if(!obj3d) obj3d = new THREE.Object3D();
+				
+					console.log( "Template " + layer.template + " not found" );
+					if ( !obj3d ) obj3d = new THREE.Object3D();
+					
 				}
+				
 			}
 			
 			break;
 			
 		case 'Camera':
-			if(!obj3d) obj3d = new THREE.PerspectiveCamera(60, 1, 1, 1000);
-			if(layer.fov != undefined) obj3d.fov = layer.fov;
-			if(layer.near != undefined) obj3d.near = layer.near;
-			if(layer.far != undefined) obj3d.far = layer.far;
+		
+			if ( !obj3d ) obj3d = new THREE.PerspectiveCamera( 60, 1, 1, 1000 );
+			if ( layer.fov != undefined ) obj3d.fov = layer.fov;
+			if ( layer.near != undefined ) obj3d.near = layer.near;
+			if ( layer.far != undefined ) obj3d.far = layer.far;
 			obj3d.isDefault = layer.isDefault ? true : false;
-			if(!options.keepSceneCamera && obj3d.isDefault){
-				if(this.camera && this.camera.parent) this.camera.parent.remove(this.camera);
+			
+			if ( !options.keepSceneCamera && obj3d.isDefault ) {
+			
+				if ( this.camera && this.camera.parent ) this.camera.parent.remove( this.camera );
 				this.camera = obj3d;
-				//console.log(obj3d);
+				
 			}
-			if(options.helpers){
-				helper = new THREE.CameraHelper(obj3d);
+			
+			if ( options.helpers ) {
+			
+				helper = new THREE.CameraHelper( obj3d );
+				
 			}
+			
 			break;
 			
 		case 'OrthographicCamera':
+		
 			var sz = 64;
-			if(options.keepSceneCamera){ // inside editor
-				obj3d = new THREE.OrthographicCamera(-sz,sz,sz,-sz,1,1000);
+			if ( options.keepSceneCamera ) { // inside editor
+			
+				obj3d = new THREE.OrthographicCamera( -sz, sz, sz, -sz, 1, 1000 );
+				
 			} else {
+			
 				var w = renderer.webgl.domElement.width * 0.22;
 				var h = renderer.webgl.domElement.height * 0.22;
-				if(!obj3d) obj3d = new THREE.OrthographicCamera(-w,w,h,-h,1,1000);
+				if ( !obj3d ) obj3d = new THREE.OrthographicCamera( -w, w, h, -h, 1, 1000 );
+				
 			}
-			if(layer.zoom != undefined){
+			
+			if ( layer.zoom != undefined ) {
+			
 				obj3d.zoom = layer.zoom;
 				obj3d.updateProjectionMatrix();
+				
 			}
-			if(layer.isDefault && (this instanceof THREE.PixelBoxScene) && !this.camera.def) { 
-				this.camera.parent.remove(this.camera);
+			
+			if ( layer.isDefault && (this instanceof THREE.PixelBoxScene) && !this.camera.def ) { 
+			
+				this.camera.parent.remove( this.camera );
 				this.camera = obj3d;
+				
 			}
+			
 			obj3d.isDefault = layer.isDefault ? true : false;
-			if(!options.keepSceneCamera && obj3d.isDefault){
-				if(this.camera && this.camera.parent) this.camera.parent.remove(this.camera);
+			
+			if ( !options.keepSceneCamera && obj3d.isDefault ) {
+			
+				if ( this.camera && this.camera.parent ) this.camera.parent.remove( this.camera );
 				this.camera = obj3d;
+				
 			}
-			if(options.helpers){
-				helper = new THREE.CameraHelper(obj3d);
+			
+			if ( options.helpers ) {
+			
+				helper = new THREE.CameraHelper( obj3d );
+				
 			}
+			
 			break;
+			
 		case 'DirectionalLight':
-			if(!obj3d) obj3d = new THREE.DirectionalLight(0xffffff, 1.0);
+		
+			if ( !obj3d ) obj3d = new THREE.DirectionalLight( 0xffffff, 1.0 );
 		    obj3d.shadowMapWidth = obj3d.shadowMapHeight = 1024;
 		    obj3d.shadowCameraNear = (layer.shadowNear != undefined ? layer.shadowNear : 1);
 			obj3d.shadowCameraFar = (layer.shadowFar != undefined ? layer.shadowFar : 10000);
@@ -4224,118 +4987,172 @@ THREE.PixelBoxScene.prototype.populateObject = function(object, layers, options)
 			obj3d.shadowCameraTop = (layer.shadowVolumeHeight != undefined ? layer.shadowVolumeHeight : (obj3d.shadowCameraRight * 2)) * 0.5;
 			obj3d.shadowCameraBottom = -obj3d.shadowCameraTop;
 			obj3d.shadowBias = (layer.shadowBias != undefined ? layer.shadowBias : -0.0005);
-			if(obj3d.shadowMap){
+			if ( obj3d.shadowMap ) {
+			
 				obj3d.shadowMap.dispose();
 				obj3d.shadowMap = null;
-			}					
-			if(obj3d.shadowCamera){
-				if(obj3d.shadowCamera.parent){
-					obj3d.shadowCamera.parent.remove(obj3d.shadowCamera);
+				
+			}				
+			if ( obj3d.shadowCamera ) {
+			
+				if ( obj3d.shadowCamera.parent ) {
+				
+					obj3d.shadowCamera.parent.remove( obj3d.shadowCamera );
+					
 				}
+				
 				obj3d.shadowCamera = null;
+				
 			}
-			if(layer.color != undefined) obj3d.color.set(parseInt(layer.color, 16));
-			if(layer.intensity != undefined) obj3d.intensity = layer.intensity;
-			if(layer.shadowMapWidth != undefined) obj3d.shadowMapWidth = obj3d.shadowMapHeight = layer.shadowMapWidth;
-			if(layer.shadowMapHeight != undefined) obj3d.shadowMapHeight = layer.shadowMapHeight;
-			if(layer.target != undefined && _.isArray(layer.target) && layer.target.length == 3){// array of world pos
+			if ( layer.color != undefined ) obj3d.color.set( parseInt( layer.color, 16 ) );
+			if ( layer.intensity != undefined ) obj3d.intensity = layer.intensity;
+			if ( layer.shadowMapWidth != undefined ) obj3d.shadowMapWidth = obj3d.shadowMapHeight = layer.shadowMapWidth;
+			if ( layer.shadowMapHeight != undefined ) obj3d.shadowMapHeight = layer.shadowMapHeight;
+			if ( layer.target != undefined && _.isArray( layer.target ) && layer.target.length == 3 ) {// array of world pos
+			
 				obj3d.target = new THREE.Object3D();
-				obj3d.target.position.set(layer.target[0],layer.target[1],layer.target[2]);
+				obj3d.target.position.fromArray( layer.target );
+				
 			}
-			if(options.helpers) { 
-		    	helper = new THREE.DirectionalLightHelper(obj3d, 5);
-		    	//obj3d.shadowCameraVisible = true;
+			if ( options.helpers ) {
+			
+		    	helper = new THREE.DirectionalLightHelper( obj3d, 5 );
+		    	
 		    }
-			break;						
+		    
+			break;
+			
 		case 'SpotLight':
-			if(!obj3d) obj3d = new THREE.SpotLight(0xffffff, 1.0, 100, Math.PI / 3, 70);
+		
+			if ( !obj3d ) obj3d = new THREE.SpotLight( 0xffffff, 1.0, 100, Math.PI / 3, 70 );
 		    obj3d.shadowMapWidth = obj3d.shadowMapHeight = 1024;
 		    obj3d.shadowCameraNear = (layer.shadowNear != undefined ? layer.shadowNear : 1);
 			obj3d.shadowCameraFar = (layer.shadowFar != undefined ? layer.shadowFar : obj3d.distance);
 			obj3d.shadowBias = (layer.shadowBias != undefined ? layer.shadowBias : -0.0005);
-			if(obj3d.shadowMap){
+			if ( obj3d.shadowMap ) {
+			
 				obj3d.shadowMap.dispose();
 				obj3d.shadowMap = null;
+				
 			}					
-			if(obj3d.shadowCamera){
-				if(obj3d.shadowCamera.parent){
-					obj3d.shadowCamera.parent.remove(obj3d.shadowCamera);
+			if ( obj3d.shadowCamera ) {
+			
+				if ( obj3d.shadowCamera.parent ) {
+				
+					obj3d.shadowCamera.parent.remove( obj3d.shadowCamera );
+					
 				}
+				
 				obj3d.shadowCamera = null;
+				
 			}
-			if(layer.color != undefined) obj3d.color.set(parseInt(layer.color, 16));
-			if(layer.intensity != undefined) obj3d.intensity = layer.intensity;
-			if(layer.distance != undefined) obj3d.distance = layer.distance;
-			if(layer.exponent != undefined) obj3d.exponent = layer.exponent;
-			if(layer.angle != undefined){
+			if ( layer.color != undefined ) obj3d.color.set( parseInt( layer.color, 16 ) );
+			if ( layer.intensity != undefined ) obj3d.intensity = layer.intensity;
+			if ( layer.distance != undefined ) obj3d.distance = layer.distance;
+			if ( layer.exponent != undefined ) obj3d.exponent = layer.exponent;
+			if ( layer.angle != undefined ) {
+			
 				obj3d.angle = layer.angle * degToRad;
 				obj3d.shadowCameraFov = layer.angle * 2;
+				
 			}
-			if(layer.shadowMapWidth != undefined) obj3d.shadowMapWidth = obj3d.shadowMapHeight = layer.shadowMapWidth;
-			if(layer.shadowMapHeight != undefined) obj3d.shadowMapHeight = layer.shadowMapHeight;
-			if(layer.target != undefined && _.isArray(layer.target) && layer.target.length == 3){// array of world pos
+			if ( layer.shadowMapWidth != undefined ) obj3d.shadowMapWidth = obj3d.shadowMapHeight = layer.shadowMapWidth;
+			if ( layer.shadowMapHeight != undefined ) obj3d.shadowMapHeight = layer.shadowMapHeight;
+			if ( layer.target != undefined && _.isArray( layer.target ) && layer.target.length == 3 ) {// array of world pos
+			
 				obj3d.target = new THREE.Object3D();
-				obj3d.target.position.set(layer.target[0],layer.target[1],layer.target[2]);
+				obj3d.target.position.fromArray( layer.target );
+				
 			}
-			if(options.helpers) { 
-		    	helper = new THREE.SpotLightHelper(obj3d, 5);
-		    	//obj3d.shadowCameraVisible = true;
+			
+			if ( options.helpers ) { 
+			
+		    	helper = new THREE.SpotLightHelper( obj3d, 5 );
+		    	
 		    }
 			
-			break;								
+			break;
+			
 		case 'PointLight':
-			if(!obj3d) obj3d = new THREE.PointLight(0xffffff, 1.0);
-			if(layer.color != undefined) obj3d.color.set(parseInt(layer.color, 16));
-			if(layer.intensity != undefined) obj3d.intensity = layer.intensity;
-			if(layer.distance != undefined) obj3d.distance = layer.distance;
-			if(options.helpers) { 
-				helper = new THREE.PointLightHelper(obj3d, 5);
+		
+			if ( !obj3d ) obj3d = new THREE.PointLight( 0xffffff, 1.0 );
+			if ( layer.color != undefined ) obj3d.color.set(parseInt( layer.color, 16 ) );
+			if ( layer.intensity != undefined ) obj3d.intensity = layer.intensity;
+			if ( layer.distance != undefined ) obj3d.distance = layer.distance;
+			if ( options.helpers ) {
+			
+				helper = new THREE.PointLightHelper( obj3d, 5 );
+				
 			}
-			break;						
+			break;
+			
 		case 'HemisphereLight':
-			if(!obj3d) obj3d = new THREE.HemisphereLight(0xffffff, 0x003366, 0.5);
+		
+			if ( !obj3d ) obj3d = new THREE.HemisphereLight( 0xffffff, 0x003366, 0.5 );
 			
-			if(layer.colors) { obj3d.color.set(parseInt(layer.colors[0], 16)); obj3d.groundColor.set(parseInt(layer.colors[1], 16)); }
-			if(layer.intensity != undefined) obj3d.intensity = layer.intensity;
+			if ( layer.colors ) { 
+			
+				obj3d.color.set( parseInt( layer.colors[ 0 ], 16 ) );
+				obj3d.groundColor.set( parseInt( layer.colors[ 1 ], 16 ) );
+				
+			}
+				
+			if ( layer.intensity != undefined ) obj3d.intensity = layer.intensity;
 			
 			break;
+			
 		case 'Object3D':
-			if(!obj3d) obj3d = new THREE.Object3D();
+		
+			if ( !obj3d ) obj3d = new THREE.Object3D();
 			obj3d.isContainer = true;
+			
 			break;
+			
 		case 'LinePath':
-			if(!obj3d) obj3d = new THREE.LinePath();
-			obj3d.initialize(layer, options);				
-			break;			
+		
+			if ( !obj3d ) obj3d = new THREE.LinePath();
+			obj3d.initialize( layer, options );
+				
+			break;
+			
 		case 'Geometry':
-			var geom = this.makeGeometryObject(layer);
+		
+			var geom = this.makeGeometryObject( layer );
 			var mat;
-			if(obj3d) {
+			
+			if ( obj3d ) {
+			
 				obj3d.geometry.dispose();
 				obj3d.geometry = geom;
 				mat = obj3d.material;
 				
 				var _gl = renderer.webgl.context;
-				for (var name in geom.attributes) {
+				for ( var name in geom.attributes ) {
+				
 					var bufferType = ( name === 'index' ) ? _gl.ELEMENT_ARRAY_BUFFER : _gl.ARRAY_BUFFER;
 					var attribute = geom.attributes[ name ];
-					if(!attribute.buffer){
+					if ( !attribute.buffer ) {
+					
 						attribute.buffer = _gl.createBuffer();
 						var res = _gl.bindBuffer( bufferType, attribute.buffer );
 						_gl.bufferData( bufferType, attribute.array, _gl.STATIC_DRAW );
+						
 					}
+					
 				}
 				
 			} else {
+			
 				mat = new THREE.MeshPixelBoxMaterial();
-				obj3d = new THREE.Mesh(geom, mat);
+				obj3d = new THREE.Mesh( geom, mat );
+				
 			}
 			
 			obj3d.geometryType = layer.mesh;
 			
 			//material
-			mat.tint.set(layer.tint != undefined ? parseInt(layer.tint, 16) : 0xffffff);
-			mat.addColor.set(layer.addColor != undefined ? parseInt(layer.addColor, 16) : 0x0);
+			mat.tint.set( layer.tint != undefined ? parseInt( layer.tint, 16 ) : 0xffffff );
+			mat.addColor.set( layer.addColor != undefined ? parseInt( layer.addColor, 16 ) : 0x0 );
 			mat.alpha = (layer.alpha != undefined ? layer.alpha : 1.0);
 			mat.brightness = (layer.brightness != undefined ? layer.brightness : 0.0);
 			mat.stipple = (layer.stipple != undefined ? layer.stipple : 0.0);
@@ -4343,253 +5160,344 @@ THREE.PixelBoxScene.prototype.populateObject = function(object, layers, options)
 		
 		// lookup asset by name
 		default:
-			var asset = assets.cache.get(layer.asset);
-			if(asset){
-				if(!obj3d) obj3d = new THREE.PixelBox(asset);
+			var asset = assets.cache.get( layer.asset );
+			if ( asset ) {
+			
+				if ( !obj3d ) obj3d = new THREE.PixelBox( asset );
+				
 			} else {
-				console.log("Deferred loading of "+layer.asset);
-				if(!obj3d) { 
+			
+				console.log( "Deferred loading of " + layer.asset );
+				
+				if ( !obj3d ) { 
+				
 					// asset will be loaded later
 					// create placeholder
 					obj3d = new THREE.Object3D();
 					obj3d.isPlaceholder = true;
-					var a = new THREE.AxisHelper(1);
+					var a = new THREE.AxisHelper( 1 );
 					a.isHelper = true;
-					obj3d.add(a);
+					obj3d.add( a );
+					
 				}
+				
 			}
+			
 			break;	
+			
 		}					
 		
 		// store definition
-		obj3d.def = _deepClone(layer, 100);
+		obj3d.def = _deepClone( layer, 100 );
 		
 		// set name
-		if(layer.name){
+		if ( layer.name ) {
+		
 			obj3d.name = layer.name;
+			
 		}
 		
 		// add as a child
-		if(!obj3d.parent && object) { 
+		if ( !obj3d.parent && object ) { 
+		
 			// add to anchor, if specified
-			if(layer.anchor && object.anchors){
-				object.anchors[layer.anchor].add(obj3d);
+			if ( layer.anchor && object.anchors ) {
+			
+				object.anchors[ layer.anchor ].add( obj3d );
+				
 			// otherwise to object itself
 			} else {
-				object.add(obj3d);
-			}				
+			
+				object.add( obj3d );
+				
+			}
+			
 			obj3d.anchored = layer.anchor ? layer.anchor : false;
+			
 		}			
 		
 		// assign common values
-		if(layer.position) {
-			obj3d.position.set(layer.position[0],layer.position[1],layer.position[2]);
-		} else if(!(obj3d instanceof THREE.HemisphereLight)){ // damnit!
-			obj3d.position.set(0,0,0);
-		}
-		if(layer.rotation) { 
-			obj3d.rotation.set(layer.rotation[0]*degToRad,layer.rotation[1]*degToRad,layer.rotation[2]*degToRad);
-		} else {
-			obj3d.rotation.set(0,0,0);
-		}
-		if(layer.scale) { 
-			if(_.isArray(layer.scale)) obj3d.scale.set(layer.scale[0],layer.scale[1],layer.scale[2]); 
-			else {
-				obj3d.scale.set(layer.scale,layer.scale,layer.scale); 
-			}
-		} else {
-			obj3d.scale.set(1,1,1);
-		}
-		if(layer.jostle){
-			if(layer.jostle.rx) obj3d.rotation.x += (Math.random() * 2 - 1.0) * layer.jostle.rx * degToRad;
-			if(layer.jostle.ry) obj3d.rotation.y += (Math.random() * 2 - 1.0) * layer.jostle.ry * degToRad;
-			if(layer.jostle.rz) obj3d.rotation.z += (Math.random() * 2 - 1.0) * layer.jostle.rz * degToRad;
-			if(layer.jostle.s) obj3d.scale.multiplyScalar(1.0 + (Math.random() * 2 - 1.0) * layer.jostle.s);
-			if(layer.jostle.sx) obj3d.scale.x += (Math.random() * 2 - 1.0) * layer.jostle.sx;
-			if(layer.jostle.sy) obj3d.scale.y += (Math.random() * 2 - 1.0) * layer.jostle.sy;
-			if(layer.jostle.sz) obj3d.scale.z += (Math.random() * 2 - 1.0) * layer.jostle.sz;
-			if(layer.jostle.x) obj3d.position.x += (Math.random() * 2 - 1.0) * layer.jostle.x;
-			if(layer.jostle.y) obj3d.position.y += (Math.random() * 2 - 1.0) * layer.jostle.y;
-			if(layer.jostle.z) obj3d.position.z += (Math.random() * 2 - 1.0) * layer.jostle.z;
-		}
-		if(layer.lookAt) {
-			obj3d.lookAt(new THREE.Vector3(layer.lookAt[0],layer.lookAt[1],layer.lookAt[2]));
-		}
-		if(layer.castShadow != undefined) obj3d.castShadow = layer.castShadow;
-		if(layer.receiveShadow != undefined) obj3d.receiveShadow = layer.receiveShadow;
+		if ( layer.position ) {
 		
-		if(helper) { 
-			//obj3d.parent.add(helper);
-			this.scene.add(helper);
+			obj3d.position.fromArray( layer.position );
+			
+		} else if ( !(obj3d instanceof THREE.HemisphereLight) ) { // damnit!
+		
+			obj3d.position.set( 0, 0, 0 );
+			
+		}
+		
+		if ( layer.rotation ) {
+		
+			obj3d.rotation.set( layer.rotation[ 0 ] * degToRad, layer.rotation[ 1 ] * degToRad, layer.rotation[ 2 ] * degToRad );
+			
+		} else {
+		
+			obj3d.rotation.set( 0, 0, 0 );
+			
+		}
+		if ( layer.scale ) { 
+		
+			if ( _.isArray( layer.scale ) ) obj3d.scale.fromArray( layer.scale );
+			else obj3d.scale.set( layer.scale, layer.scale, layer.scale );
+			
+		} else {
+		
+			obj3d.scale.set( 1, 1, 1 );
+			
+		}
+		
+		if ( layer.castShadow != undefined ) obj3d.castShadow = layer.castShadow;
+		if ( layer.receiveShadow != undefined ) obj3d.receiveShadow = layer.receiveShadow;
+		
+		if ( helper ) { 
+		
+			this.scene.add( helper );
 			obj3d.helper = helper;
 			helper.isHelper = true;
 			helper.update();
 			helper.visible = false;
+			
 		}
 		
-		if(layer.visible != undefined) {
+		if ( layer.visible != undefined ) {
+		
 			obj3d.visible = layer.visible;
+			
 		} else obj3d.visible = true;
 		
 		// PixelBox specific
-		if(!obj3d.isInstance && obj3d instanceof THREE.PixelBox){
-			if(layer.pointSize != undefined) { 
-				obj3d.pointSize = layer.pointSize;
-			}
-			if(layer.alpha != undefined) { 
-				obj3d.alpha = layer.alpha;
-			} else {
-				obj3d.alpha = 1;
-			}			
-			if(layer.cullBack != undefined) obj3d.cullBack = layer.cullBack;
-			if(layer.occlusion != undefined) obj3d.occlusion = layer.occlusion;
-			if(layer.tint != undefined) { 
-				obj3d.tint.set(parseInt(layer.tint, 16));
-			} else {
-				obj3d.tint.set(0xffffff);
-			}
-			if(layer.add != undefined) { 
-				obj3d.addColor.set(parseInt(layer.add, 16));
-			} else {
-				obj3d.addColor.set(0x0);
-			}
-			if(layer.stipple != undefined) { 
-				obj3d.stipple = layer.stipple;
-			} else {
-				obj3d.stipple = 0;
-			}
-			if(layer.animSpeed != undefined) obj3d.animSpeed = layer.animSpeed;
+		if ( !obj3d.isInstance && obj3d instanceof THREE.PixelBox ) {
+		
+			if ( layer.pointSize != undefined ) { 
 			
-			if(layer.animName != undefined && obj3d.animNamed(layer.animName) != undefined){
+				obj3d.pointSize = layer.pointSize;
+				
+			}
+			
+			if ( layer.alpha != undefined ) { 
+			
+				obj3d.alpha = layer.alpha;
+				
+			} else {
+			
+				obj3d.alpha = 1;
+				
+			}
+					
+			if ( layer.cullBack != undefined ) obj3d.cullBack = layer.cullBack;
+			if ( layer.occlusion != undefined ) obj3d.occlusion = layer.occlusion;
+			if ( layer.tint != undefined ) { 
+			
+				obj3d.tint.set( parseInt( layer.tint, 16 ) );
+				
+			} else {
+			
+				obj3d.tint.set( 0xffffff );
+				
+			}
+			if ( layer.add != undefined ) { 
+			
+				obj3d.addColor.set( parseInt( layer.add, 16 ) );
+				
+			} else {
+			
+				obj3d.addColor.set( 0x0 );
+				
+			}
+			if ( layer.stipple != undefined ) { 
+			
+				obj3d.stipple = layer.stipple;
+				
+			} else {
+			
+				obj3d.stipple = 0;
+				
+			}
+			
+			if ( layer.animSpeed != undefined ) obj3d.animSpeed = layer.animSpeed;
+			
+			if ( layer.animName != undefined && obj3d.animNamed( layer.animName ) != undefined ) {
+			
 				var animOption = layer.animOption ? layer.animOption : 'gotoAndStop';
 				var animFrame = layer.animFrame != undefined ? layer.animFrame : 0;
 				
-				if(animOption == 'loopAnim'){
-					obj3d.loopAnim(layer.animName, Infinity, false);
-				} else if(animOption == 'loopFrom') { 
-					obj3d.gotoAndStop(layer.animName, animFrame + 1); 
-					obj3d.loopAnim(layer.animName, Infinity, true);
-				} else if(animOption == 'playAnim') { 
-					obj3d.playAnim(layer.animName);
+				if ( animOption == 'loopAnim' ) {
+				
+					obj3d.loopAnim( layer.animName, Infinity, false );
+					
+				} else if ( animOption == 'loopFrom' ) { 
+				
+					obj3d.gotoAndStop( layer.animName, animFrame + 1 ); 
+					obj3d.loopAnim( layer.animName, Infinity, true );
+					
+				} else if ( animOption == 'playAnim' ) { 
+				
+					obj3d.playAnim( layer.animName );
+					
 				} else {
-					obj3d.gotoAndStop(layer.animName, animFrame);
+				
+					obj3d.gotoAndStop( layer.animName, animFrame );
+					
 				}
-			} else if(layer.animFrame != undefined){
+				
+			} else if ( layer.animFrame != undefined ) {
+			
 				obj3d.stopAnim();
 				obj3d.frame = layer.animFrame;
+				
 			}
 			
 			// re-add anchors if removed
-			for(var a in obj3d.anchors){
-				if(!obj3d.anchors[a].parent){
-					obj3d.add(obj3d.anchors[a]);
+			for ( var a in obj3d.anchors ) {
+			
+				if ( !obj3d.anchors[a].parent ) {
+				
+					obj3d.add( obj3d.anchors[ a ] );
+					
 				}
-			}				
+				
+			}
+						
 		}
+		
 		// add as a name reference
-		if(layer.name && !options.noNameReferences && object){
-			if(!object[layer.name]) {
-				object[layer.name] = obj3d;
+		if ( layer.name && !options.noNameReferences && object ) {
+		
+			if ( !object[ layer.name ] ) {
+			
+				object[ layer.name ] = obj3d;
+				
 			// if already have one with that name
 			} else {
-				//console.log("skipped "+layer.name+" - already added to scene");
-				if(layer.name != 'camera' || (layer.name == 'camera' && !(obj3d instanceof THREE.Camera)) ) console.log("Warning: ",object,"["+layer.name+"] already exists. Overwriting.");
-				object[layer.name] = obj3d;
+			
+				if ( layer.name != 'camera' || (layer.name == 'camera' && !(obj3d instanceof THREE.Camera)) ) { 
+				
+					console.log( "Warning: ", object, "[" + layer.name + "] already exists. Overwriting." );
+					
+				}
+				
+				object[ layer.name ] = obj3d;
 			}
+			
 		}
 		
-		objectsCreated.splice(0, 0, obj3d);
+		objectsCreated.splice( 0, 0, obj3d );
 		
-		if(!obj3d.isInstance && !obj3d.parentInstance()){
+		if ( !obj3d.isInstance && !obj3d.parentInstance() ) {
 					
-			if(layer.isTemplate) obj3d.isTemplate = layer.isTemplate;
+			if ( layer.isTemplate ) obj3d.isTemplate = layer.isTemplate;
 			
 			// add templates for editor
-			if(layer.containsTemplates && options.templates){
-				for(var ti = 0; ti < layer.containsTemplates.length; ti++){
-					var td = options.templates[layer.containsTemplates[ti]];
+			if ( layer.containsTemplates && options.templates ) {
+			
+				for ( var ti = 0; ti < layer.containsTemplates.length; ti++ ) {
+				
+					var td = options.templates[ layer.containsTemplates[ ti ] ];
 					var addedTemplates = [];
-					if(td) { 
+					
+					if ( td ) {
+					
 						var nc = obj3d.children.length;
-						addedTemplates = addedTemplates.concat(this.populateObject(obj3d, [ options.templates[layer.containsTemplates[ti]] ], options));
-						this.linkObjects(addedTemplates, obj3d.children[nc], !!options.skipProps);
-						objectsCreated = objectsCreated.concat(addedTemplates);
+						addedTemplates = addedTemplates.concat( this.populateObject( obj3d, [ options.templates[ layer.containsTemplates[ ti ] ] ], options ) );
+						this.linkObjects( addedTemplates, obj3d.children[ nc ], !!options.skipProps );
+						objectsCreated = objectsCreated.concat( addedTemplates );
+						
 					}
+					
 				}
+				
 			}
 			
 		}
 		
 		// recursively process children
-		if(layer.layers){
-			objectsCreated = objectsCreated.concat(this.populateObject(obj3d, layer.layers, options));
+		if ( layer.layers ) {
+		
+			objectsCreated = objectsCreated.concat( this.populateObject( obj3d, layer.layers, options ) );
+			
 		}
 
 		// callback
-		if(options.initObject) options.initObject(obj3d, layer);
+		if ( options.initObject ) options.initObject( obj3d, layer );
+		
 	}
 	
 	return objectsCreated;
+	
 };
 
 /* generates geometry for 'Geometry' object during populateObject */
-THREE.PixelBoxScene.prototype.makeGeometryObject = function(layer){
-	var geom;
-	function param(p, def, min, max){ 
+THREE.PixelBoxScene.prototype.makeGeometryObject = function ( layer ) {
+
+	function param( p, def, min, max ) { 
+	
 		var val;
-		if(layer[p] !== undefined) val = layer[p]; 
+		if ( layer[ p ] !== undefined ) val = layer[ p ]; 
 		else val = def; 
-		if(min !== undefined) val = Math.max(min, val);
-		if(max !== undefined) val = Math.min(max, val);
+		if ( min !== undefined ) val = Math.max( min, val );
+		if ( max !== undefined ) val = Math.min( max, val );
 		return val;
+		
 	}
+	
 	var degToRad = Math.PI / 180;
-	switch(layer.mesh){
+	var geom;
+	
+	switch( layer.mesh ) {
+	
 	case 'Sphere':
-		layer.radius = param('radius',5);
-		layer.widthSegments = param('widthSegments',8,3);
-		layer.heightSegments = param('heightSegments',6,2);
-		layer.phiStart = param('phiStart',0);
-		layer.phiLength = param('phiLength',360);
-		layer.thetaStart = param('thetaStart',0);
-		layer.thetaLength = param('thetaLength',180);
-		geom = new THREE.SphereGeometry(layer.radius, 
+	
+		layer.radius = param( 'radius', 5 );
+		layer.widthSegments = param( 'widthSegments', 8, 3 );
+		layer.heightSegments = param( 'heightSegments', 6, 2 );
+		layer.phiStart = param( 'phiStart', 0 );
+		layer.phiLength = param( 'phiLength', 360 );
+		layer.thetaStart = param( 'thetaStart', 0 );
+		layer.thetaLength = param( 'thetaLength', 180 );
+		geom = new THREE.SphereGeometry(
+						layer.radius, 
 						layer.widthSegments, layer.heightSegments,
 						layer.phiStart * degToRad, layer.phiLength * degToRad,
-						layer.thetaStart * degToRad, layer.thetaLength * degToRad);
+						layer.thetaStart * degToRad, layer.thetaLength * degToRad );
 		break;
 		
 	case 'Box':
-		layer.widthSegments = param('widthSegments',1,1);
-		layer.heightSegments = param('heightSegments',1,1);
-		layer.depthSegments = param('depthSegments',1,1);
-		layer.width = param('width',10);
-		layer.height = param('height',10);
-		layer.depth = param('depth',10);
-		geom = new THREE.BoxGeometry(layer.width, layer.height, layer.depth, layer.widthSegments, layer.heightSegments, layer.depthSegments);
+	
+		layer.widthSegments = param( 'widthSegments', 1, 1 );
+		layer.heightSegments = param( 'heightSegments', 1, 1 );
+		layer.depthSegments = param( 'depthSegments', 1, 1 );
+		layer.width = param( 'width', 10 );
+		layer.height = param( 'height', 10 );
+		layer.depth = param( 'depth', 10 );
+		geom = new THREE.BoxGeometry( layer.width, layer.height, layer.depth, layer.widthSegments, layer.heightSegments, layer.depthSegments );
 		break;
 
 	case 'Plane':
 	default:
-		layer.widthSegments = param('widthSegments',1,1);
-		layer.heightSegments = param('heightSegments',1,1);
-		layer.width = param('width',10);
-		layer.height = param('height',10);
-		if(!layer.inverted)
-			geom = new THREE.PlaneBufferGeometry(layer.width, layer.height,layer.widthSegments, layer.heightSegments);
+	
+		layer.widthSegments = param( 'widthSegments', 1, 1 );
+		layer.heightSegments = param( 'heightSegments', 1, 1 );
+		layer.width = param( 'width', 10 );
+		layer.height = param( 'height', 10 );
+		if ( !layer.inverted )
+			geom = new THREE.PlaneBufferGeometry( layer.width, layer.height,layer.widthSegments, layer.heightSegments );
 		else
-			geom = new THREE.PlaneGeometry(layer.width, layer.height,layer.widthSegments, layer.heightSegments);
+			geom = new THREE.PlaneGeometry( layer.width, layer.height,layer.widthSegments, layer.heightSegments );
 
 		break;
 	}
 	
 	// flip normals
-	if(layer.inverted){
-		for ( var i = 0; i < geom.faces.length; i ++ ) {
+	if ( layer.inverted ) {
+	
+		for ( var i = 0; i < geom.faces.length; i++ ) {
+		
 		    var face = geom.faces[ i ];
 		    var temp = face.a;
 		    face.a = face.c;
 		    face.c = temp;
+		    
 		}
 		
 		geom.computeFaceNormals();
@@ -4597,88 +5505,124 @@ THREE.PixelBoxScene.prototype.makeGeometryObject = function(layer){
 		
 		var faceVertexUvs = geom.faceVertexUvs[ 0 ];
 		for ( var i = 0; i < faceVertexUvs.length; i ++ ) {
+		
 		    var temp = faceVertexUvs[ i ][ 0 ];
 		    faceVertexUvs[ i ][ 0 ] = faceVertexUvs[ i ][ 2 ];
 		    faceVertexUvs[ i ][ 2 ] = temp;
+		    
 		}
+		
 	}
 	
 	return geom;
 };
 
-/* links "#targetName.$anchorname.targetName" style references to objects in the hierarchy
+/* 
+	links "#targetName.$anchorname.targetName" style references to objects in the hierarchy
 	Used by Spot and Direct lights 
-	*/
-THREE.PixelBoxScene.prototype.linkObjects = function(objs, top, skipProps){
+*/
+THREE.PixelBoxScene.prototype.linkObjects = function ( objs, top, skipProps ) {
 	
-	function dereferenceObject(nameFragments, currentLevel){
+	function dereferenceObject( nameFragments, currentLevel ) {
+	
 		// start
-		if(typeof(nameFragments) == 'string'){
-			nameFragments = nameFragments.split('.');
-			if(!nameFragments.length) return top;
-			return dereferenceObject(nameFragments, currentLevel);
+		if ( typeof( nameFragments ) == 'string' ) {
+		
+			nameFragments = nameFragments.split( '.' );
+			if ( !nameFragments.length ) return top;
+			return dereferenceObject( nameFragments, currentLevel );
 			
 		// descend
-		} else if(nameFragments.length){
-			var first = nameFragments[0];
-			nameFragments.splice(0, 1);
+		} else if ( nameFragments.length ) {
+		
+			var first = nameFragments[ 0 ];
+			nameFragments.splice( 0, 1 );
 			var obj = null;
-			if(first.substr(0, 1) == '$') { 
-				if(currentLevel.anchors)
-					obj = currentLevel.anchors[first.substr(1)];
-				else 
-					first = first.substr(1);
+			
+			if ( first.substr( 0, 1 ) == '$' ) { 
+			
+				if ( currentLevel.anchors ) obj = currentLevel.anchors[ first.substr( 1 ) ];
+				else first = first.substr( 1 );
+				
 			}
-			if(!obj){ 
-				for(var ci = 0, cl = currentLevel.children.length; ci < cl; ci++){
-					if(currentLevel.children[ci].name == first){
-						obj = currentLevel.children[ci];
+			
+			if ( !obj ) {
+			
+				for ( var ci = 0, cl = currentLevel.children.length; ci < cl; ci++ ) {
+				
+					if ( currentLevel.children[ ci ].name == first ) {
+					
+						obj = currentLevel.children[ ci ];
 						break;
+						
 					}
+					
 				}
+				
 			}
-			if(!obj) return null;
-			if(nameFragments.length) return dereferenceObject(nameFragments, obj);
+			
+			if ( !obj ) return null;
+			if ( nameFragments.length ) return dereferenceObject( nameFragments, obj );
 			return obj;
+			
 		}
 		
 		return null;
+		
 	}
 	
 	// link
-	for(var i = 0, l = objs.length; i < l; i++){
-		var obj = objs[i];
+	for ( var i = 0, l = objs.length; i < l; i++ ) {
+	
+		var obj = objs[ i ];
+		
 		// do .target prop first (for lights)
 		var propVal;
 		var found;
 		var nearestTemplate = undefined;
 		this.updateMaterials = this.updateLights = this.updateLights || (obj instanceof THREE.Light);
-		if(obj instanceof THREE.SpotLight || obj instanceof THREE.DirectionalLight){
+		
+		if ( obj instanceof THREE.SpotLight || obj instanceof THREE.DirectionalLight ) {
+		
 			propVal = obj.def.target;
-			if(typeof(propVal) == 'string' && propVal.substr(0,1) == '#'){
+			if ( typeof( propVal ) == 'string' && propVal.substr( 0, 1 ) == '#' ) {
+			
 				nearestTemplate = obj.nearestTemplate();
-				found = dereferenceObject(propVal.substr(1), nearestTemplate ? nearestTemplate : top);
-				if(found) { 
+				found = dereferenceObject( propVal.substr( 1 ), nearestTemplate ? nearestTemplate : top );
+				
+				if ( found ) { 
+				
 					obj.target = found;
 					obj.def.target = true;
+					
 				}
+				
 			}
+			
 		}
-		if(obj.def.props && !skipProps){
-			for(var propName in obj.def.props){
-				propVal = obj.def.props[propName];
-				if(typeof(propVal) == 'string' && propVal.substr(0,1) == '#'){
-					if(nearestTemplate === undefined) nearestTemplate = obj.nearestTemplate();
-					found = dereferenceObject(propVal.substr(1), nearestTemplate ? nearestTemplate : top);
-					if(found) { 
-						obj[propName] = found;
-						//obj.def.props[propName] = true;
-					}
+		
+		if ( obj.def.props && !skipProps ) {
+		
+			for ( var propName in obj.def.props ) {
+			
+				propVal = obj.def.props[ propName ];
+				
+				if ( typeof( propVal ) == 'string' && propVal.substr( 0, 1 ) == '#' ) {
+				
+					if ( nearestTemplate === undefined ) nearestTemplate = obj.nearestTemplate();
+					found = dereferenceObject( propVal.substr( 1 ), nearestTemplate ? nearestTemplate : top);
+					if ( found ) obj[ propName ] = found;
+					
 				} else {
-					obj[propName] = propVal;
+				
+					obj[ propName ] = propVal;
+					
 				}
+				
 			}
+			
 		}
+		
 	}
 	
 };
@@ -4693,93 +5637,129 @@ THREE.PixelBoxScene.prototype.linkObjects = function(objs, top, skipProps){
 	Assets that persist between scenes should be loaded with assets.loadAssets,
 	and assets that only exist in a scene as part of scene definition should be part of sceneDef
 	
-*/		
-THREE.PixelBoxScene.prototype.dispose = function(unloadAssets){
+*/	
+	
+THREE.PixelBoxScene.prototype.dispose = function ( unloadAssets ) {
+
 	// remove all children
-	this.recycle(this.children.concat());
+	this.recycle( this.children.concat() );
 	
 	// clear object pool
-	for(var otype in this.objectPool){
-		var objects = this.objectPool[otype];
-		for(var i = 0, l = objects.length; i < l; i++){
-			var obj = objects[i];
-			if(obj['dispose']) obj.dispose();
+	for ( var otype in this.objectPool ) {
+	
+		var objects = this.objectPool[ otype ];
+		
+		for ( var i = 0, l = objects.length; i < l; i++ ) {
+		
+			var obj = objects[ i ];
+			if ( obj[ 'dispose' ] ) obj.dispose();
+			
 		}
-		delete this.objectPool[otype];
+		
+		delete this.objectPool[ otype ];
+		
 	}
 	
-	if(unloadAssets){
+	if ( unloadAssets) {
+	
 		// clean up assets that were loaded with this scene
-		for(var aname in assets.cache.files){
-			var asset = assets.cache.files[aname];
-			if(asset.frameData && asset.includedWithScene == this){
-				THREE.PixelBoxUtil.dispose(asset);
-				delete assets.cache.files[aname];
+		for ( var aname in assets.cache.files ) {
+			var asset = assets.cache.files[ aname ];
+			
+			if ( asset.frameData && asset.includedWithScene == this ) {
+			
+				THREE.PixelBoxUtil.dispose( asset );
+				delete assets.cache.files[ aname ];
+				
 			}
+			
 		}
+		
 	}
+	
 };
 
 /* ================================================================================ THREE.PixelBoxRenderer callbacks */
 
-THREE.PixelBoxScene.prototype.addResizeListener = function(){
-	this._boundOnResized = this.onResized.bind(this);
-	window.addEventListener('resize', this._boundOnResized);
+THREE.PixelBoxScene.prototype.addResizeListener = function () {
+
+	this._boundOnResized = this.onResized.bind( this );
+	window.addEventListener( 'resize', this._boundOnResized );
+	
 };
 
-THREE.PixelBoxScene.prototype.removeResizeListener = function(){
-	window.removeEventListener('resize', this._boundOnResized);
+THREE.PixelBoxScene.prototype.removeResizeListener = function () {
+
+	window.removeEventListener( 'resize', this._boundOnResized );
 	this._boundOnResized = null;
+	
 };
 
 /* render callback */
-THREE.PixelBoxScene.prototype.render = function( delta, rtt ) {
-	this.tick(delta);
+THREE.PixelBoxScene.prototype.render = function ( delta, rtt ) {
+
+	this.tick( delta );
 	
 	// remove maxShadows placeholders
-	if(this.placeHolderLights){
-		for(var i = 0; i < this.placeHolderLights.length; i++){
+	if ( this.placeHolderLights ) {
+	
+		for ( var i = 0; i < this.placeHolderLights.length; i++ ) {
+		
 			this.remove(this.placeHolderLights[i]);
+			
 		}
-		this.recycle(this.placeHolderLights);
+		
+		this.recycle( this.placeHolderLights );
 		this.placeHolderLights = null;
 		this.updateLights = true;
+		
 	}
 	
-	if(this.updateLights || this.updateMaterials){
-		THREE.PixelBoxUtil.updateLights(this, this.updateMaterials);
+	if ( this.updateLights || this.updateMaterials ) {
+	
+		THREE.PixelBoxUtil.updateLights( this, this.updateMaterials );
 		this.updateLights = false;
 		this.updateMaterials = false;
+		
 	}
 	
-	renderer.webgl.setClearColor( this.clearColor, 1);
+	renderer.webgl.setClearColor( this.clearColor, 1 );
 	
-	if(this.useComposer){
+	if ( this.useComposer ) {
+	
 		this.composer.screenPass.renderToScreen = !rtt;
-		this.composer.render(delta);
+		this.composer.render( delta );
+		
 	} else {
-		if (rtt) renderer.webgl.render( this, this.camera, this.fbo, true );
+	
+		if ( rtt ) renderer.webgl.render( this, this.camera, this.fbo, true );
 		else renderer.webgl.render( this, this.camera );
 	}
 	
 };
 
 /* resize callback */
-THREE.PixelBoxScene.prototype.onResized = function(){
+THREE.PixelBoxScene.prototype.onResized = function () {
+
 	this.camera.aspect = renderer.webgl.domElement.width / renderer.webgl.domElement.height;
 	this.camera.updateProjectionMatrix();
-	var renderTargetParameters = { 
-		minFilter: THREE.NearestFilter,//THREE.LinearFilter, 
-		magFilter: THREE.NearestFilter,//THREE.LinearFilter, 
-		format: THREE.RGBFormat, 
-		stencilBuffer: false };
-	this.fbo = new THREE.WebGLRenderTarget( renderer.webgl.domElement.width, 
-											renderer.webgl.domElement.height, renderTargetParameters );
 	
-	if(this.useComposer){
+	var renderTargetParameters = { 
+		minFilter: THREE.NearestFilter,
+		magFilter: THREE.NearestFilter,
+		format: THREE.RGBFormat, 
+		stencilBuffer: false 
+	};
+	
+	this.fbo = new THREE.WebGLRenderTarget( renderer.webgl.domElement.width, renderer.webgl.domElement.height, renderTargetParameters );
+	
+	if ( this.useComposer ) {
+	
 		this.composer.screenPass.onResized();	
-		this.composer.reset(this.fbo);
+		this.composer.reset( this.fbo );
+		
 	}
+	
 };
 //     Underscore.js 1.7.0
 //     http://underscorejs.org
