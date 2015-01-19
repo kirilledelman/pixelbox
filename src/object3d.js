@@ -19,6 +19,20 @@ THREE.Object3D.prototype.nearestParentWithProperty = function ( prop, val ) {
 	
 }
 
+THREE.Object3D.prototype.nearestParentWithoutProperty = function ( prop ) {
+
+	if ( this.parent ) {
+	
+		if ( this.parent[ prop ] === undefined ) return this.parent;
+		
+		return this.parent.nearestParentWithoutProperty( prop );
+		
+	}
+	
+	return null;
+	
+}
+
 THREE.Object3D.prototype.isVisibleRecursive = function () {
 
 	if ( !this.visible ) return false;

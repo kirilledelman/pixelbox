@@ -276,6 +276,10 @@ THREE.PixelBoxScene.prototype.recycle = function ( scrap ) {
 					
 				}
 				
+			} else if( obj.dispose ) {
+				
+				obj.dispose();
+				
 			}
 			
 		}
@@ -389,12 +393,78 @@ THREE.PixelBoxScene.prototype.populateWith = function ( sceneDef, options ) {
 	// populate scene
 	var addedObjects = this.populateObject( this, sceneDef.layers ? sceneDef.layers : [], options );
 
-	// prepare maxShadows placeholders
+	// link up objects targets
+	this.linkObjects( addedObjects, this );
+
 	var numShadows = 0;
-	for ( var i = 0, l = addedObjects.length; i < l; i++ ) {
+	this.staticGroups = {};
+	
+	this.updateMatrixWorld( true );
+	
+	// process maxShadows and staticGroups
+	for ( var i = addedObjects.length - 1; i >= 0; i-- ) {
 	
 		var obj = addedObjects[ i ];
+		
+		// prepare to create maxShadows placeholders
 		if ( (obj instanceof THREE.DirectionalLight || obj instanceof THREE.SpotLight) && obj.castShadow ) numShadows++;
+		
+		// generate static groups
+		if ( obj instanceof THREE.PixelBox && obj.staticGroup && obj.visible ) {
+			
+			obj.updateMatrixWorld( true );
+			
+			var group = this.staticGroups[ obj.staticGroup ];
+			
+			if ( !group ) {
+				
+				this.staticGroups[ obj.staticGroup ] = group = new THREE.PixelBox( { staticGroup: obj.staticGroup, pointSize: obj.pointSize, width: 1, depth: 1, height: 1 } );
+				
+				group.position.copy( obj.position );
+				obj.parent.localToWorld( group.position );
+				
+				this.add( group );
+				
+				group.updateMatrixWorld( true );
+				
+			}
+			
+			// append this PixelBox to static group
+			group.appendPixelBox( obj );
+			
+			// transplant all children to first grandparent without staticGroup
+			var grandparent = obj.nearestParentWithoutProperty( 'staticGroup' );
+			if ( !grandparent ) grandparent = this;
+			
+			while ( obj.children.length ) {
+				
+				var child = obj.children[ obj.children.length - 1 ];
+				obj.children.pop();
+				
+				child.transplant( grandparent );
+			}
+			
+			// remove from parent
+			if ( obj.parent ) obj.parent.remove( obj );
+			
+			// dispose
+			obj.visible = false;
+			obj.dispose();			
+			
+		}
+		
+	}
+	
+	// commit added groups
+	for ( var groupName in this.staticGroups ) {
+		
+		var group = this.staticGroups[ groupName ];
+		
+		// bake
+		THREE.PixelBoxUtil.finalizeFrames( group.geometry.data, new THREE.Vector3(), true );
+		
+		// commit
+		group.frame = 0;
 		
 	}
 	
@@ -416,8 +486,6 @@ THREE.PixelBoxScene.prototype.populateWith = function ( sceneDef, options ) {
 		
 	}
 	
-	// link up objects targets
-	this.linkObjects( addedObjects, this );
 	
 };
 
@@ -792,6 +860,8 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 			
 				if ( !obj3d ) obj3d = new THREE.PixelBox( asset );
 				
+				obj3d.staticGroup = layer.staticGroup;
+				
 			} else {
 			
 				console.log( "Deferred loading of " + layer.asset );
@@ -824,8 +894,10 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 			
 		}
 		
+		var addAsChild = (!obj3d.parent && object);
+		
 		// add as a child
-		if ( !obj3d.parent && object ) { 
+		if ( addAsChild ) { 
 		
 			// add to anchor, if specified
 			if ( layer.anchor && object.anchors ) {
@@ -988,8 +1060,10 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 						
 		}
 		
+		var addNameReference = (layer.name && !options.noNameReferences && object);
+		
 		// add as a name reference
-		if ( layer.name && !options.noNameReferences && object ) {
+		if ( addNameReference ) {
 		
 			if ( !object[ layer.name ] ) {
 			
@@ -1287,7 +1361,7 @@ THREE.PixelBoxScene.prototype.dispose = function ( unloadAssets ) {
 		
 	}
 	
-	if ( unloadAssets) {
+	if ( unloadAssets ) {
 	
 		// clean up assets that were loaded with this scene
 		for ( var aname in assets.files ) {

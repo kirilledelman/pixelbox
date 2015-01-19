@@ -994,7 +994,7 @@ THREE.PixelBox = function ( data ) {
 			var data = geom.data;
 			 
 			// validate frame
-			if ( f == geom._frame || !data.frameData.length ) return;
+			if ( f == geom._frame || !data.frameData || !data.frameData.length ) return;
 			if ( f < 0 ) f = data.frameData.length + ( f % data.frameData.length );
 			f = f % data.frameData.length;
 			geom._frame = f;
@@ -1084,15 +1084,19 @@ THREE.PixelBox = function ( data ) {
 	// set frame / anim params
 	this.vertexBufferStart = 0;
 	this.vertexBufferLength = 0;
-	this.frame = 0;
-	this.totalFrames = data.frameData.length;
+	if( data.frameData ) { 
+	
+		this.frame = 0;
+		this.totalFrames = data.frameData.length;
+		
+	}
 
 	// dispose function
 	this.dispose = function ( unloadAsset ) {
 	
 		if ( this.geometry ) {
 		
-			if ( unloadAsset ) {
+			if ( unloadAsset || ( this.geometry.data && !this.geometry.data.name ) ) {
 			
 				if ( this.geometry.data ) {
 				
@@ -1107,7 +1111,7 @@ THREE.PixelBox = function ( data ) {
 			
 			delete this.geometry;
 			this.material.dispose();
-			
+			this.customDepthMaterial.dispose();
 		}
 		
 	};
@@ -1209,10 +1213,10 @@ THREE.PixelBox = function ( data ) {
 	// create particles
 	if ( data.particles !== undefined ) {
 	
-		var pos = new Array();
-		var clr = new Array();
-		var nrm = new Array();
-		var occ = new Array();
+		var pos = [];
+		var clr = [];
+		var nrm = [];
+		var occ = [];
 		
 		for ( var i = 0; i < data.particles; i++ ) {
 		
@@ -1526,6 +1530,87 @@ THREE.PixelBox.prototype.updateFrameWithCallback = function ( callBack, extraPar
 	
 };
 
+THREE.PixelBox.prototype.appendPixelBox = function ( other ) {
+	
+	if ( this.geometry._frame != -1 ) { 
+		
+		console.log( "Unable to append - geometry already committed." );
+		return;
+		
+	}
+	
+	if ( !this.geometry.data.frameData ) this.geometry.data.frameData = [];
+
+	if ( !this.geometry.boundingBox ) this.geometry.boundingBox = new THREE.Box3();
+	if ( !this.geometry.boundingSphere ) this.geometry.boundingSphere = new THREE.Sphere();	
+	
+	other.updateMatrixWorld( true );
+
+	// transform other's points by mat
+	var mat = other.matrixWorld.clone();
+	var inv = new THREE.Matrix4();
+	inv.getInverse( this.matrixWorld );
+	//mat.multiply( inv );
+	inv.multiply( mat );
+	mat.copy( inv );
+
+	// append points
+	
+	var pos = [];
+	var clr = [];
+	var nrm = [];
+	var occ = [];
+	
+	var frameData = other.geometry.data.frameData[ 0 ];
+	var index = other.geometry.offsets.length ? other.geometry.offsets[ 0 ].index : 0;
+	var end = index + (other.geometry.offsets.length ? other.geometry.offsets[ 0 ].count : frameData.o.array.length);
+
+	var p = new THREE.Vector3(), n = new THREE.Vector3(), c = new THREE.Vector4(), o, nd, ab, m;
+	
+	for ( var i = index; i < end; i++ ) {
+	
+		// load 
+		p.set( frameData.p.array[ i * 3 ], frameData.p.array[ i * 3 + 1 ], frameData.p.array[ i * 3 + 2 ] );
+		n.set( frameData.n.array[ i * 3 ], frameData.n.array[ i * 3 + 1 ], frameData.n.array[ i * 3 + 2 ] );
+		c.set( frameData.c.array[ i * 4 ], frameData.c.array[ i * 4 + 1 ], frameData.c.array[ i * 4 + 2 ], frameData.c.array[ i * 4 + 3 ] );
+		o = frameData.o.array[ i ] * other.occlusion;
+		
+		// transform pos
+		p.applyMatrix4( mat );
+		nd = n.length();
+
+		// bake color
+		var ab = Math.max( other.addColor.r, other.addColor.g, other.addColor.b );
+		c.x = c.x * other.tint.r + other.addColor.r * ab;
+		c.y = c.y * other.tint.g + other.addColor.g * ab;
+		c.z = c.z * other.tint.b + other.addColor.b * ab;
+		c.w = c.w * other.alpha;
+
+		// transform normal
+		n.normalize().transformDirection( mat ).multiplyScalar( Math.min( 2, nd + ab ) );
+		
+		// store
+		pos.push( p.x, p.y, p.z );
+		clr.push( c.x, c.y, c.z, c.w );
+		nrm.push( n.x, n.y, n.z );
+		occ.push( o );
+		
+		// update bounding box
+		m = this.geometry.boundingBox.min;
+		m.set( Math.min( m.x, p.x ), Math.min( m.y, p.y ), Math.min( m.z, p.z ) );
+		m = this.geometry.boundingBox.max;
+		m.set( Math.max( m.x, p.x ), Math.max( m.y, p.y ), Math.max( m.z, p.z ) );
+
+		// update bounding sphere		
+		m = this.geometry.boundingSphere.radius;
+		this.geometry.boundingSphere.radius = Math.max( m, p.length() );
+	}
+	
+	this.geometry.data.frameData.push( { p: pos, n: nrm, c: clr, o: occ } );
+	
+}
+
+
 /* 
 
 	PixelBoxUtil namespace
@@ -1624,6 +1709,8 @@ THREE.PixelBoxUtil.dispose = function ( data ) {
 		
 		delete data.frameData;
 		
+		if ( data.name && assets.files[ data.name ] == data ) assets.remove( data.name );
+		
 	}
 	
 };
@@ -1662,7 +1749,7 @@ THREE.PixelBoxUtil.processPixelBoxFrames = function ( data ) {
 		// decode frames
 		if ( !data.frameData ) {
 		
-			data.frameData = new Array( data.frames.length );
+			data.frameData = [];
 			
 			for ( var f = 0; f < data.frames.length; f++ ) {
 			
@@ -1813,10 +1900,10 @@ THREE.PixelBoxUtil.decodeFrame = function ( dataObject, frameIndex ) {
 	var floor = dataObject.floor != undefined ? dataObject.floor : false;
 	var optimize = dataObject.optimize != undefined ? dataObject.optimize : true;
 
-	var positions = new Array();
-	var colors = new Array();
-	var normals = new Array();
-	var occlusion = new Array();
+	var positions = [];
+	var colors = [];
+	var normals = [];
+	var occlusion = [];
 	var width = dataObject.width, height = dataObject.height, depth = dataObject.depth;
 	var hw = width * 0.5, hh = height * 0.5, hd = depth * 0.5;
 
@@ -2135,7 +2222,7 @@ THREE.PixelBoxUtil.decodeFrame = function ( dataObject, frameIndex ) {
 
 */
 
-THREE.PixelBoxUtil.finalizeFrames = function ( dataObject, pivot ) {
+THREE.PixelBoxUtil.finalizeFrames = function ( dataObject, pivot, singleFrame ) {
 
 	var ffd = dataObject.frameData[ 0 ];
 	var curOffset = 0;
@@ -2182,6 +2269,15 @@ THREE.PixelBoxUtil.finalizeFrames = function ( dataObject, pivot ) {
 		ffd.p[ i ] -= pivot.x;
 		ffd.p[ i + 1 ] -= pivot.y;
 		ffd.p[ i + 2 ] -= pivot.z;
+		
+	}
+	
+	if ( singleFrame && dataObject.frameData.length > 1 ) {
+		
+		dataObject.frameData.splice( 1, dataObject.frameData.length - 1 );
+		
+		ffd.s = 0;
+		ffd.l = ffd.o.length;
 		
 	}
 	

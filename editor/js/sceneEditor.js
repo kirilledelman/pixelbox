@@ -1010,7 +1010,7 @@ EditSceneScene.prototype = {
 			}
 		}
 		
-		var addedObjects = this.populateObject(pasteTarget, this.sceneCopyItem.objects, { helpers: true, keepSceneCamera:true, noNameReferences:true, wrapTemplates: true, templates: this.doc.serializedTemplates, skipProps: true, initObject: this.populateObjectCallback });
+		var addedObjects = this.populateObject(pasteTarget, this.sceneCopyItem.objects, { helpers: true, keepSceneCamera:true, noNameReferences:true, wrapTemplates: true, templates: this.doc.serializedTemplates, skipProps: true, noStaticGroups:true, initObject: this.populateObjectCallback });
 		this.updateLights = true;
 		var doAdd = [];
 		var undoAdd = [];
@@ -1526,7 +1526,7 @@ EditSceneScene.prototype = {
 		}
 		
 		// populate
-		var opts = { helpers: true, keepSceneCamera:true, noNameReferences: true, wrapTemplates: true, templates: dataObject.templates, skipProps: true, initObject: this.populateObjectCallback };
+		var opts = { helpers: true, keepSceneCamera:true, noNameReferences: true, wrapTemplates: true, templates: dataObject.templates, skipProps: true, noStaticGroups:true, initObject: this.populateObjectCallback };
 		var addedObjects = this.populateObject(this.container, dataObject.layers ? dataObject.layers : [], opts);
 		if(dataObject.containsTemplates){
 			for(var ti = 0; ti < dataObject.containsTemplates.length; ti++){
@@ -3852,7 +3852,7 @@ EditSceneScene.prototype = {
 			}
 		});
 		if(numRebuilt){
-			var opts = { helpers: false, keepSceneCamera:true, noNameReferences:true, wrapTemplates: false, templates: this.doc.serializedTemplates, skipProps: true, initObject: this.populateObjectCallback };
+			var opts = { helpers: false, keepSceneCamera:true, noNameReferences:true, wrapTemplates: false, templates: this.doc.serializedTemplates, skipProps: true, noStaticGroups:true, initObject: this.populateObjectCallback };
 			for(var uuid in replacements){
 				var obj = replacements[uuid];
 				var def = obj.serialize(null);
@@ -4334,6 +4334,20 @@ EditSceneScene.prototype = {
 		editScene.addUndo({name:prop, mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
 											redo:[editScene.setObjectProperty, doArr, prop]});
 		editScene.setObjectProperty(doArr, prop);
+	},
+
+	pixelboxGroupChanged:function(val){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'staticGroup';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj[prop]]);
+		}
+		editScene.addUndo({name:prop, mergeable:true, undo:[editScene.setAnimProperty, undoArr, prop],
+											redo:[editScene.setAnimProperty, doArr, prop]});
+		editScene.setAnimProperty(doArr, prop);		
 	},
 
 	pixelboxAnimSpeedChanged:function(val){
@@ -5745,6 +5759,12 @@ EditSceneScene.prototype = {
 				} else if(!mults['cullBack']){
 					$('#pixelbox-cullBack')[0].checked = obj.cullBack;
 				}
+				if(prevObj && prevObj.def.staticGroup != obj.def.staticGroup){
+					$('#pixelbox-group').attr('placeholder','Multiple').val('').data('prevVal',''); mults['pixelbox-group'] = true;
+				} else if(!mults['pixelbox-group']){
+					var newVal = obj.def.staticGroup;
+					$('#pixelbox-group:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}				
 				if(prevObj && prevObj.def['animOption'] != obj.def['animOption']){
 					$('#panel-pixelbox input[name=pixelbox-animOption]').addClass('multiple').attr('checked',false);
 					mults['animOption'] = true;
@@ -6354,19 +6374,20 @@ EditSceneScene.prototype = {
 			<label class="w32 right-align pad5">Color tint</label><div id="pixelbox-tint" class="color-swatch"/>\
 			<label class="w31 right-align pad5">Add</label><div id="pixelbox-add" class="color-swatch"/><hr/>\
 			<input tabindex="4" type="checkbox" id="pixelbox-cullBack"/><label for="pixelbox-cullBack" class="w3">Cull backface</label>\
+			<label class="w4 right-align" for="pixelbox-group">Static group</label> <input type="text" id="pixelbox-group" size="7" tabindex="6">\
 			<hr/>\
-			<label for="pixelbox-animSpeed" class="w4 pad5 right-align">Animation speed</label><input tabindex="5" type="text" class="center" id="pixelbox-animSpeed" size="1"/>\
+			<label for="pixelbox-animSpeed" class="w4 pad5 right-align">Animation speed</label><input tabindex="7" type="text" class="center" id="pixelbox-animSpeed" size="1"/>\
 			<a id="anim-restart" class="sub float-right">restart all</a><br/>\
-			<input type="radio" name="pixelbox-animOption" tabindex="6" id="pixelbox-gotoAndStop" value="gotoAndStop"/>\
+			<input type="radio" name="pixelbox-animOption" tabindex="7" id="pixelbox-gotoAndStop" value="gotoAndStop"/>\
 			<label for="pixelbox-gotoAndStop" class="w32 pad5 left-align">gotoAndStop</label>\
-			<input type="radio" name="pixelbox-animOption" tabindex="7" id="pixelbox-playAnim" value="playAnim"/>\
+			<input type="radio" name="pixelbox-animOption" tabindex="8" id="pixelbox-playAnim" value="playAnim"/>\
 			<label for="pixelbox-playAnim" class="w32 pad5 left-align">playAnim</label><br/>\
-			<input type="radio" name="pixelbox-animOption" tabindex="8" id="pixelbox-loopAnim" value="loopAnim"/>\
+			<input type="radio" name="pixelbox-animOption" tabindex="9" id="pixelbox-loopAnim" value="loopAnim"/>\
 			<label for="pixelbox-loopAnim" class="w32 pad5 left-align">loopAnim</label>\
-			<input type="radio" name="pixelbox-animOption" tabindex="9" id="pixelbox-loopFrom" value="loopFrom"/>\
+			<input type="radio" name="pixelbox-animOption" tabindex="10" id="pixelbox-loopFrom" value="loopFrom"/>\
 			<label for="pixelbox-loopFrom" class="w32 pad5 left-align">loopFrom</label><br/>\
-			<label class="w1 right-align pad5">Anim </label><select id="pixelbox-animName" tabindex="10" class="w4"/>\
-			<label for="pixelbox-animFrame" class="w2 right-align pad5">Frame</label><input tabindex="11" class="center" type="text" id="pixelbox-animFrame" size="1"/>\
+			<label class="w1 right-align pad5">Anim </label><select id="pixelbox-animName" tabindex="11" class="w4"/>\
+			<label for="pixelbox-animFrame" class="w2 right-align pad5">Frame</label><input tabindex="12" class="center" type="text" id="pixelbox-animFrame" size="1"/>\
 			</div>');
 
 		$('#anim-restart').click(this.restartAllAnims);
@@ -6379,6 +6400,10 @@ EditSceneScene.prototype = {
 		vc = valueChanged(this.pixelboxOcclusionChanged);
 		$('#pixelbox-occlusion').spinner({step:0.1, min:0, max:1, change:vc, stop:vc});
 		$('#pixelbox-cullBack').click(this.pixelboxCullBackChanged);
+		
+		vc = textFieldValueChanged(this.pixelboxGroupChanged.bind(this));
+		$('#pixelbox-group').change(vc).keydown(function(e){ $(e.target).attr('placeholder',''); if(e.which == 13) $(e.target).data('prevVal',Math.random()).trigger('change').blur(); });
+		
 		vc = valueChanged(this.pixelboxAnimSpeedChanged);
 		$('#pixelbox-animSpeed').spinner({step:0.1, change:vc, stop:vc});
 		$('#panel-pixelbox input[name=pixelbox-animOption]').click(this.pixelboxAnimTypeChanged);
@@ -6960,7 +6985,7 @@ EditSceneScene.prototype = {
 			
 			var addedObject;
 			var addedObjects = this.populateObject(addTarget, [ objDef ], 
-								{ helpers: true, keepSceneCamera:true, noNameReferences:true, wrapTemplates: true, templates: this.doc.serializedTemplates, skipProps: true, initObject: this.populateObjectCallback });
+								{ helpers: true, keepSceneCamera:true, noNameReferences:true, wrapTemplates: true, templates: this.doc.serializedTemplates, skipProps: true, noStaticGroups:true, initObject: this.populateObjectCallback });
 			addedObject = addTarget.children[addTarget.children.length - 1];
 			
 			var doAdd = [ [addedObject, addTarget] ];
@@ -7386,6 +7411,7 @@ EditSceneScene.prototype = {
 	},
 	
 	onResized: function(e){
+		if(!e) return;
 		if($(e.target).hasClass('floating-panel')) return;
 		
 		this.camera.aspect = window.innerWidth / window.innerHeight;
@@ -7602,6 +7628,7 @@ THREE.Object3D.prototype.serialize = function(templates){
 				}
 			}
 		}
+		if(this.def.staticGroup != undefined) def.staticGroup = this.def.staticGroup;
 		if(this.def.animName != undefined) def.animName = this.def.animName;
 		if(this.def.animOption != undefined) def.animOption = this.def.animOption;
 		if(this.def.animFrame != undefined) def.animFrame = this.def.animFrame;

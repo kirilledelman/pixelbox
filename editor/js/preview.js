@@ -27,7 +27,7 @@ PreviewScene.prototype.constructor = PreviewScene;
 /* called on document load */
 $(document).ready(function(){
 	// init renderer
-	if(!renderer.init(2.0, true)){ // scale, stats
+	if(!renderer.init(1.0, true)){ // scale, stats
 		var err = "Your browser doesn't support WebGL";
 		alert(err);
 		console.error(err);
