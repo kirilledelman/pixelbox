@@ -1,10 +1,12 @@
 /*
 
-	Sample screen shader to use with THREE.PixelBoxScene .useComposer == true
+	Screen shader to use with THREE.PixelBoxScene .screenPass == true
+	
+	Feel free to modify.
 	
 */
 
-THREE.ScreenShader = {
+THREE.PixelBoxScreenShader = {
 
 	uniforms: {
 		"tDiffuse":   { type: "t", value: null },
@@ -27,6 +29,8 @@ THREE.ScreenShader = {
 		"uniform sampler2D tDiffuse;",
 
 		"varying vec2 vUv;",
+		
+		//"varying out vec4 Color1;",
 
 		"void main() {",
 			// sample the source
@@ -46,10 +50,12 @@ THREE.ScreenShader = {
 
 };
 
-THREE.ScreenPass = function () {
+THREE.PixelBoxScreenPass = function ( sourceScene ) {
 
-	var screenShader = THREE.ScreenShader;
+	var screenShader = THREE.PixelBoxScreenShader;
+
 	this.screenUniforms = THREE.UniformsUtils.clone( screenShader.uniforms );
+
 	this.screenMaterial = new THREE.ShaderMaterial( {
 		uniforms: this.screenUniforms,
 		vertexShader:  screenShader.vertexShader,
@@ -60,36 +66,42 @@ THREE.ScreenPass = function () {
 	this.needsSwap = false;
 	this.clear = false;
 
+	this.sourceScene = sourceScene;
+
 	this.camera = new THREE.OrthographicCamera( -1, 1, 1, -1, 0, 1 );
 	this.scene  = new THREE.Scene();
 
-	this.quad = new THREE.Mesh( new THREE.PlaneGeometry( 2, 2 ), null );
+	this.quad = new THREE.Mesh( new THREE.PlaneGeometry( 2, 2 ), this.screenMaterial );
 	this.scene.add( this.quad );
 	
 };
 
-THREE.ScreenPass.prototype = {
+THREE.PixelBoxScreenPass.prototype = {
 
-	onResized: function() {},
+	onResized: function() { },
 	
-	render: function ( renderer, writeBuffer, readBuffer, delta, maskActive ) {
+	render: function ( webgl, writeBuffer, readBuffer, delta, maskActive ) {
 
-		if ( maskActive ) renderer.context.disable( renderer.context.STENCIL_TEST );
+		// render using shader
 		
-		this.quad.material = this.screenMaterial;
-		this.screenUniforms.tDiffuse.value = readBuffer;
+		this.screenUniforms.tDiffuse.value = readBuffer;		
+		
 		this.screenUniforms.time.value += delta;
 		
 		if ( this.renderToScreen ) {
 		
-			renderer.render( this.scene, this.camera );
+			webgl.render( this.scene, this.camera );
 			
 		} else {
 		
-			renderer.render( this.scene, this.camera, writeBuffer, false );
+			webgl.render( this.scene, this.camera, writeBuffer, false );
 			
 		}
 		
 	}
 	
 };
+
+
+
+

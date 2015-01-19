@@ -40,12 +40,7 @@ THREE.PixelBoxScene = function () {
 		
 			this._camera = v;
 			
-			// switch camera in renderPass of composer
-			if ( this.useComposer && this.composer && this.composer.renderPass ) {
-			
-				this.composer.renderPass.camera = v;
-				
-			}
+			this.onCameraChanged( v );
 			
 		}
 	} );	
@@ -60,8 +55,8 @@ THREE.PixelBoxScene = function () {
 	
 	this.fbo = new THREE.WebGLRenderTarget( renderer.webgl.domElement.width, renderer.webgl.domElement.height, renderTargetParameters );
 	
-	// create composer if necessary
-	if ( this.useComposer ) {
+	// create composer for the screen pass, if necessary
+	if ( this.screenPass ) {
 	
 		/* 
 			Composer requires the following classes / includes:
@@ -70,8 +65,14 @@ THREE.PixelBoxScene = function () {
 			<script src="js/postprocessing/RenderPass.js"></script>
 			<script src="js/postprocessing/ShaderPass.js"></script>
 			<script src="js/postprocessing/MaskPass.js"></script>
-			<script src="js/postprocessing/ScreenShader.js"></script>
+			<script src="js/postprocessing/PixelBoxScreenPass.js"></script>
 		*/			
+		
+		if( !(THREE.EffectComposer && THREE.RenderPass && THREE.CopyShader && THREE.MaskPass && THREE.ShaderPass) ){
+		
+			throw "Using .screenPass requires the following THREE.js classes: THREE.EffectComposer, THREE.RenderPass, THREE.MaskPass, THREE.ShaderPass, THREE.CopyShader.";
+			
+		}
 	
 		// composer
 		this.composer =  new THREE.EffectComposer( renderer.webgl, this.fbo );
@@ -80,10 +81,16 @@ THREE.PixelBoxScene = function () {
 	    this.composer.renderPass = new THREE.RenderPass( this, this.camera );
 	    this.composer.addPass( this.composer.renderPass );	    
 	    
-	    // last pass - ScreenPass is an example shader in js/lib/screenShader.js
-	    this.composer.screenPass = new THREE.ScreenPass();
-		this.composer.addPass( this.composer.screenPass );
+	    // pass a ShaderPass-like instance to use as final render pass, or pass `true` to use THREE.PixelBoxScreenPass
+	    if( typeof(this.screenPass) !== 'object' ) {
+	    
+		    // PixelBoxScreenPass is an example shader in js/postprocessing/PixelBoxScreenPass.js
+		    this.screenPass = new THREE.PixelBoxScreenPass( this );
 		
+		}
+		
+		this.composer.addPass( this.screenPass );
+
 	}
 	
 	// raycaster for mouse picking
@@ -316,7 +323,7 @@ THREE.PixelBoxScene.prototype.populateWith = function ( sceneDef, options ) {
 	if ( !sceneDef ) {
 	
 		console.log( "PixelBoxScene.populateWith called with sceneDef = ", sceneDef );
-		console.log( "Make sure that the name of scene in sceneDef matches the name of the file loaded with PixelBoxAssets.loadAssets(...)\nCurrently loaded assets: ", assets.cache.files );
+		console.log( "Make sure that the name of scene in sceneDef matches the name of the file loaded with PixelBoxAssets.loadAssets(...)\nCurrently loaded assets: ", assets.files );
 		return;
 		
 	}
@@ -366,13 +373,13 @@ THREE.PixelBoxScene.prototype.populateWith = function ( sceneDef, options ) {
 		}
 		
 		// already loaded
-		if ( assets.cache.get( asset.name ) ) continue;
+		if ( assets.get( asset.name ) ) continue;
 		
 		// save reference
 		asset.includedWithScene = this;
 		
 		// add asset to cache if needed
-		assets.cache.add( asset.name, asset );
+		assets.add( asset.name, asset );
 		
 	}
 	
@@ -780,7 +787,7 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 		
 		// lookup asset by name
 		default:
-			var asset = assets.cache.get( layer.asset );
+			var asset = assets.get( layer.asset );
 			if ( asset ) {
 			
 				if ( !obj3d ) obj3d = new THREE.PixelBox( asset );
@@ -1283,13 +1290,13 @@ THREE.PixelBoxScene.prototype.dispose = function ( unloadAssets ) {
 	if ( unloadAssets) {
 	
 		// clean up assets that were loaded with this scene
-		for ( var aname in assets.cache.files ) {
-			var asset = assets.cache.files[ aname ];
+		for ( var aname in assets.files ) {
+			var asset = assets.files[ aname ];
 			
 			if ( asset.frameData && asset.includedWithScene == this ) {
 			
 				THREE.PixelBoxUtil.dispose( asset );
-				delete assets.cache.files[ aname ];
+				delete assets.files[ aname ];
 				
 			}
 			
@@ -1300,20 +1307,6 @@ THREE.PixelBoxScene.prototype.dispose = function ( unloadAssets ) {
 };
 
 /* ================================================================================ THREE.PixelBoxRenderer callbacks */
-
-THREE.PixelBoxScene.prototype.addResizeListener = function () {
-
-	this._boundOnResized = this.onResized.bind( this );
-	window.addEventListener( 'resize', this._boundOnResized );
-	
-};
-
-THREE.PixelBoxScene.prototype.removeResizeListener = function () {
-
-	window.removeEventListener( 'resize', this._boundOnResized );
-	this._boundOnResized = null;
-	
-};
 
 /* render callback */
 THREE.PixelBoxScene.prototype.render = function ( delta, rtt ) {
@@ -1345,39 +1338,63 @@ THREE.PixelBoxScene.prototype.render = function ( delta, rtt ) {
 	
 	renderer.webgl.setClearColor( this.clearColor, 1 );
 	
-	if ( this.useComposer ) {
+	if ( this.screenPass ) {
 	
-		this.composer.screenPass.renderToScreen = !rtt;
+		this.screenPass.renderToScreen = !rtt;
 		this.composer.render( delta );
 		
 	} else {
 	
 		if ( rtt ) renderer.webgl.render( this, this.camera, this.fbo, true );
 		else renderer.webgl.render( this, this.camera );
+		
 	}
 	
 };
 
+/* 
+	called whenever scene.camera = newCamera is invoked
+ 	allows updating screenPass and renderPass's camera property	
+*/
+THREE.PixelBoxScene.prototype.onCameraChanged = function ( newCamera ) {
+
+	// switch camera in renderPass of composer
+	if ( this.screenPass && this.composer && this.composer.renderPass ) {
+	
+		this.composer.renderPass.camera = newCamera;
+		
+	}
+
+};
+
 /* resize callback */
-THREE.PixelBoxScene.prototype.onResized = function () {
+THREE.PixelBoxScene.prototype.onResized = function ( resizeFBO ) {
 
 	this.camera.aspect = renderer.webgl.domElement.width / renderer.webgl.domElement.height;
 	this.camera.updateProjectionMatrix();
 	
-	var renderTargetParameters = { 
-		minFilter: THREE.NearestFilter,
-		magFilter: THREE.NearestFilter,
-		format: THREE.RGBFormat, 
-		stencilBuffer: false 
-	};
+	if ( resizeFBO ) {
 	
-	this.fbo = new THREE.WebGLRenderTarget( renderer.webgl.domElement.width, renderer.webgl.domElement.height, renderTargetParameters );
-	
-	if ( this.useComposer ) {
-	
-		this.composer.screenPass.onResized();	
-		this.composer.reset( this.fbo );
+		var renderTargetParameters = { 
+			minFilter: THREE.NearestFilter,
+			magFilter: THREE.NearestFilter,
+			format: THREE.RGBFormat, 
+			stencilBuffer: false 
+		};
 		
+		this.fbo.dispose();
+		
+		this.fbo = new THREE.WebGLRenderTarget( renderer.webgl.domElement.width, renderer.webgl.domElement.height, renderTargetParameters );
+		
+		if ( this.screenPass ) {
+		
+			this.screenPass.onResized();
+			
+			this.composer.renderTarget2.dispose();
+			this.composer.reset( this.fbo );
+			
+		}
+	
 	}
 	
 };

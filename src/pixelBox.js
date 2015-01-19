@@ -1777,7 +1777,7 @@ THREE.PixelBoxUtil.updateLights = function ( scene, updateAllMaterials ) {
 	
 	dataObject format:
 	{ 	
-		name, 						name to add to assets.cache or null to not cache
+		name, 						name to add to assets or null to not cache
 		width, height, depth,		fixed dimensions
 		optimize,					true to carve out pixels inside model
 		smoothNormals,				0.0 - 1.0 normal averaging factor (1.0 is default)

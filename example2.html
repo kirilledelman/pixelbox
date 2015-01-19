@@ -7,18 +7,18 @@
 		<meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1"/>
 
 		<!-- THREE base includes -->
-		<script src="js/three.min.js"></script>
+		<script src="js/three.js"></script>
 		
 		<!-- PixelBox include -->
-		<script src="js/pixelbox.min.js"></script>
+		<script src="js/pixelbox.js"></script>
 		
-		<!-- This example uses EffectComposer -->
+		<!-- This example uses screen shader -->
 		<script src="js/postprocessing/CopyShader.js"></script>
 		<script src="js/postprocessing/EffectComposer.js"></script>
 		<script src="js/postprocessing/RenderPass.js"></script>
 		<script src="js/postprocessing/ShaderPass.js"></script>
 		<script src="js/postprocessing/MaskPass.js"></script>
-		<script src="js/postprocessing/ScreenShader.js"></script>
+		<script src="js/postprocessing/PixelBoxScreenPass.js"></script>
 		
 		<!-- OrbitControls from THREE's examples  -->
 		<script src="js/OrbitControls.js"></script>
@@ -102,7 +102,7 @@
 					
 						// switch to scene 1 with texture transition
 						
-						var texture = assets.cache.get( 'images/transition1.png' );
+						var texture = assets.get( 'images/transition1.png' );
 						
 						renderer.setScene( exampleScene1, texture, 1 );
 						
@@ -129,7 +129,7 @@
 			
 			// get scene definition from assets cache
 			
-			var sceneDef = assets.cache.get( 'example2_A' );
+			var sceneDef = assets.get( 'example2_A' );
 			
 			// populate this scene with the definition
 			
@@ -155,11 +155,11 @@
 		
 		function ExampleScene2() {
 		
-			// turn on composer before calling superclass constructor
-			// 		this.composer will contain THREE.EffectComposer instance
-			// 		this.composer.screenPass will be an example screen noise shader
+			// set to true to perform a post-render screen pass
+			// * this.composer will contain THREE.EffectComposer instance
+			// * this.screenPass will be replaced with example screen shader from js/postprocessing/ScreenShader.js
 			
-			this.useComposer = true;
+			this.screenPass = true;
 		
 		 	// call superclass constructor
 		 	
@@ -167,7 +167,7 @@
 			
 			// get scene definition from assets cache
 			
-			var sceneDef = assets.cache.get( 'example2_B' );
+			var sceneDef = assets.get( 'example2_B' );
 			
 			// populate this scene with the definition
 			

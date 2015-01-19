@@ -50,11 +50,11 @@ EditSceneScene.prototype = {
 			if(obj.dispose) obj.dispose(true);
 			else if(obj.shadowMap) obj.shadowMap.dispose();
 		}
-		for(var a in assets.cache.files){
-			THREE.PixelBoxUtil.dispose(assets.cache.files[a]);
+		for(var a in assets.files){
+			THREE.PixelBoxUtil.dispose(assets.files[a]);
 		}
 		// clear assets
-		assets.cache.clear();
+		assets.clear();
 		// clean up / dispose of assets cached in undo
 		var checkArgs = function(arg){
 			if(typeof(arg)!='object') return;
@@ -1002,7 +1002,7 @@ EditSceneScene.prototype = {
 		var importedAssetsUndoItem = [];
 		for(var aname in this.sceneCopyItem.assets){
 			var asset = this.sceneCopyItem.assets[aname];
-			if(!assets.cache.files[aname]){
+			if(!assets.files[aname]){
 				asset = _deepClone(asset, 100);
 				importedAssetsUndoItem.push({name:"addAsset",undo:[editScene.deleteAsset, asset],
 											redo:[editScene.importSceneAsset, asset]});
@@ -1349,9 +1349,9 @@ EditSceneScene.prototype = {
 			$('#drop-files').append(file);
 			
 			if(!single){
-				for(var assetName in assets.cache.files){
+				for(var assetName in assets.files){
 					var assetFileName = assetName+'.b64';
-					var asset = assets.cache.files[assetName];
+					var asset = assets.files[assetName];
 					file = $('<span class="file handcursor"/>').text(assetFileName);
 					file.click((function(assetFileName,asset,compress){
 						return function(){ editScene.download(assetFileName, editScene.exportAsset(asset, !compress, compress)); };})(assetFileName,asset,compress));
@@ -1515,10 +1515,10 @@ EditSceneScene.prototype = {
 				}
 			}
 			// add asset to cache if needed
-			if(!assets.cache.get(asset.name)){
+			if(!assets.get(asset.name)){
 				asset.importedAsset = _deepClone(asset, 100);
 				if(THREE.PixelBoxUtil.processPixelBoxFrames(asset)){
-					assets.cache.add(asset.name, asset);
+					assets.add(asset.name, asset);
 				} else {
 					console.log("Failed to load ",asset);
 				}				
@@ -1740,7 +1740,7 @@ EditSceneScene.prototype = {
 	assetUpdated:function(newAsset){
 		this.showMessage(newAsset.name+' updated');
 
-		var prevAsset = assets.cache.files[newAsset.name];
+		var prevAsset = assets.files[newAsset.name];
 		if(prevAsset){
 			this.addUndo({name:"updateAsset",undo:[this.importSceneAsset, prevAsset],redo:[this.importSceneAsset, newAsset]});
 		}
@@ -1912,7 +1912,7 @@ EditSceneScene.prototype = {
 		} while(replaced.length);
 		
 		// add new asset to cache
-		assets.cache.add(newAsset.name, newAsset);
+		assets.add(newAsset.name, newAsset);
 		
 		// refresh
 		editScene.refreshAssets();
@@ -1989,8 +1989,8 @@ EditSceneScene.prototype = {
 		
 		if(single){
 			obj.assets = {};
-			for(var assetName in assets.cache.files){
-				var asset = assets.cache.files[assetName];
+			for(var assetName in assets.files){
+				var asset = assets.files[assetName];
 				obj.assets[assetName] = editScene.exportAsset(asset, !compress, false);
 			}
 		}
@@ -2597,7 +2597,7 @@ EditSceneScene.prototype = {
 	
 	assetEdit:function(e){
 		var row = $(e.target).closest('.row');
-		var origAsset = assets.cache.get(row.prop('asset'));
+		var origAsset = assets.get(row.prop('asset'));
 		if(!origAsset){
 			// alert("Asset "+row.prop('asset')+" hasn't been loaded.\nTODO: prompt to create new.");
 			console.warn("Asset "+row.prop('asset')+" hasn't been loaded.\nTODO: prompt to create new.");
@@ -2634,8 +2634,8 @@ EditSceneScene.prototype = {
 		var rows = [];
 		var allAssets = {};
 		// reset use counts
-		for(var key in assets.cache.files){
-			assets.cache.files[key].used = 0;
+		for(var key in assets.files){
+			assets.files[key].used = 0;
 		}
 		// traverse and count
 		editScene.container.traverse(function(obj3d){
@@ -2643,10 +2643,10 @@ EditSceneScene.prototype = {
 				if(!allAssets[obj3d.def.asset]) allAssets[obj3d.def.asset] = { used: 1, name:obj3d.def.asset, missing:true };
 				else allAssets[obj3d.def.asset].used++;
 			} else if(obj3d.pixelBox && !(obj3d instanceof THREE.LinePathHandle)){
-				assets.cache.files[obj3d.geometry.data.name].used++;
+				assets.files[obj3d.geometry.data.name].used++;
 			}
 		});
-		_.extend(allAssets, assets.cache.files);
+		_.extend(allAssets, assets.files);
 		// traverse scene to update use counts
 		for(var i in allAssets){
 			var asset = allAssets[i];
@@ -2797,10 +2797,10 @@ EditSceneScene.prototype = {
 	},
 	
 	renameAsset:function(oldName, newName){
-		assets.cache.files[newName] = assets.cache.files[oldName];
-		assets.cache.files[newName].name = newName;
-		assets.cache.files[newName].importedAsset.name = newName;
-		delete assets.cache.files[oldName];
+		assets.files[newName] = assets.files[oldName];
+		assets.files[newName].name = newName;
+		assets.files[newName].importedAsset.name = newName;
+		delete assets.files[oldName];
 		
 		this.refreshAssets();
 		this.refreshScene();
@@ -2828,7 +2828,7 @@ EditSceneScene.prototype = {
 	      		var err = null;
 	      		if(oldName != newName){
 		      		if(!newName.length) err = "Asset name can't be empty";
-		      		if(assets.cache.files[newName] != undefined) err = "Asset with this name already exists";
+		      		if(assets.files[newName] != undefined) err = "Asset with this name already exists";
 		      		if(err){
 		      			$('#editor-rename #asset-name').val(newName).focus().select();
 			      		$('#editor-rename > span').last().removeClass('info').addClass('error center').text(err);
@@ -2872,7 +2872,7 @@ EditSceneScene.prototype = {
 	      		newName = newName.substr(0,1).toLowerCase()+newName.substr(1); //lowercase first
 	      		var err = null;
 	      		if(!newName.length) err = "Asset name can't be empty";
-	      		if(assets.cache.files[newName] != undefined) err = "Asset with this name already exists";
+	      		if(assets.files[newName] != undefined) err = "Asset with this name already exists";
 	      		var xx = parseInt($('#asset-x').val());
 	      		var yy = parseInt($('#asset-y').val());
 	      		var zz = parseInt($('#asset-z').val());
@@ -2918,7 +2918,7 @@ EditSceneScene.prototype = {
 	},
 
 	deleteAsset:function(asset){
-		delete assets.cache.files[asset.name];
+		delete assets.files[asset.name];
 		editScene.refreshAssets();
 	},
 	deleteAssetWithName:function(assetName){
@@ -2936,7 +2936,7 @@ EditSceneScene.prototype = {
 			}
 		};
 		trav(this.container);
-		var asset = assets.cache.get(assetName);
+		var asset = assets.get(assetName);
 		if(!asset) return;
 		if(objs.length){
 		    this.addUndo([
@@ -6839,7 +6839,7 @@ EditSceneScene.prototype = {
 			$('#scene-add-submenu').remove();
 			var submenu = $('<ul id="scene-add-submenu" class="editor submenu absolute-pos">');
 			var numRows = 0;
-			for(var aname in assets.cache.files){
+			for(var aname in assets.files){
 				var row = $('<li/>');
 				row.text(aname);
 				var func = (function(assetName){ 
@@ -6925,7 +6925,7 @@ EditSceneScene.prototype = {
 		
 		default:
 			if(asset){
-				var anims = assets.cache.files[asset].anims;
+				var anims = assets.files[asset].anims;
 				var anames = _.keys(anims);
 				var firstAnim = anames.length ? anames[0] : '';				
 				objDef = { asset: asset, name:asset, animOption: 'gotoAndStop', animFrame: 0, animName: firstAnim };

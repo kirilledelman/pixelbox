@@ -64,7 +64,7 @@ THREE.PixelBoxRenderer = function () {
 		}
 		
 		// window resized listener
-		window.addEventListener( 'resize', this._windowResized );
+		window.addEventListener( 'resize', this._resizeCallback, false );
 		canvas.style.width = window.innerWidth + 'px';
 		canvas.style.height = window.innerHeight + 'px';
 			
@@ -91,8 +91,6 @@ THREE.PixelBoxRenderer = function () {
 	*/
 	this.setScene = function ( newScene, transType, duration ) {
 	
-		this.currentScene = newScene;
-		
 		// ignore if the same scene
 		if ( transType != undefined && (((this.scene instanceof THREE.PixelBoxSceneTransition) && this.scene.sceneB == newScene && transType != 0) || this.scene == newScene) ) { 
 		
@@ -100,20 +98,29 @@ THREE.PixelBoxRenderer = function () {
 			return;
 			
 		}
+		
+		var ww = this.webgl.domElement.width;
+		var hh = this.webgl.domElement.height;
 	
-		// check if size changed
-		if ( newScene.fbo && 
-			(newScene.fbo.width != window.innerWidth * this.scale || newScene.fbo.height != window.innerHeight * this.scale) &&
-			newScene.onResized ) { 
+		// resize buffers if sizes changed
+		if ( this.currentScene && this.currentScene.fbo && (this.currentScene.fbo.width != ww || this.currentScene.fbo.height != hh) && this.currentScene.onResized ) { 
 				
-				newScene.onResized();
+			this.currentScene.onResized( true );
 				
 		}
+		
+		if ( newScene.fbo && (newScene.fbo.width != ww || newScene.fbo.height != hh) &&	newScene.onResized ) { 
+				
+			newScene.onResized( true );
+				
+		}
+		
+		// set current scene
+		this.currentScene = newScene;
 	
 		// with transition
 		if ( transType != undefined && transType !== 0 ) {
 		
-			if ( newScene[ 'addResizeListener' ] ) newScene.addResizeListener();
 			if ( newScene[ 'onWillAdd' ] ) newScene.onWillAdd();
 			
 			// add a blank scene if was empty
@@ -168,14 +175,12 @@ THREE.PixelBoxRenderer = function () {
 			// notify old scene that it's removed
 			if ( (this.scene instanceof THREE.PixelBoxSceneTransition) && this.scene.sceneA && this.scene.sceneA[ 'onRemoved' ] ) {
 			
-				if ( this.scene.sceneA[ 'removeResizeListener' ]) this.scene.sceneA.removeResizeListener();
 				this.scene.sceneA.onRemoved();
 				this.scene.sceneA = undefined;
 				
 			} else if ( this.scene && this.scene[ 'onRemoved' ] ) {
 			
 				if ( transType == undefined && this.scene[ 'onWillRemove' ] ) this.scene.onWillRemove();
-				if ( this.scene[ 'removeResizeListener' ] ) this.scene.removeResizeListener();
 				this.scene.onRemoved();
 				
 			}
@@ -186,7 +191,6 @@ THREE.PixelBoxRenderer = function () {
 			// callback when scene transition is complete
 			if ( transType == undefined ) { 
 			
-				if ( newScene[ 'addResizeListener' ] ) newScene.addResizeListener();
 				if ( newScene[ 'onWillAdd' ] ) newScene.onWillAdd();
 				
 			}
@@ -215,17 +219,33 @@ THREE.PixelBoxRenderer = function () {
 	}
 
 	/* window resized callback */
+	this._resizeCallback = function( e ) {
+	
+		// fill screen
+		renderer.webgl.domElement.style.width = window.innerWidth;
+		renderer.webgl.domElement.style.height = window.innerHeight;
+	
+		// schedule a resize to prevent too many consequitive calls
+		if ( !renderer.resizeTimeout ) {
+		
+			renderer.resizeTimeout = setTimeout( renderer._windowResized, 100 );
+			
+		}
+				
+	};
+
 	this._windowResized = function () {
 	
+		renderer.resizeTimeout = 0;
+	
 		// notify the renderer of the size change
-		renderer.webgl.setSize( window.innerWidth * renderer.scale, window.innerHeight * renderer.scale );
+		renderer.webgl.setSize( Math.floor( window.innerWidth * renderer.scale ), Math.floor( window.innerHeight * renderer.scale ) );
 		
-		// fill screen
-		renderer.webgl.domElement.style.width = window.innerWidth + 'px';
-		renderer.webgl.domElement.style.height = window.innerHeight + 'px';
-
 		// update PixelBox viewport uniform
 		THREE.PixelBoxUtil.updateViewPortUniform();
+		
+		// call onResize callback
+		if(renderer.scene) renderer.scene.onResized();
 		
 	};
 
@@ -250,7 +270,15 @@ THREE.PixelBoxEmptyScene = function ( clearColor ) {
 	this.scene = new THREE.Scene();
 	
 	// create render target
-	var renderTargetParameters = { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, format: THREE.RGBFormat, stencilBuffer: false };
+	var renderTargetParameters = { 
+		minFilter: THREE.NearestFilter, 
+		magFilter: THREE.NearestFilter, 
+		format: THREE.RGBFormat, 
+		generateMipmaps: false,
+		stencilBuffer: false,
+		depthBuffer: false
+	};
+	
 	this.fbo = new THREE.WebGLRenderTarget( renderer.webgl.domElement.width, renderer.webgl.domElement.height, renderTargetParameters );
 	
 }
@@ -360,7 +388,7 @@ THREE.PixelBoxSceneTransition = function ( sa, sb ) {
 
 	} );		
 
-	quadgeometry = new THREE.PlaneBufferGeometry( renderer.webgl.domElement.width, renderer.webgl.domElement.height );
+	quadgeometry = new THREE.PlaneBufferGeometry( 1, 1 );
 	
 	this.quad = new THREE.Mesh( quadgeometry, this.quadmaterial );
 	this.scene.add( this.quad );
@@ -379,14 +407,23 @@ THREE.PixelBoxSceneTransition = function ( sa, sb ) {
 		
 		var ww = renderer.webgl.domElement.width;
 		var hh = renderer.webgl.domElement.height;
+		
+		this.quad.scale.set( ww, hh );
+		
 		this.quadmaterial.uniforms.tScale.value.set(
 			Math.min( ww / hh, 1 ),
 			Math.min( hh / ww, 1 )			
 		);
 		
+		this.cameraOrtho.left = ww / -2;
+		this.cameraOrtho.right = ww / 2;
+		this.cameraOrtho.top = hh / 2;
+		this.cameraOrtho.bottom = hh / -2;
+		this.cameraOrtho.updateProjectionMatrix();
+				
 	}
 	
-	this.init(sa, sb);
+	this.init( sa, sb );
 	
 	this.setTextureThreshold = function ( value ) {
 	
@@ -406,7 +443,7 @@ THREE.PixelBoxSceneTransition = function ( sa, sb ) {
 		
 	}
 	
-	this.render = function (  delta ) {
+	this.render = function ( delta ) {
 	
 		var transitionParams = renderer.transitionParams;
 		
@@ -445,6 +482,29 @@ THREE.PixelBoxSceneTransition = function ( sa, sb ) {
 			
 		}
 
+	}
+	
+	this.onResized = function () {
+		
+		var ww = renderer.webgl.domElement.width;
+		var hh = renderer.webgl.domElement.height;
+		
+		this.quad.scale.set( ww, hh );
+		
+		this.quadmaterial.uniforms.tScale.value.set(
+			Math.min( ww / hh, 1 ),
+			Math.min( hh / ww, 1 )			
+		);
+		
+		this.cameraOrtho.left = ww / -2;
+		this.cameraOrtho.right = ww / 2;
+		this.cameraOrtho.top = hh / 2;
+		this.cameraOrtho.bottom = hh / -2;
+		this.cameraOrtho.updateProjectionMatrix();			
+		
+		this.sceneA.onResized( true );
+		this.sceneB.onResized( true );
+		
 	}
 	
 }

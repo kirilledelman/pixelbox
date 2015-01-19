@@ -43,7 +43,7 @@ THREE.PixelBoxAssets = function () {
 			
 				return function () {
 				
-					assets.cache.add( url, new THREE.ImageUtils.loadTexture(url, undefined, assets.assetLoaded ) );
+					assets.add( url, new THREE.ImageUtils.loadTexture(url, undefined, assets.assetLoaded ) );
 					
 				};
 				
@@ -95,7 +95,7 @@ THREE.PixelBoxAssets = function () {
 									
 								}
 								
-								assets.cache.add( json.name, json );
+								assets.add( json.name, json );
 								
 							}
 							
@@ -165,7 +165,7 @@ THREE.PixelBoxAssets = function () {
 								// process
 								time = new Date();
 								THREE.PixelBoxUtil.processPixelBoxFrames( json );
-								assets.cache.add( json.name, json );
+								assets.add( json.name, json );
 								console.log( "[" + json.name + "] process time:" + ( (new Date()).getTime() - time ) );
 								
 							}
@@ -230,7 +230,7 @@ THREE.PixelBoxAssets = function () {
 									
 								}
 								
-								assets.cache.add( url, json );
+								assets.add( url, json );
 								
 							}
 							
@@ -279,9 +279,9 @@ THREE.PixelBoxAssets = function () {
 
 	this.unload = function () {
 	
-		for ( var key in this.cache.files ){
+		for ( var key in this.files ){
 		
-			var a = this.cache.files[ key ];
+			var a = this.files[ key ];
 			
 			// PixelBox
 			if ( a.frameData || a.frames ) {
@@ -296,18 +296,22 @@ THREE.PixelBoxAssets = function () {
 			
 		}
 		
-		this.cache.clear();
+		this.clear();
 		console.log( "All assets unloaded" );
 		
 	};
 	
-	this.cache = new THREE.Cache();
 	this.totalLoaded = 0;
 	this.totalAssets = 0;
 	this.loadQueue = [];
 	
 	this.objectLoader = new THREE.JSONLoader();
 	
+	THREE.Cache.call(this);
+	
 }
+
+THREE.PixelBoxAssets.prototype = Object.create( THREE.Cache.prototype );
+THREE.PixelBoxAssets.prototype.constructor = THREE.PixelBoxAssets;
 
 var assets = new THREE.PixelBoxAssets();
