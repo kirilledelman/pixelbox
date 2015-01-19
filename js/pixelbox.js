@@ -6959,6 +6959,8 @@ THREE.PixelBoxAssets = function () {
 			(Array) info.assets - array of paths to json or LZ-String-compressed PixelBox asset files
 			(Array) info.scenes - array of paths to json or LZ-String-compressed PixelBox scene files
 			(Array) info.json - array of paths to json files to load and parse
+			(Array) info.other - array of urls to load, and invoke custom handler on (see docs)
+			(Array) info.custom - array of urls to invoke custom loading with (see docs)
 			
 			(Function) info.progress(percent) - function called after each file is loaded
 			(Function) info.done - function called after all assets have been loaded
@@ -6971,11 +6973,87 @@ THREE.PixelBoxAssets = function () {
 		this.scenedata = params.scenes ? params.scenes : [];
 		this.models = params.assets ? params.assets : [];
 		this.json = params.json ? params.json : [];
+		this.custom = params.custom ? params.custom : [];
+		this.other = params.other ? params.other : [];
 		this.onprogress = params.progress;
 		this.onloaded = params.done;
 		
 		this.totalLoaded = 0;
-		this.totalAssets = this.textures.length + this.scenedata.length + this.models.length + this.json.length;
+		this.totalAssets = this.textures.length + this.scenedata.length + this.models.length + this.json.length + this.custom.length + this.other.length;
+		
+		// custom
+		for ( var i = 0; i < this.custom.length; i++ ) {
+		
+			var cust = this.custom[ i ];
+			var reqObj = function ( cust ) {
+			
+				return function () {
+				
+					if ( !cust[ 'start' ] ) throw "Assets custom loading object - .start( obj, callOnDone ) function not specified.";
+					
+					cust.start( cust, assets.assetLoaded );
+					
+				};
+				
+			}( cust );
+			this.loadQueue.push( reqObj );
+			
+		}
+		
+		// other
+		for ( var i = 0; i < this.other.length; i++ ) {
+		
+			var obj = this.other[ i ];
+			var url, parse = null;
+			
+			if ( typeof( obj ) == 'object' ) { 
+				
+				if ( obj.url && obj.parse ) throw "Assets other loading object - .url and .parse are required.";
+				
+				url = obj.url;
+				parse = obj.parse;
+				
+			} else {
+				
+				url = obj;
+				
+			}
+			
+			var reqObj = function ( url, parse ) {
+			
+				return function () {
+				
+					var request = new XMLHttpRequest();
+					request.open( 'GET', url, true );
+					request.onload = function () {
+						if ( request.status >= 200 && request.status < 400 ) {
+						
+							var data = request.responseText;
+							
+							if ( parse ) data = parse( data );
+
+							assets.add( url, data );
+								
+							assets.assetLoaded();
+							
+						} else console.error( "Failed to load " + url );
+						
+					};
+									
+					request.onerror = function () {
+					
+						console.error( "Connection error while loading " + url );
+						
+					};
+					
+					request.send();	
+					
+				};
+				
+			}( url, parse );
+			this.loadQueue.push( reqObj );
+			
+		}
 		
 		// textures
 		for ( var i = 0; i < this.textures.length; i++ ) {
@@ -7076,6 +7154,8 @@ THREE.PixelBoxAssets = function () {
 						if ( request.status >= 200 && request.status < 400 ) {
 						
 							var time = new Date(), json;
+							var data = request.responseText;
+							
 							if ( data.substr(0,1) == '{' ) {
 							
 								json = data;
@@ -7145,6 +7225,8 @@ THREE.PixelBoxAssets = function () {
 						
 							// decompress if needed
 							var json;
+							var data = request.responseText;
+							
 							if ( data.substr(0,1) == '{' ) {
 							
 								json = data;
