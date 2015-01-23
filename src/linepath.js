@@ -152,10 +152,12 @@ THREE.LinePath.prototype.applyTween = function ( tweenObj ) {
 	}
 	
 	// set position
+	var prevPosition = tweenObj.target.position.clone();
 	tweenObj.target.position.copy( pos );
 	
 	// orient to path
 	var incTime = modt + delta;
+	var prevRotation = tweenObj.target.rotation.clone();
 	if ( tweenObj.orientToPath && incTime > 0 && (this.isLoop || incTime <= 1.0) ) {
 	
 		var tangent = this.getPoint( incTime % 1.0 );
@@ -170,6 +172,9 @@ THREE.LinePath.prototype.applyTween = function ( tweenObj ) {
 		tweenObj.target.lookAt( tangent );
 		
 	}
+	
+	// TODO: modify body velocity and angularVelocity
+	tweenObj.target.syncBody();
 	
 };
 
