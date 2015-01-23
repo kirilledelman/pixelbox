@@ -33,12 +33,14 @@ Project source also contains above examples, as well as the Scene Editor as Goog
 * Sprite opacity, tint, and additive color.
 * Sprite stipple (pattern transparency).
 * Animation and anchor events.
+* Static scenery can be merged into a single pointcloud for faster drawing.
 
 ## PixelBoxScene class
 * Parses / populates scenes created with PixelBox scene editor.
 * Easy scene hierarchy access by object name. e.g. `scene.robot.head.eyeball`
 * Supports instancing of templates created with scene editor.
 * Object recycling: instead of destroying objects, they get recycled for quicker reuse.
+* [CANNON](http://schteppe.github.io/cannon.js/) physics integration.
 
 ## PixelBoxAssets class
 * Easy preloading of assets - PixelBox scenes, sprites, image textures, and json files.
