@@ -143,7 +143,7 @@ THREE.PixelBoxScene.prototype.instantiate = function ( templateName, options ) {
 		options = options ? options : {};
 		options.templates = this.templates;
 		
-		var objs = this.populateObject( null, [ def ], options );
+		var objs = this.populateObject( null, [ { asset:'Instance', name:templateName, template:templateName } ], options );
 		
 		if ( objs.length ) {
 		
@@ -290,6 +290,8 @@ THREE.PixelBoxScene.prototype.recycle = function ( scrap ) {
 	
 };
 
+
+
 /* 
 	retrieves an object of objType from objectPool
 	
@@ -326,9 +328,7 @@ THREE.PixelBoxScene.prototype.populateWith = function ( sceneDef, options ) {
 
 	if ( !sceneDef ) {
 	
-		console.log( "PixelBoxScene.populateWith called with sceneDef = ", sceneDef );
-		console.log( "Make sure that the name of scene in sceneDef matches the name of the file loaded with PixelBoxAssets.loadAssets(...)\nCurrently loaded assets: ", assets.files );
-		return;
+		throw "Invalid sceneDef.";
 		
 	}
 
@@ -342,6 +342,29 @@ THREE.PixelBoxScene.prototype.populateWith = function ( sceneDef, options ) {
 	this.fog.far = value( sceneDef, 'fogFar', 10000000 );
 	
 	this.ambientLight.color.set( parseInt( value( sceneDef, 'ambient', '0' ), 16 ) );
+	
+	// init world / physics
+	if ( sceneDef.physics ) {
+		
+		if ( !window['CANNON'] ) {
+			
+			throw "Scene definition has physics enabled, but CANNON library is not included.";
+			
+		} else { 
+		
+			this.world = new CANNON.World();
+			this.world.allMaterials = {};
+			this.world.broadphase = new CANNON.NaiveBroadphase();
+			
+			this.world.gravity.set( sceneDef.gravity[0], sceneDef.gravity[1], sceneDef.gravity[2] );
+			
+			// prebind
+			this.objectRemovedFromWorld = this.objectRemovedFromWorld.bind( this );
+			this.objectAddedToWorld = this.objectAddedToWorld.bind( this );
+		
+		}
+		
+	}
 	
 	// add assets to cache if needed
 	for ( var i in sceneDef.assets ) {
@@ -539,10 +562,19 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 		var obj3d = null;
 		var helper = null;
 		
-		// try to get an object of the same type from pool
-		if ( options.makeObject ) obj3d = options.makeObject( layer );
-		if ( obj3d === -1 ) continue;
-		if ( !obj3d && layer.asset != 'Instance' ) obj3d = this.upcycle( layer.asset );
+		if ( !layer.collisionShape ) {
+		
+			// try to get an object of the same type from pool
+			if ( options.makeObject ) { 
+				
+				obj3d = options.makeObject( layer );
+				if ( obj3d === -1 ) continue;
+				
+			}
+			
+			if ( !obj3d && layer.asset != 'Instance' ) obj3d = this.upcycle( layer.asset );
+			
+		}
 		
 		// Layer types
 		switch( layer.asset ) {
@@ -577,7 +609,13 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 						
 					} else {
 					
-						objs = this.populateObject( object, [ templateDef ], options );
+						var extended = _.clone( templateDef );
+						extended.position = layer.position;
+						extended.rotation = layer.rotation;
+						extended.scale = layer.scale;
+						extended.name = layer.name;
+						
+						objs = this.populateObject( object, [ extended ], options );
 						obj3d = objs[ 0 ];
 						obj3d.isInstance = true;
 						obj3d.isTemplate = false;
@@ -812,45 +850,72 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 			
 		case 'Geometry':
 		
-			var geom = this.makeGeometryObject( layer );
-			var mat;
+			var mat, geom;
 			
-			if ( obj3d ) {
-			
-				obj3d.geometry.dispose();
-				obj3d.geometry = geom;
-				mat = obj3d.material;
+			if ( layer.collisionShape ) { 
 				
-				var _gl = renderer.webgl.context;
-				for ( var name in geom.attributes ) {
+				if ( !(object instanceof THREE.Mesh || object.isContainer || object.isAnchor || object instanceof THREE.PixelBox) ) continue;
 				
-					var bufferType = ( name === 'index' ) ? _gl.ELEMENT_ARRAY_BUFFER : _gl.ARRAY_BUFFER;
-					var attribute = geom.attributes[ name ];
-					if ( !attribute.buffer ) {
+				if ( options.helpers ) {
 					
-						attribute.buffer = _gl.createBuffer();
-						var res = _gl.bindBuffer( bufferType, attribute.buffer );
-						_gl.bufferData( bufferType, attribute.array, _gl.STATIC_DRAW );
-						
-					}
+					geom = this.makeGeometryObject( layer, true );
+					mat = new THREE.MeshBasicMaterial({ color: 0x666666, wireframe: true });
+					obj3d = new THREE.Mesh( geom, mat );
+					obj3d.collisionShape = true;
+					obj3d.geometryType = layer.mesh;
+					
+				} else {
+					
+					// don't need to create anything
+					continue;
 					
 				}
 				
-			} else {
-			
-				mat = new THREE.MeshPixelBoxMaterial();
-				obj3d = new THREE.Mesh( geom, mat );
 				
+			} else { 
+		
+				geom = this.makeGeometryObject( layer );
+				
+				if ( obj3d ) {
+				
+					obj3d.geometry.dispose();
+					obj3d.geometry = geom;
+					mat = obj3d.material;
+					
+					var _gl = renderer.webgl.context;
+					for ( var name in geom.attributes ) {
+					
+						var bufferType = ( name === 'index' ) ? _gl.ELEMENT_ARRAY_BUFFER : _gl.ARRAY_BUFFER;
+						var attribute = geom.attributes[ name ];
+						if ( !attribute.buffer ) {
+						
+							attribute.buffer = _gl.createBuffer();
+							var res = _gl.bindBuffer( bufferType, attribute.buffer );
+							_gl.bufferData( bufferType, attribute.array, _gl.STATIC_DRAW );
+							
+						}
+						
+					}
+					
+				} else {
+				
+					mat = new THREE.MeshPixelBoxMaterial();
+					obj3d = new THREE.Mesh( geom, mat );
+				}
+				
+				obj3d.geometryType = layer.mesh;
+				
+				obj3d.material.side = (layer.mesh == 'Plane') ? THREE.DoubleSide : THREE.FrontSide;
+				
+				//material
+				mat.tint.set( layer.tint != undefined ? parseInt( layer.tint, 16 ) : 0xffffff );
+				mat.addColor.set( layer.addColor != undefined ? parseInt( layer.addColor, 16 ) : 0x0 );
+				mat.alpha = (layer.alpha != undefined ? layer.alpha : 1.0);
+				mat.brightness = (layer.brightness != undefined ? layer.brightness : 0.0);
+				mat.stipple = (layer.stipple != undefined ? layer.stipple : 0.0);
+			
 			}
 			
-			obj3d.geometryType = layer.mesh;
-			
-			//material
-			mat.tint.set( layer.tint != undefined ? parseInt( layer.tint, 16 ) : 0xffffff );
-			mat.addColor.set( layer.addColor != undefined ? parseInt( layer.addColor, 16 ) : 0x0 );
-			mat.alpha = (layer.alpha != undefined ? layer.alpha : 1.0);
-			mat.brightness = (layer.brightness != undefined ? layer.brightness : 0.0);
-			mat.stipple = (layer.stipple != undefined ? layer.stipple : 0.0);
 			break;
 		
 		// lookup asset by name
@@ -885,7 +950,7 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 		}					
 		
 		// store definition
-		obj3d.def = _deepClone( layer, 100 );
+		layer = obj3d.def = _deepClone( layer, 100 );
 		
 		// set name
 		if ( layer.name ) {
@@ -894,33 +959,37 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 			
 		}
 		
-		var addAsChild = (!obj3d.parent && object);
-		
-		// add as a child
-		if ( addAsChild ) { 
-		
-			// add to anchor, if specified
-			if ( layer.anchor && object.anchors ) {
+		// override position
+		if ( options.position != undefined ) {
 			
-				object.anchors[ layer.anchor ].add( obj3d );
-				
-			// otherwise to object itself
-			} else {
+			layer.position = options.position;
+			options.position = null;
 			
-				object.add( obj3d );
-				
-			}
+		}
+
+		// override rotation
+		if ( options.rotation != undefined ) {
 			
-			obj3d.anchored = layer.anchor ? layer.anchor : false;
+			layer.rotation = options.rotation;
+			options.rotation = null;
 			
-		}			
+		}
+
+		// override scale
+		if ( options.scale != undefined ) {
+			
+			layer.scale = options.scale;
+			options.scale = null;
+			
+		}		
 		
 		// assign common values
 		if ( layer.position ) {
 		
-			obj3d.position.fromArray( layer.position );
+			if ( _.isArray( layer.position ) ) obj3d.position.fromArray( layer.position );
+			else obj3d.position.copy( layer.position );
 			
-		} else if ( !(obj3d instanceof THREE.HemisphereLight) ) { // damnit!
+		} else if ( !(obj3d instanceof THREE.HemisphereLight) ) { //?
 		
 			obj3d.position.set( 0, 0, 0 );
 			
@@ -928,16 +997,19 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 		
 		if ( layer.rotation ) {
 		
-			obj3d.rotation.set( layer.rotation[ 0 ] * degToRad, layer.rotation[ 1 ] * degToRad, layer.rotation[ 2 ] * degToRad );
+			if ( _.isArray( layer.rotation ) )  obj3d.rotation.set( layer.rotation[ 0 ] * degToRad, layer.rotation[ 1 ] * degToRad, layer.rotation[ 2 ] * degToRad );
+			else obj3d.rotation.copy( layer.rotation );
 			
 		} else {
 		
 			obj3d.rotation.set( 0, 0, 0 );
 			
 		}
+		
 		if ( layer.scale ) { 
 		
 			if ( _.isArray( layer.scale ) ) obj3d.scale.fromArray( layer.scale );
+			else if( typeof( layer.scale ) == 'object' ) obj3d.scale.copy( layer.scale );
 			else obj3d.scale.set( layer.scale, layer.scale, layer.scale );
 			
 		} else {
@@ -1063,7 +1135,7 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 		var addNameReference = (layer.name && !options.noNameReferences && object);
 		
 		// add as a name reference
-		if ( addNameReference ) {
+		if ( addNameReference && object[ layer.name ] != obj3d ) {
 		
 			if ( !object[ layer.name ] ) {
 			
@@ -1084,6 +1156,48 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 		}
 		
 		objectsCreated.splice( 0, 0, obj3d );
+		
+		// force matrix update
+		obj3d.updateMatrixWorld( true );
+		
+		// physics
+		if ( layer.physics ) {
+			
+			this.initObjectPhysics( obj3d, layer );
+			
+		} else {
+			
+			obj3d.physics = false;
+			
+		}
+		
+		if ( this.world ) {
+			
+			obj3d.addEventListener( 'removed', this.objectRemovedFromWorld );
+			obj3d.addEventListener( 'added', this.objectAddedToWorld );		
+			
+		}
+		
+		var addAsChild = (!obj3d.parent && object);
+		
+		// add as a child
+		if ( addAsChild ) { 
+		
+			// add to anchor, if specified
+			if ( layer.anchor && object.anchors ) {
+			
+				object.anchors[ layer.anchor ].add( obj3d );
+				
+			// otherwise to object itself
+			} else {
+			
+				object.add( obj3d );
+				
+			}
+			
+			obj3d.anchored = layer.anchor ? layer.anchor : false;
+			
+		}
 		
 		if ( !obj3d.isInstance && !obj3d.parentInstance() ) {
 					
@@ -1129,7 +1243,7 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 };
 
 /* generates geometry for 'Geometry' object during populateObject */
-THREE.PixelBoxScene.prototype.makeGeometryObject = function ( layer ) {
+THREE.PixelBoxScene.prototype.makeGeometryObject = function ( layer, isCollShape ) {
 
 	function param( p, def, min, max ) { 
 	
@@ -1150,8 +1264,8 @@ THREE.PixelBoxScene.prototype.makeGeometryObject = function ( layer ) {
 	case 'Sphere':
 	
 		layer.radius = param( 'radius', 5 );
-		layer.widthSegments = param( 'widthSegments', 8, 3 );
-		layer.heightSegments = param( 'heightSegments', 6, 2 );
+		layer.widthSegments = isCollShape ? 10 : param( 'widthSegments', 8, 3 );
+		layer.heightSegments = isCollShape ? 10 : param( 'heightSegments', 6, 2 );
 		layer.phiStart = param( 'phiStart', 0 );
 		layer.phiLength = param( 'phiLength', 360 );
 		layer.thetaStart = param( 'thetaStart', 0 );
@@ -1162,12 +1276,32 @@ THREE.PixelBoxScene.prototype.makeGeometryObject = function ( layer ) {
 						layer.phiStart * degToRad, layer.phiLength * degToRad,
 						layer.thetaStart * degToRad, layer.thetaLength * degToRad );
 		break;
+
+	case 'Cylinder':
+	
+		layer.radiusTop = param( 'radiusTop', 10 );
+		layer.radiusBottom = param( 'radiusBottom', 10 );
+		layer.height = param( 'height', 10 );
+		
+		layer.radiusSegments = param( 'radiusSegments', 10, 3 );
+		layer.heightSegments = isCollShape ? 1 : param( 'heightSegments', 1, 1 );
+		layer.openEnded = isCollShape ? false : param( 'openEnded', false );		
+		
+		geom = new THREE.CylinderGeometry(
+						layer.radiusTop, 
+						layer.radiusBottom, 
+						layer.height, 
+						layer.radiusSegments, 
+						layer.heightSegments,
+						layer.openEnded );
+		break;
+
 		
 	case 'Box':
 	
-		layer.widthSegments = param( 'widthSegments', 1, 1 );
-		layer.heightSegments = param( 'heightSegments', 1, 1 );
-		layer.depthSegments = param( 'depthSegments', 1, 1 );
+		layer.widthSegments = isCollShape ? 1 : param( 'widthSegments', 1, 1 );
+		layer.heightSegments = isCollShape ? 1 : param( 'heightSegments', 1, 1 );
+		layer.depthSegments = isCollShape ? 1 : param( 'depthSegments', 1, 1 );
 		layer.width = param( 'width', 10 );
 		layer.height = param( 'height', 10 );
 		layer.depth = param( 'depth', 10 );
@@ -1177,13 +1311,13 @@ THREE.PixelBoxScene.prototype.makeGeometryObject = function ( layer ) {
 	case 'Plane':
 	default:
 	
-		layer.widthSegments = param( 'widthSegments', 1, 1 );
-		layer.heightSegments = param( 'heightSegments', 1, 1 );
+		layer.widthSegments = isCollShape ? 5 : param( 'widthSegments', 1, 1 );
+		layer.heightSegments = isCollShape ? 5 : param( 'heightSegments', 1, 1 );
 		layer.width = param( 'width', 10 );
 		layer.height = param( 'height', 10 );
 		if ( !layer.inverted )
 			geom = new THREE.PlaneBufferGeometry( layer.width, layer.height,layer.widthSegments, layer.heightSegments );
-		else
+		else 
 			geom = new THREE.PlaneGeometry( layer.width, layer.height,layer.widthSegments, layer.heightSegments );
 
 		break;
@@ -1221,6 +1355,11 @@ THREE.PixelBoxScene.prototype.makeGeometryObject = function ( layer ) {
 /* 
 	links "#targetName.$anchorname.targetName" style references to objects in the hierarchy
 	Used by Spot and Direct lights 
+	
+	Also creates constraints
+	
+	And links physics materials
+	
 */
 THREE.PixelBoxScene.prototype.linkObjects = function ( objs, top, skipProps ) {
 	
@@ -1272,7 +1411,7 @@ THREE.PixelBoxScene.prototype.linkObjects = function ( objs, top, skipProps ) {
 		
 	}
 	
-	// link
+	// link light targets and custom props
 	for ( var i = 0, l = objs.length; i < l; i++ ) {
 	
 		var obj = objs[ i ];
@@ -1302,6 +1441,7 @@ THREE.PixelBoxScene.prototype.linkObjects = function ( objs, top, skipProps ) {
 			
 		}
 		
+		// link props
 		if ( obj.def.props && !skipProps ) {
 		
 			for ( var propName in obj.def.props ) {
@@ -1317,6 +1457,61 @@ THREE.PixelBoxScene.prototype.linkObjects = function ( objs, top, skipProps ) {
 				} else {
 				
 					obj[ propName ] = propVal;
+					
+				}
+				
+			}
+			
+		}
+		
+		// process constraints
+		if ( obj.physics && this.world ) {
+		
+			if( obj.parent ) { 
+			
+				var weldParent = null;
+				if ( obj.parent.physics ) weldParent = obj.parent;
+				else if ( obj.parent.isAnchor && obj.parent.parent.physics ) weldParent = obj.parent.parent;
+				
+				if ( weldParent ) {
+					
+					// Weld / PointToPoint constaint
+					var constraint = new CANNON.PointToPointConstraint(
+						weldParent.body, new CANNON.Vec3( obj.position.x, obj.position.y, obj.position.z ),
+						obj.body, new CANNON.Vec3(), Infinity );
+					
+					constraint.collideConnected = false;
+					
+					weldParent.body.constraints.push( constraint );
+					obj.body.constraints.push( constraint );
+					
+				}
+				
+			}
+		
+		}
+				
+	}
+	
+	// link physics materials
+	if ( this.world ) { 
+		
+		for ( var m1n in this.world.allMaterials ) { 
+			
+			var m1 = this.world.allMaterials[ m1n ];
+
+			for ( var m2n in this.world.allMaterials ) { 
+			
+				var m2 = this.world.allMaterials[ m2n ];
+				
+				var contactMaterial = this.world.getContactMaterial( m1, m2 );
+				
+				if ( !contactMaterial ) {
+					
+					contactMaterial = new CANNON.ContactMaterial( m1, m2 );
+					contactMaterial.friction = m1.friction * m2.friction;
+					contactMaterial.restitution = Math.max( m1.restitution, m2.restitution);
+					this.world.addContactMaterial( contactMaterial );
 					
 				}
 				
@@ -1380,10 +1575,222 @@ THREE.PixelBoxScene.prototype.dispose = function ( unloadAssets ) {
 	
 };
 
+/* ================================================================================ CANNON physics hooks */
+
+THREE.PixelBoxScene.prototype.initObjectPhysics = function( obj3d, layer ) {
+	
+	obj3d.physics = true;
+	
+	obj3d.def.velocity = layer.velocity ? layer.velocity.concat() : [ 0, 0, 0 ];
+	obj3d.def.angularVelocity = layer.angularVelocity ? layer.angularVelocity.concat() : [ 0, 0, 0 ];
+	obj3d.def.collisionGroup = (layer.collisionGroup !== undefined) ? layer.collisionGroup : 1;
+	obj3d.def.collisionMask = (layer.collisionMask !== undefined) ? layer.collisionMask : 1;
+	obj3d.def.friction = (layer.friction !== undefined) ? layer.friction : 0.3;
+	obj3d.def.restitution = (layer.restitution !== undefined) ? layer.restitution : 0.3;
+	obj3d.def.sensor = (layer.sensor !== undefined) ? layer.sensor : false;
+	
+	if ( this.world && layer.layers ) {
+	
+		// world space coords
+		var worldPos = new THREE.Vector3();
+		var worldQuat = new THREE.Quaternion();
+		var worldScale = new THREE.Vector3();
+		var localScale = new THREE.Vector3();
+		var rot = new THREE.Euler(), degToRad = Math.PI / 180;
+		
+		obj3d.matrixWorld.decompose( worldPos, worldQuat, worldScale );
+	
+		// create body	
+		var bodyType = (obj3d.def.bodyType == "1") ? CANNON.Body.STATIC : ((obj3d.def.bodyType == "2") ? CANNON.Body.KINEMATIC : CANNON.Body.DYNAMIC);
+		var opts = {
+			position: new CANNON.Vec3( worldPos.x, worldPos.y, worldPos.z ),
+			quaternion: new CANNON.Quaternion( worldQuat.x, worldQuat.y, worldQuat.z, worldQuat.w ),
+			velocity: new CANNON.Vec3( obj3d.def.velocity[ 0 ], obj3d.def.velocity[ 1 ], obj3d.def.velocity[ 2 ] ),	
+			angularVelocity: new CANNON.Vec3( obj3d.def.angularVelocity[ 0 ], obj3d.def.angularVelocity[ 1 ], obj3d.def.angularVelocity[ 2 ] ),
+			mass: (bodyType == CANNON.Body.DYNAMIC) ? (obj3d.def.mass ? obj3d.def.mass : 0) : 0,
+			type: bodyType,
+			linearDamping: obj3d.def.linearDamping ? obj3d.def.linearDamping : 0
+		};
+		var body = new CANNON.Body( opts );
+		body.collisionFilterGroup = obj3d.def.collisionGroup;
+		body.collisionFilterMask = obj3d.def.collisionMask;
+		body.collisionResponse = !obj3d.def.sensor;
+		body.fixedRotation = obj3d.def.fixedRotation;
+		body.constraints = [];
+		
+		// material
+		var matName = "M_" + obj3d.def.friction + "_" + obj3d.def.restitution;
+		var mat = this.world.allMaterials[ matName ];
+		if ( !mat ) {
+			
+			this.world.allMaterials[ matName ] = mat = new CANNON.Material( matName );
+			mat.friction = obj3d.def.friction;
+			mat.restitution = obj3d.def.restitution;
+			
+		}
+		
+		body.material = mat;
+		
+		// add shapes
+		for ( var i = 0, ns = layer.layers.length; i < ns; i++) { 
+			
+			var shapeDef = layer.layers[ i ];
+			if ( !shapeDef.collisionShape ) continue;
+			
+			if ( shapeDef.position ) { 
+			
+				worldPos.set( shapeDef.position[0], shapeDef.position[1], shapeDef.position[2] );
+			
+			} else {
+				
+				worldPos.set( 0, 0, 0 );
+				
+			}
+
+			if ( shapeDef.scale ) { 
+			
+				if ( typeof( shapeDef.scale ) == 'number' ) localScale.set( shapeDef.scale, shapeDef.scale, shapeDef.scale );
+				else localScale.set( shapeDef.scale[0], shapeDef.scale[1], shapeDef.scale[2] );
+			
+			} else {
+				
+				localScale.set( 1, 1, 1 );
+				
+			}
+
+			localScale.multiply( worldScale );
+
+			if ( shapeDef.rotation ) {
+			 
+				rot.set( shapeDef.rotation[0] * degToRad, shapeDef.rotation[1] * degToRad, shapeDef.rotation[2] * degToRad );
+				worldQuat.setFromEuler( rot );
+			
+			} else {
+				
+				worldQuat.set( 0, 0, 0, 1 );
+				
+			}
+			
+			var shape = null;
+			switch ( shapeDef.mesh ) {
+				
+			case 'Plane':
+			
+				shape = new CANNON.Plane();
+				break;
+			
+			case 'Box':
+				
+				shape = new CANNON.Box( new CANNON.Vec3( shapeDef.width * 0.5 * localScale.x, shapeDef.height * 0.5 * localScale.y, shapeDef.depth * 0.5 * localScale.z) );
+				break;
+			
+			case 'Sphere':
+			
+				var maxScale = Math.max( localScale.x, localScale.y, localScale.z );
+				shape = new CANNON.Sphere( shapeDef.radius * maxScale );
+				break;
+				
+			case 'Cylinder':
+			
+				var maxScaleXZ = Math.max( localScale.x, localScale.z );
+				shape = new CANNON.Cylinder( shapeDef.radiusTop * maxScaleXZ, shapeDef.radiusBottom * maxScaleXZ, shapeDef.height * localScale.y, shapeDef.radiusSegments );
+				var rotateQuat = new THREE.Quaternion();
+				rotateQuat.setFromAxisAngle( new THREE.Vector3( 1, 0, 0 ),  -Math.PI * 0.5 );
+				worldQuat.multiply( rotateQuat );
+				break;
+				
+			}
+			
+			if ( shape ) { 
+				
+				worldPos.multiply( worldScale );
+				
+				body.addShape( shape, new CANNON.Vec3( worldPos.x, worldPos.y, worldPos.z ), new CANNON.Quaternion( worldQuat.x, worldQuat.y, worldQuat.z, worldQuat.w ) );
+				
+			}
+		}		
+		
+		obj3d.body = body;
+		body.obj3d = obj3d;
+		
+	}
+	
+};
+
+/* remove body and constraints from world */
+THREE.PixelBoxScene.prototype.objectRemovedFromWorld = function ( event ) {
+
+	event.target.removeBodyAndConstraintsFromWorld( this.world );
+	
+};
+
+/* add body and constraints to world */
+THREE.PixelBoxScene.prototype.objectAddedToWorld = function ( event ) {
+
+	// check if object is actually added to scene
+	var p = event.target.parent;
+	while( p ) {
+		
+		if ( p === this ) {
+		
+			// add its body and constraints to the world
+			event.target.addBodyAndConstraintsToWorld( this.world );
+			return;
+			
+		}
+		
+		p = p.parent;
+		
+	}
+	
+};
+
+
+
 /* ================================================================================ THREE.PixelBoxRenderer callbacks */
 
 /* render callback */
 THREE.PixelBoxScene.prototype.render = function ( delta, rtt ) {
+
+	if ( this.world ) {
+		
+		this.world.step( Math.min( delta, 0.1 ) );
+		
+		var mat = new THREE.Matrix4(), worldScale = new THREE.Vector3();
+		
+		// copy new positions / rotations back to objects
+		for ( var i = this.world.bodies.length - 1; i >= 0; i-- ) {
+			
+			var body = this.world.bodies[ i ];
+			
+			if ( body.obj3d ) {
+				
+				var obj3d = body.obj3d;
+				var objParent = obj3d.parent;
+				
+				if ( !objParent || objParent == this ) {
+					
+					obj3d.matrix.identity();
+					
+				} else {
+				
+					obj3d.matrix.getInverse( objParent.matrixWorld );
+					
+				}
+				
+				worldScale.setFromMatrixScale( obj3d.matrixWorld );
+								
+				mat.compose( body.position, body.quaternion, worldScale );
+				obj3d.matrix.multiply( mat );
+				
+				obj3d.matrix.decompose( obj3d.position, obj3d.quaternion, obj3d.scale );
+				obj3d.rotation.setFromQuaternion( obj3d.quaternion );
+				
+			}
+			
+		}
+		
+	}
 
 	this.tick( delta );
 	

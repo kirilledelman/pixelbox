@@ -154,6 +154,111 @@ THREE.Object3D.prototype.getObjectByUUID = function ( uuid, recursive ) {
 	
 };
 
+/* called by 'added' handler to add physics body and constraints to world */
+THREE.Object3D.prototype.addBodyAndConstraintsToWorld = function( world ) {
+	
+	var obj = this;
+	var body = obj.body;
+	
+	if ( body ) {
+	
+		world.addBody( body );
+		
+		for ( var i = 0, l = body.constraints.length; i < l; i++ ) { 
+			
+			world.addConstraint( body.constraints[ i ] );
+			
+		}
+	
+	}
+	
+	for ( var i = 0; i < obj.children.length; i ++) {
+			
+		obj.children[ i ].removeBodyAndConstraintsFromWorld( world );
+		
+	}
+	
+};
+
+/* called by 'removed' handler to remove physics body and constraints from world */
+THREE.Object3D.prototype.removeBodyAndConstraintsFromWorld = function( world ) {
+	
+	var obj = this;
+	var body = obj.body;
+	
+	if ( body ) {
+		
+		// remove body
+		body.world.remove( body );
+		
+		// remove constraints
+		for ( var i = body.constraints.length - 1; i >= 0; i-- ) {
+			
+			var constraint = body.constraints[ i ];
+			var other = constraint.bodyA == obj ? constraint.bodyB : constraint.bodyA;
+			body.world.removeConstraint( constraint );
+			
+			if ( other && other.body ) {
+			
+				var index = other.body.constraints.indexOf( constraint );
+				if ( index >= 0 ) other.body.constraints.splice( index, 1 );
+				
+			}		
+			
+		}
+		
+		body.constraints.length = 0;
+		obj.body = null;
+		
+		for ( var i = 0; i < obj.children.length; i ++) {
+			
+			obj.children[ i ].removeBodyAndConstraintsFromWorld( world );
+			
+		}
+		
+	}
+	
+};
+
+
+/* copies this objects position and rotation to physics body */
+THREE.Object3D.prototype.syncBody = function() {
+	
+	if ( !this.body ) return;
+	
+	this.matrixWorldNeedsUpdate = true;
+	this.updateMatrixWorld();
+	
+	var worldPos = new THREE.Vector3(), worldScale = new THREE.Vector3();
+	var worldQuat = new THREE.Quaternion();
+	
+	this.matrixWorld.decompose( worldPos, worldQuat, worldScale );
+	
+	this.body.position.set( worldPos.x, worldPos.y, worldPos.z );
+	this.body.quaternion.set( worldQuat.x, worldQuat.y, worldQuat.z, worldQuat.w );
+	
+};
+
+/* copies this objects position and rotation to physics body */
+THREE.Object3D.prototype.syncToBody = function() {
+	
+	if ( !this.body || !this.parent ) return;
+	
+	this.matrix.getInverse( this.parent.matrixWorld );
+
+	var worldPos = new THREE.Vector3(), worldScale = new THREE.Vector3();
+	var worldQuat = new THREE.Quaternion();
+		
+	worldScale.setFromMatrixScale( this.matrixWorld );
+					
+	mat.compose( this.body.position, this.body.quaternion, worldScale );
+	this.matrix.multiply( mat );
+	
+	this.matrix.decompose( this.position, this.quaternion, this.scale );
+	this.rotation.setFromQuaternion( this.quaternion );
+	
+};
+
 THREE.Object3D.prototype.removeFromParent = function () {
 
 	if ( !this.parent ) return false;

@@ -173,7 +173,8 @@ THREE.PixelBoxAssets = function () {
 									
 								}
 								
-								assets.add( json.name, json );
+								var shortName = url.match(/([\w\d_-]*)\.?[^\\\/]*$/i)[ 1 ];								
+								assets.add( shortName, json );
 								
 							}
 							

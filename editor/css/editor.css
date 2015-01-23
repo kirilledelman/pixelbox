@@ -193,9 +193,26 @@ label.object-label.droppable.active {
 	font-size: 10px;
 	margin:0;
 	color: #666;
-	right:2px;
+	left:4px;
 	top:2px;
 	cursor: default;
+	cursor: pointer;
+	width: 90%;
+}
+
+#editor-props .panel h4:hover {
+	color: #fff;
+}
+
+#editor-props .panel.collapsed {
+	overflow: hidden;
+	height: 0px;
+	padding-bottom: 2px;
+	background-color: rgba(0,0,0,0.5);
+}
+
+#editor-props .panel.collapsed h4 {
+	color: white;
 }
 
 #prop-object-type {
@@ -773,7 +790,6 @@ input.error {
 
 input:active, input:hover, input:focus {
 	background-color: rgba(255,255,255,0.4);
-	outline: 0;
 }
 
 input.active {
@@ -786,11 +802,38 @@ input[type=text][disabled],input[type=text][readonly]{
 
 input[type=checkbox]{
 	margin: 5px 10px 5px 5px;
+	outline:0;
+	position: relative;
+}
+
+input[size='1']{
+	width:2.5em;
+	padding: 0 0.25em;
+}
+
+input[size='2']{
+	width:4em;
+	padding: 0 0.25em;
+}
+
+input[type=checkbox].multiple:after {
+	position: absolute;
+	top: 1px;
+	left: 2px;
+	content: 'M';
+	width: 16px;
+	height: 16px;
+	z-index: 1;
+	font-size: 62%;
+	color: rgba(0,0,0,0.6);
+	text-shadow: 0px 0px 1px white;
 }
 
 input[type=checkbox].multiple + label, input[type=radio].multiple + label{
 	color: #666;
 }
+
+input[type=checkbox].ui-helper-hidden-accessible { display: none; }
 
 ::-webkit-input-placeholder { /* WebKit browsers */
     color:    #AAA;

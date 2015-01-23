@@ -992,7 +992,7 @@ EditSceneScene.prototype = {
 		else pasteTarget = this.selectedObjects.length ? this.selectedObjects[0].parent : this.container;
 		
 		if(pasteTarget instanceof THREE.LinePathHandle) pasteTarget = pasteTarget.parent.parent;
-		else if(pasteTarget instanceof THREE.LinePath) pasteTarget = pasteTarget.parent;
+		else if(pasteTarget instanceof THREE.LinePath || pasteTarget.collisionShape) pasteTarget = pasteTarget.parent;
 
 		this.deselectAll();
 		
@@ -1217,6 +1217,8 @@ EditSceneScene.prototype = {
 	populateObject: THREE.PixelBoxScene.prototype.populateObject,
 
 	makeGeometryObject: THREE.PixelBoxScene.prototype.makeGeometryObject,
+
+	initObjectPhysics: THREE.PixelBoxScene.prototype.initObjectPhysics,
 
 	linkObjects: THREE.PixelBoxScene.prototype.linkObjects,
 	
@@ -1497,6 +1499,7 @@ EditSceneScene.prototype = {
 		this.scene.fog.color.copy(this.doc.fogColor);
 		this.scene.fog.near = this.doc.fogNear;
 		this.scene.fog.far = this.doc.fogFar;
+		this.doc.gravity = this.doc.gravity ? (new THREE.Vector3()).fromArray(this.doc.gravity) : new THREE.Vector3();
 		
 		// add assets to cache if needed
 		for(var i in dataObject.assets){
@@ -1977,6 +1980,8 @@ EditSceneScene.prototype = {
 			fogColor: this.doc.fogColor.getHexString(),
 			fogNear: this.doc.fogNear,
 			fogFar: this.doc.fogFar,
+			physics: !!this.doc.physics,
+			gravity: (this.doc.gravity ? this.doc.gravity.toArray() : [0, 0, 0]),
 			layers:[],
 			templates:{}
 		}
@@ -2115,7 +2120,7 @@ EditSceneScene.prototype = {
 		// traverse
 		editScene.container.children.sort(editScene.sceneSortFunc);
 		editScene.container.traverse(function(obj3d){
-			obj3d.omit = (obj3d.parent.isInstance === true) | (obj3d.parent.omit === true);
+			obj3d.omit = (obj3d.parent.isInstance === true) || (obj3d.parent.omit === true);
 		
 			// don't show helpers
 			if(obj3d.isHelper || obj3d == editScene.container || obj3d.parent.isHelper || obj3d.omit) return;
@@ -2124,11 +2129,11 @@ EditSceneScene.prototype = {
 			obj3d.children.sort(editScene.sceneSortFunc);
 			
 			// create a new row			
-			
 			var type = '';
 			if(obj3d.isAnchor) type = 'Anchor';
 			else if(obj3d instanceof THREE.LinePathHandle) type = obj3d.isControlPoint ? 'ControlPoint' : 'Point';
 			else if(obj3d.pixelBox) type = obj3d.geometry.data.name;
+			else if(obj3d.collisionShape) type = 'CollisionShape';
 			else type = obj3d.def.asset;
 			
 			if(obj3d.isInstance) type = '['+obj3d.def.template+']';
@@ -2233,9 +2238,11 @@ EditSceneScene.prototype = {
 			draggedObjects = [draggedObj];
 		}
 		ui.helper.empty();
+		var containsCollisionShapes = false;
 		for(var i = draggedObjects.length - 1; i >= 0; i--){
 			var obj3d = draggedObjects[i];
 			if(obj3d.isAnchor) { draggedObjects.splice(i, 1); continue; }
+			if(obj3d.collisionShape) containsCollisionShapes = true;
 			var color = editScene.automaticColorForIndex(obj3d.id, 1.0);
 			var type = obj3d.isAnchor ? 'Anchor' : (obj3d.def ? obj3d.def.asset : '?');
 			var h = $('<li><div class="tiny-swatch" style="background-color:'+color+'"/><label/></li>');
@@ -2253,7 +2260,18 @@ EditSceneScene.prototype = {
 			var invalid = false;
 			for(var i = 0; i < draggedObjects.length; i++){
 				// no parenting to dragged objects themselves, or instances
-				if(obj == draggedObjects[i] || obj.isDescendantOf(draggedObjects[i]) || obj.isInstance || obj.omit || obj instanceof THREE.LinePathHandle || obj instanceof THREE.LinePath){
+				if(obj == draggedObjects[i] || obj.isDescendantOf(draggedObjects[i]) || obj.isInstance || obj.omit ||
+				
+				// no parenting to line paths
+				obj instanceof THREE.LinePathHandle || obj instanceof THREE.LinePath || 
+				
+				// no parenting to collision shapes
+				obj.collisionShape ||
+				
+				// collision shapes can be parented to Mesh, container, or PixelBox
+				(containsCollisionShapes && !(obj instanceof THREE.Mesh || obj.isContainer || obj.isAnchor || obj instanceof THREE.PixelBox))
+				
+				){
 					invalid = true;
 					break;
 				}
@@ -3875,6 +3893,7 @@ EditSceneScene.prototype = {
 	},
 	
 	touchTemplate:function(obj){
+		if(!(obj instanceof THREE.Object3D)) return;
 		var template = obj.nearestTemplate();
 		while(template){
 			template.dirty = true;
@@ -4340,6 +4359,10 @@ EditSceneScene.prototype = {
 		var doArr = [];
 		var undoArr = [];
 		var prop = 'staticGroup';
+		val = val.replace(/\W+/g,'_'); // replace non-word chars with _
+		if(val.match(/^\d+/) || !val.length){ // prepend _ if starts with a digit
+			val = '_'+val;
+		}
 		for(var i = 0; i < editScene.selectedObjects.length; i++){
 			var obj = editScene.selectedObjects[i];
 			doArr.push([obj, val]);
@@ -4467,10 +4490,12 @@ EditSceneScene.prototype = {
 			p.remove(obj);
 
 			obj.def.mesh = val;
-			var geom = this.makeGeometryObject(obj.def);
+			var geom = this.makeGeometryObject(obj.def, !!obj.collisionShape);
 			obj.geometry.dispose();
 			obj.geometry = geom;
 			obj.geometryType = val;
+			
+			obj.material.side = (obj.geometryType == 'Plane') ? THREE.DoubleSide : THREE.FrontSide;
 
 			p.add(obj);
 
@@ -4601,6 +4626,8 @@ EditSceneScene.prototype = {
 			var geom = this.makeGeometryObject(obj.def);
 			obj.geometry.dispose();
 			obj.geometry = geom;
+
+			obj.material.side = (obj.geometryType == 'Plane') ? THREE.DoubleSide : THREE.FrontSide;
 
 			p.add(obj);
 			
@@ -5307,10 +5334,260 @@ EditSceneScene.prototype = {
 			obj.rebuild(false);
 		}
 	},
+
+/* ------------------- ------------------- ------------------- ------------------- ------------------- Physics */
+	
+	setDefProperty:function(arr, prop){
+		for(var i = 0; i < arr.length; i++){
+			var obj = arr[i][0];
+			var val = arr[i][1];
+			obj.def[prop] = val;
+		}		
+	},
+	
+	setVectorComponentDefProperty:function(arr, prop, comp){
+		for(var i = 0; i < arr.length; i++){
+			var obj = arr[i][0];
+			var val = arr[i][1];
+			if(obj.def[prop] === undefined){
+				obj.def[prop] = new THREE.Vector3();
+			}
+			obj.def[prop][comp] = val;
+		}		
+	},
+	
+	physicsChanged:function(e){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'physics';
+		val = e.target.checked;
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			if(val){ // add defaults
+				if(obj.def.angularVelocity === undefined) obj.def.angularVelocity = [0, 0, 0];
+				if(obj.def.velocity === undefined) obj.def.velocity = [0, 0, 0];
+				if(obj.def.collisionGroup === undefined) obj.def.collisionGroup = 1;
+				if(obj.def.collisionMask === undefined) obj.def.collisionMask = 1;
+				if(obj.def.friction === undefined) obj.def.friction = 0.3;
+				if(obj.def.restitution === undefined) obj.def.restitution = 0.3;
+			}
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj[prop]]);
+		}
+		editScene.addUndo({name:"physics", mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
+											redo:[editScene.setObjectProperty, doArr, prop]});
+		editScene.setObjectProperty(doArr, prop);
+	},
+	
+	scenePhysicsChanged:function(e){
+		var prop = 'physics';
+		var doArr = [ [ editScene.doc, e.target.checked ] ];
+		var undoArr = [ [ editScene.doc, !!editScene.doc.physics ] ];
+		
+		editScene.addUndo({name:"scenePhysics", mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
+											redo:[editScene.setObjectProperty, doArr, prop]});
+											
+		editScene.doc.physics = e.target.checked;
+		editScene.refreshProps();
+	},
+	
+	sceneGravityChanged:function(val, e){
+		var prop = e.target.id.substr(-1);
+		var doArr = [ [ editScene.doc.gravity, parseFloat(val) ] ];
+		var undoArr = [ [ editScene.doc.gravity, editScene.doc.gravity[prop] ] ];
+		
+		editScene.addUndo({name:"gravity"+prop.toUpperCase(), mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
+											redo:[editScene.setObjectProperty, doArr, prop]});
+		
+		editScene.setObjectProperty(doArr, prop);											
+	},
+	
+	collisionChanged:function(e){
+		var prop = ($(e.target).attr('name').indexOf('Mask') != -1) ? 'collisionMask' : 'collisionGroup';
+		var thisBit = parseInt($(e.target).attr('alt'));
+		var bitVal = e.target.checked;
+		var doArr = [];
+		var undoArr = [];
+		var val, prevVal;
+		e.target.blur();
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			prevVal = obj.def[prop];
+			// set bit
+			if(bitVal){
+				val = prevVal | Math.pow(2, thisBit);
+			// unset bit
+			} else {
+				val = prevVal & (0xFF - Math.pow(2, thisBit));
+			}
+			doArr.push([obj, val]);
+			undoArr.push([obj, prevVal]);
+		}
+		editScene.addUndo({name:prop, undo:[editScene.setDefProperty, undoArr, prop],
+											redo:[editScene.setDefProperty, doArr, prop]});
+		editScene.setDefProperty(doArr, prop);
+		editScene.refreshProps();
+	},
+	
+	addCollisionShape:function(e){
+		var prevSelection = this.selectedObjects.concat();
+		var objs = [];
+		for(var i = 0; i < prevSelection.length; i++){
+			this.selectedObjects = [ prevSelection[i] ];
+			objs.push(this.addObjectMenuItemClicked({target:{id:'scene-add-collision-shape'}, shiftKey: true }));
+		}
+		if(prevSelection.length > 1) this.joinUndoActions(prevSelection.length + 1);
+		this.selectedObjects = objs;
+		this.selectionChanged();
+		this.refreshProps();
+	},
+	
+	velocityChanged:function(val, e){
+		var comp = parseInt(e.target.id.substr(-1));
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'velocity';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj.def[prop] ? obj.def[prop][comp] : 0 ]);
+		}
+		editScene.addUndo({name:prop+'-'+comp, mergeable: true, undo:[editScene.setVectorComponentDefProperty, undoArr, prop, comp],
+											redo:[editScene.setVectorComponentDefProperty, doArr, prop, comp]});
+		editScene.setVectorComponentDefProperty(doArr, prop, comp);
+		editScene.refreshProps();
+	},
+	
+	angularVelocityChanged:function(val, e){
+		var comp = parseInt(e.target.id.substr(-1));
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'angularVelocity';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj.def[prop] ? obj.def[prop][comp] : 0 ]);
+		}
+		editScene.addUndo({name:prop+'-'+comp, mergeable: true, undo:[editScene.setVectorComponentDefProperty, undoArr, prop, comp],
+											redo:[editScene.setVectorComponentDefProperty, doArr, prop, comp]});
+		editScene.setVectorComponentDefProperty(doArr, prop, comp);
+		editScene.refreshProps();
+	},
+	
+	massChanged:function(val){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'mass';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj.def.mass || 0]);
+		}
+		editScene.addUndo({name:prop, mergeable: true, undo:[editScene.setDefProperty, undoArr, prop],
+											redo:[editScene.setDefProperty, doArr, prop]});
+		editScene.setDefProperty(doArr, prop);
+		editScene.refreshProps();
+	},
+
+	dampingChanged:function(val){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'damping';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj.def.damping || 0]);
+		}
+		editScene.addUndo({name:prop, mergeable: true, undo:[editScene.setDefProperty, undoArr, prop],
+											redo:[editScene.setDefProperty, doArr, prop]});
+		editScene.setDefProperty(doArr, prop);
+		editScene.refreshProps();
+	},
+
+	frictionChanged:function(val){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'friction';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj.def[prop] ]);
+		}
+		editScene.addUndo({name:prop, mergeable: true, undo:[editScene.setDefProperty, undoArr, prop],
+											redo:[editScene.setDefProperty, doArr, prop]});
+		editScene.setDefProperty(doArr, prop);
+		editScene.refreshProps();
+	},
+	
+	restitutionChanged:function(val){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'restitution';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj.def[prop] ]);
+		}
+		editScene.addUndo({name:prop, mergeable: true, undo:[editScene.setDefProperty, undoArr, prop],
+											redo:[editScene.setDefProperty, doArr, prop]});
+		editScene.setDefProperty(doArr, prop);
+		editScene.refreshProps();
+	},
+
+	fixedRotationChanged:function(val){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'fixedRotation';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, !!obj.def.fixedRotation]);
+		}
+		editScene.addUndo({name:prop, mergeable: true, undo:[editScene.setDefProperty, undoArr, prop],
+											redo:[editScene.setDefProperty, doArr, prop]});
+		editScene.setDefProperty(doArr, prop);
+		editScene.refreshProps();
+	},
+	
+	sensorChanged:function(val){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'sensor';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, !!obj.def.sensor]);
+		}
+		editScene.addUndo({name:prop, mergeable: true, undo:[editScene.setDefProperty, undoArr, prop],
+											redo:[editScene.setDefProperty, doArr, prop]});
+		editScene.setDefProperty(doArr, prop);
+		editScene.refreshProps();
+	},
+	
+	bodyTypeChanged:function(e){
+		var val = $('#phys-type').val();
+		if(val === '-') return;
+		
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'bodyType';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj.def.bodyType || 0]);
+		}
+		editScene.addUndo({name:prop, undo:[editScene.setDefProperty, undoArr, prop],
+											redo:[editScene.setDefProperty, doArr, prop]});
+		editScene.setDefProperty(doArr, prop);
+		editScene.refreshProps();
+	},
 	
 /* ------------------- ------------------- ------------------- ------------------- ------------------- Properties panel */
 
 	previewScene:function(e){
+	
+		if(window.previewWindow) window.previewWindow.close();
+
 	 	var loadScene = editScene.exportScene(true, false);
 	 	console.log(JSON.parse(loadScene));
 		if(window['chrome'] && chrome.storage){
@@ -5322,15 +5599,18 @@ EditSceneScene.prototype = {
 			 }, function(win){
 		 		win.contentWindow.loadScene = loadScene;
 			 	win.focus();
+			 	window.previewWindow = win;
 			});
 		} else {
 			var win = window.open('preview.html', '_blank');
 	 		win.loadScene = loadScene;
 		 	win.focus();
+		 	window.previewWindow = win;
 		}
 	},
 
 	refreshProps:function(){
+		var prevScroll = $('#editor-props .panels').scrollTop();
 		$('#editor-props > h1').text('Properties' + (this.selectedObjects.length ? (' ('+this.selectedObjects.length+')') : ''));
 		$('#editor-props .panels > .panel').hide();
 		if(!this.selectedObjects.length){
@@ -5338,12 +5618,22 @@ EditSceneScene.prototype = {
 			$('#prop-object-type').text('Scene');
 			$('#panel-scene').show();
 			// scene panel
+			$('#scene-physics')[0].checked = !!this.doc.physics;
 			$('#scene-color').css({backgroundColor: this.doc.clearColor.getHexString()});
 			$('#scene-fog-color').css({backgroundColor: this.doc.fogColor.getHexString()});
 			$('#scene-ambient-color').css({backgroundColor: this.doc.ambient.getHexString()});
 			$('#scene-max-shadows').val(this.doc.maxShadows != undefined ? this.doc.maxShadows : 0).data('prevVal', $('#scene-max-shadows').val().toString());
 			$('#scene-fog-near').val(this.doc.fogNear != undefined ? this.doc.fogNear : this.scene.fog.near).data('prevVal', $('#scene-fog-near').val().toString());
 			$('#scene-fog-far').val(this.doc.fogFar != undefined ? this.doc.fogFar : this.scene.fog.far).data('prevVal', $('#scene-fog-far').val().toString());
+			// scene physics panel
+			if(this.doc.physics){
+				$('#panel-scene-physics').show();
+				if(this.doc.gravity){
+					$('#phys-grav-x:not(:focus)').data('prevVal', this.doc.gravity.x.toString()).val(this.doc.gravity.x);
+					$('#phys-grav-y:not(:focus)').data('prevVal', this.doc.gravity.y.toString()).val(this.doc.gravity.y);
+					$('#phys-grav-z:not(:focus)').data('prevVal', this.doc.gravity.z.toString()).val(this.doc.gravity.z);
+				}
+			}
 			return;
 		}
 		$('#prop-name').attr('placeholder','Object name');
@@ -5355,9 +5645,9 @@ EditSceneScene.prototype = {
 		$('#pixelbox-animName').empty().append('<option value=""/>');
 		$('#props-container').empty();
 		
-		$('#geometry-type option[value="0"]').remove();
+		$('#geometry-type option[value="0"],#phys-type option[value="-"]').remove();
 		
-		var prevObj = null;
+		var prevObj = null, prevPhysObj = null;
 		var mults = {};
 		var containsAnchors = false;
 		var containsContainers = false;
@@ -5365,6 +5655,7 @@ EditSceneScene.prototype = {
 		var containsInstances = false;
 		var containsCameras = false;
 		var containsGeometry = false;
+		var containsCollisionShapes = false;
 		var containsSpotLights = false;
 		var containsDirLights = false;
 		var containsHemiLights = false;
@@ -5377,6 +5668,9 @@ EditSceneScene.prototype = {
 		function getType(o, pbt){
 			if(o.def){
 				switch(o.def.asset){
+				case 'Geometry':
+					if(o.collisionShape) return 'CollisionShape';
+					return 'Geometry';
 				case 'Camera':
 				case 'OrthographicCamera':
 					return 'Camera';
@@ -5408,7 +5702,8 @@ EditSceneScene.prototype = {
 			containsPointClouds = containsPointClouds | (obj.pixelBox);
 			containsInstances = containsInstances | (obj.isInstance);
 			containsCameras = containsCameras | (obj instanceof THREE.Camera);
-			containsGeometry = containsGeometry | (obj instanceof THREE.Mesh);
+			containsGeometry = containsGeometry | (obj instanceof THREE.Mesh && !obj.collisionShape);
+			containsCollisionShapes = containsCollisionShapes | (obj instanceof THREE.Mesh && obj.collisionShape);
 			containsSpotLights = containsSpotLights | (obj instanceof THREE.SpotLight);
 			containsDirLights = containsDirLights | (obj instanceof THREE.DirectionalLight);
 			containsHemiLights = containsHemiLights | (obj instanceof THREE.HemisphereLight);
@@ -5442,6 +5737,13 @@ EditSceneScene.prototype = {
 				mults['template'] = true;
 			} else if(!mults['template']){
 				$('#prop-template')[0].checked = obj.isTemplate;
+			}
+			// visible
+			if(prevObj && prevObj.physics != obj.physics){
+				$('#prop-physics').addClass('multiple')[0].checked = false;
+				mults['physics'] = true;
+			} else if(!mults['physics']){
+				$('#prop-physics')[0].checked = obj.physics;
 			}
 			// cast
 			if(prevObj && prevObj.castShadow != obj.castShadow){
@@ -5651,42 +5953,45 @@ EditSceneScene.prototype = {
 			} else 
 			
 			// Geometry
-			if(commonType == 'Geometry'){
-				if(prevObj && prevObj.material.stipple != obj.material.stipple){
-					$('#geometry-stipple').attr('placeholder','M').val('').data('prevVal',''); mults['geometry-stipple'] = true;
-				} else if(!mults['geometry-stipple']){
-					var newVal = obj.material.stipple;
-					$('#geometry-stipple:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
+			if(commonType == 'Geometry' ||  commonType == 'CollisionShape'){
+				if(commonType == 'Geometry'){
+					if(prevObj && prevObj.material.stipple != obj.material.stipple){
+						$('#geometry-stipple').attr('placeholder','M').val('').data('prevVal',''); mults['geometry-stipple'] = true;
+					} else if(!mults['geometry-stipple']){
+						var newVal = obj.material.stipple;
+						$('#geometry-stipple:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
+					}
+					if(prevObj && prevObj.material.alpha != obj.material.alpha){
+						$('#geometry-alpha').attr('placeholder','M').val('').data('prevVal',''); mults['geometry-alpha'] = true;
+					} else if(!mults['geometry-alpha']){
+						var newVal = obj.material.alpha;
+						$('#geometry-alpha:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
+					}
+					if(prevObj && prevObj.material.brightness != obj.material.brightness){
+						$('#geometry-brightness').attr('placeholder','M').val('').data('prevVal',''); mults['geometry-brightness'] = true;
+					} else if(!mults['geometry-occlusion']){
+						var newVal = obj.material.brightness;
+						$('#geometry-brightness:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
+					}
+					if(prevObj && prevObj.material.tint.getHex() != obj.material.tint.getHex()){
+						$('#geometry-tint').css({backgroundColor:'transparent'}); mults['geometry-tint'] = true;
+					} else if(!mults['geometry-tint']){
+						$('#geometry-tint').css({backgroundColor:'#'+obj.material.tint.getHexString()});
+					}
+					if(prevObj && prevObj.material.addColor.getHex() != obj.material.addColor.getHex()){
+						$('#geometry-addColor').css({backgroundColor:'transparent'}); mults['geometry-addColor'] = true;
+					} else if(!mults['geometry-addColor']){
+						$('#geometry-addColor').css({backgroundColor:'#'+obj.material.addColor.getHexString()});
+					}
+					// invert
+					if(prevObj && prevObj.def.inverted != obj.def.inverted){
+						$('#geometry-invert').addClass('multiple')[0].checked = false;
+						mults['geometry-invert'] = true;
+					} else if(!mults['geometry-invert']){
+						$('#geometry-invert')[0].checked = obj.def.inverted;
+					}
 				}
-				if(prevObj && prevObj.material.alpha != obj.material.alpha){
-					$('#geometry-alpha').attr('placeholder','M').val('').data('prevVal',''); mults['geometry-alpha'] = true;
-				} else if(!mults['geometry-alpha']){
-					var newVal = obj.material.alpha;
-					$('#geometry-alpha:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
-				}
-				if(prevObj && prevObj.material.brightness != obj.material.brightness){
-					$('#geometry-brightness').attr('placeholder','M').val('').data('prevVal',''); mults['geometry-brightness'] = true;
-				} else if(!mults['geometry-occlusion']){
-					var newVal = obj.material.brightness;
-					$('#geometry-brightness:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
-				}
-				if(prevObj && prevObj.material.tint.getHex() != obj.material.tint.getHex()){
-					$('#geometry-tint').css({backgroundColor:'transparent'}); mults['geometry-tint'] = true;
-				} else if(!mults['geometry-tint']){
-					$('#geometry-tint').css({backgroundColor:'#'+obj.material.tint.getHexString()});
-				}
-				if(prevObj && prevObj.material.addColor.getHex() != obj.material.addColor.getHex()){
-					$('#geometry-addColor').css({backgroundColor:'transparent'}); mults['geometry-addColor'] = true;
-				} else if(!mults['geometry-addColor']){
-					$('#geometry-addColor').css({backgroundColor:'#'+obj.material.addColor.getHexString()});
-				}
-				// invert
-				if(prevObj && prevObj.def.inverted != obj.def.inverted){
-					$('#geometry-invert').addClass('multiple')[0].checked = false;
-					mults['geometry-invert'] = true;
-				} else if(!mults['geometry-invert']){
-					$('#geometry-invert')[0].checked = obj.def.inverted;
-				}
+				
 				// type
 				if(prevObj && prevObj.geometryType != obj.geometryType){
 					if(!mults['geometry-type']){
@@ -5703,7 +6008,7 @@ EditSceneScene.prototype = {
 				
 					var panel = $('#panel-geometry');
 					// props
-					var props = ['width','height','depth','widthSegments','heightSegments','depthSegments'];
+					var props = ['width','height','depth','widthSegments','heightSegments','depthSegments','radiusSegments','radiusTop','radiusBottom'];
 					for(var pi in props){
 						var p = props[pi];
 						if(prevObj && prevObj.def[p] != obj.def[p]){
@@ -5722,6 +6027,12 @@ EditSceneScene.prototype = {
 							var newVal = obj.def[p];
 							$('#geometry-'+p+':not(:focus)',panel).attr('placeholder','').val(newVal).data('prevVal', newVal);
 						}
+					}
+					if(prevObj && prevObj.def.openEnded != obj.def.openEnded){
+						$('#geometry-cylinder-openEnded').addClass('multiple')[0].checked = false;
+						mults['geometry-openEnded'] = true;
+					} else if(!mults['geometry-openEnded']){
+						$('#geometry-cylinder-openEnded')[0].checked = obj.def.openEnded;
 					}
 					
 				}				
@@ -5900,10 +6211,126 @@ EditSceneScene.prototype = {
 				}
 			});
 			
+			// physics properties
+			if(obj.physics){
+				// body type
+				if(prevPhysObj && prevPhysObj.def.bodyType != obj.def.bodyType){
+					if(!mults['phys-type']){
+						$('#phys-type').prepend('<option value="-" selected>- multiple -</option>');
+					}
+					$('#phys-type').val('-');
+					mults['phys-type'] = true;
+				} else if(!mults['phys-type']){
+					var newVal = obj.def.bodyType ? obj.def.bodyType : '0';
+					$('#phys-type').val(newVal);
+				}				
+				// mass
+				if(prevPhysObj && prevPhysObj.def.mass != obj.def.mass){
+					$('#phys-mass').attr('placeholder','M').val('').data('prevVal',''); mults['phys-mass'] = true;
+				} else if(!mults['phys-mass']){
+					var newVal = obj.def.mass ? obj.def.mass : 0;
+					$('#phys-mass:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}
+				// damping
+				if(prevPhysObj && prevPhysObj.def.damping != obj.def.damping){
+					$('#phys-damping').attr('placeholder','M').val('').data('prevVal',''); mults['phys-damping'] = true;
+				} else if(!mults['phys-damping']){
+					var newVal = obj.def.damping ? obj.def.damping : 0;
+					$('#phys-damping:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}
+				// fric
+				if(prevPhysObj && prevPhysObj.def.friction != obj.def.friction){
+					$('#phys-friction').attr('placeholder','M').val('').data('prevVal',''); mults['phys-friction'] = true;
+				} else if(!mults['phys-friction']){
+					var newVal = obj.def.friction;
+					$('#phys-friction:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}
+				// restitution
+				if(prevPhysObj && prevPhysObj.def.restitution != obj.def.restitution){
+					$('#phys-restitution').attr('placeholder','M').val('').data('prevVal',''); mults['phys-restitution'] = true;
+				} else if(!mults['phys-restitution']){
+					var newVal = obj.def.restitution;
+					$('#phys-restitution:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}
+				// fixed rot
+				if(prevPhysObj && prevPhysObj.def.fixedRotation != obj.def.fixedRotation){
+					$('#phys-fixed').addClass('multiple')[0].checked = false;
+					mults['phys-fixed'] = true;
+				} else if(!mults['phys-fixed']){
+					$('#phys-fixed')[0].checked = obj.def.fixedRotation;
+				}
+				// fixed rot
+				if(prevPhysObj && prevPhysObj.def.sensor != obj.def.sensor){
+					$('#phys-sensor').addClass('multiple')[0].checked = false;
+					mults['phys-sensor'] = true;
+				} else if(!mults['phys-sensor']){
+					$('#phys-sensor')[0].checked = obj.def.sensor;
+				}
+				// velocity
+				if(prevPhysObj && prevPhysObj.def.velocity[0] != obj.def.velocity[0]){
+					$('#phys-v0').attr('placeholder','M').val('').data('prevVal',''); mults['phys-vx'] = true;
+				} else if(!mults['phys-vx']){
+					var newVal = obj.def.velocity[0];
+					$('#phys-v0:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}
+				if(prevPhysObj && prevPhysObj.def.velocity[1] != obj.def.velocity[1]){
+					$('#phys-v1').attr('placeholder','M').val('').data('prevVal',''); mults['phys-vy'] = true;
+				} else if(!mults['phys-vy']){
+					var newVal = obj.def.velocity[1];
+					$('#phys-v1:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}
+				if(prevPhysObj && prevPhysObj.def.velocity[2] != obj.def.velocity[2]){
+					$('#phys-v2').attr('placeholder','M').val('').data('prevVal',''); mults['phys-vz'] = true;
+				} else if(!mults['phys-vz']){
+					var newVal = obj.def.velocity[2];
+					$('#phys-v2:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}
+				// angular vel
+				if(prevPhysObj && prevPhysObj.def.angularVelocity[0] != obj.def.angularVelocity[0]){
+					$('#phys-rv0').attr('placeholder','M').val('').data('prevVal',''); mults['phys-rvx'] = true;
+				} else if(!mults['phys-rvx']){
+					var newVal = obj.def.angularVelocity[0];
+					$('#phys-rv0:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}
+				if(prevPhysObj && prevPhysObj.def.angularVelocity[1] != obj.def.angularVelocity[1]){
+					$('#phys-rv1').attr('placeholder','M').val('').data('prevVal',''); mults['phys-rvy'] = true;
+				} else if(!mults['phys-rvy']){
+					var newVal = obj.def.angularVelocity[1];
+					$('#phys-rv1:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}
+				if(prevPhysObj && prevPhysObj.def.angularVelocity[2] != obj.def.angularVelocity[2]){
+					$('#phys-rv2').attr('placeholder','M').val('').data('prevVal',''); mults['phys-rvz'] = true;
+				} else if(!mults['phys-rvz']){
+					var newVal = obj.def.angularVelocity[2];
+					$('#phys-rv2:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}
+				// collision group
+				$('#panel-physics input[name="collisionGroup"]').each(function(i, el){
+					if($(el).hasClass('multiple')) return;
+					var thisBit = Math.pow(2, i);
+					el.checked = !!(obj.def.collisionGroup & thisBit);
+					if(prevPhysObj && !!(prevPhysObj.def.collisionGroup & thisBit) != el.checked){
+						$(el).addClass('multiple');
+						el.checked = false;
+					}
+				});
+				$('#panel-physics input[name="collisionMask"]').each(function(i, el){
+					if($(el).hasClass('multiple')) return;
+					var thisBit = Math.pow(2, i);
+					el.checked = !!(obj.def.collisionMask & thisBit);
+					if(prevPhysObj && !!(prevPhysObj.def.collisionMask & thisBit) != el.checked){
+						$(el).addClass('multiple');
+						el.checked = false;
+					}
+				});				
+				
+				prevPhysObj = obj;
+			}
+			
+			
 			// end loop
 			prevObj = obj;
-		}
-		
+		}		
 		
 		// common type
 		if(commonType == 'Camera'){
@@ -5913,7 +6340,7 @@ EditSceneScene.prototype = {
 			} else {
 				$('#cam-default,#cam-default~label:first').removeAttr('disabled').removeClass('multiple');
 			}			
-		} else if(commonType == 'Geometry'){
+		} else if(commonType == 'Geometry' || commonType == 'CollisionShape'){
 			$('#panel-geometry').show();
 		} else if(commonType == 'PixelBox'){
 			$('#panel-pixelbox').show();
@@ -5927,7 +6354,7 @@ EditSceneScene.prototype = {
 		}
 		
 		if((containsDirLights || containsHemiLights || containsPointLights || containsSpotLights) &&
-			!(containsAnchors || containsCameras || containsContainers || containsInstances || containsGeometry || containsPointClouds || containsPoints)){
+			!(containsAnchors || containsCameras || containsContainers || containsInstances || containsGeometry || containsPointClouds || containsPoints || containsPaths || containsCollisionShapes)){
 			$('#panel-light').show();
 			
 			$('#light-distance,#light-exponent,#light-angle').spinner('enable');
@@ -5956,12 +6383,26 @@ EditSceneScene.prototype = {
 			$('#panel-move input[type=text].rotation,#panel-move input[type=text].scale').attr('disabled','disabled').spinner('disable');
 			$('#panel-move input[type=checkbox]').attr('disabled','disabled');
 			$('#look-at,#prop-name,#obj-from-cam').attr('disabled','disabled');
+		} else if(containsCollisionShapes){
+			$('#panel-move input[type=checkbox]').not('#prop-visible').attr('disabled','disabled');
+			// hide geometry sub-stuff
+			$('#panel-geometry .geom-only').hide();
 		} else {
 			$('#panel-move input[type=text]').removeAttr('disabled').spinner('enable');
 			$('#panel-move input[type=checkbox]').removeAttr('disabled');
 			$('#look-at,#prop-name,#obj-from-cam').removeAttr('disabled');
 			$('#panel-custom').show();
+			// show geometry sub-stuff
+			$('#panel-geometry .geom-only').show();
 		}
+		
+		// phys
+		if(this.doc.physics && !(containsDirLights || containsHemiLights || containsPointLights || containsSpotLights || containsAnchors || containsCameras || containsInstances || containsPoints || containsPaths || containsCollisionShapes) && (containsContainers || containsGeometry || containsPointClouds)){
+			$('#prop-physics').removeAttr('disabled');
+			if($('#prop-physics')[0].checked) $('#panel-physics').show();
+		} else {
+			$('#prop-physics').attr('disabled','disabled');
+		}		
 		
 		if(containsPaths){
 			$('#prop-cast-shadow,#prop-receive-shadow').attr('disabled','disabled');
@@ -5984,7 +6425,10 @@ EditSceneScene.prototype = {
 		
 		this.updateStoredPosition();
 		
-		// if(containsSpotLights || containsDirLights){ $('#look-at').attr('disabled', 'disabled'); }
+		// scroll to the same pos
+		var cont = $('#editor-props .panels');
+		prevScroll = Math.min(prevScroll, cont.prop('scrollHeight') - cont.innerHeight());
+		cont.scrollTop(prevScroll);
 	},
 	
 /* ------------------- ------------------- ------------------- ------------------- ------------------- UI functions */
@@ -6089,9 +6533,10 @@ EditSceneScene.prototype = {
 		<div class="panels">\
 			<div id="panel-move" class="panel"><h4>Object3D</h4>\
 			<input tabindex="9" type="checkbox" id="prop-visible"/><label for="prop-visible" class="w3">Visible</label>\
-			<input tabindex="10" type="checkbox" id="prop-template"/><label for="prop-template" class="w32">Template</label>\
-			<hr/><input tabindex="11" type="checkbox" id="prop-cast-shadow"/><label for="prop-cast-shadow" class="w32">Cast Shadow</label>\
-			<input tabindex="12" type="checkbox" id="prop-receive-shadow"/><label for="prop-receive-shadow" class="w32">Receive Shadow</label>\
+			<input tabindex="10" type="checkbox" id="prop-template"/><label for="prop-template" class="w31">Template</label>\
+			<input tabindex="11" type="checkbox" id="prop-physics"/><label for="prop-physics" class="w3">Physics</label><br/>\
+			<hr/><input tabindex="12" type="checkbox" id="prop-cast-shadow"/><label for="prop-cast-shadow" class="w32">Cast Shadow</label>\
+			<input tabindex="13" type="checkbox" id="prop-receive-shadow"/><label for="prop-receive-shadow" class="w32">Receive Shadow</label>\
 			<hr/><label for="prop-x" class="w0 right-align">X</label><input tabindex="0" type="text" class="center position" id="prop-x" size="1"/>\
 			<label for="prop-rx" class="w1 right-align">Rot X</label><input tabindex="3" type="text" class="center rotation" id="prop-rx" size="1"/>\
 			<label for="prop-sx" class="w1 right-align">Scale X</label><input tabindex="6" type="text" class="center scale" id="prop-sx" size="1"/><br/>\
@@ -6116,7 +6561,7 @@ EditSceneScene.prototype = {
 		function checkBoxValueChanged(setValueFunc){
 			return function(e){
 				var targ = $(e.target);
-				setValueFunc.call(editScene, e.target.checked);
+				setValueFunc.call(editScene, e.target.checked, e);
 			}	
 		};
 		$('#panel-move input.position').spinner({step:1, change:this.positionSpinnerChange, stop:this.positionSpinnerChange });//
@@ -6124,8 +6569,9 @@ EditSceneScene.prototype = {
 		$('#panel-move input.scale').spinner({step:0.25, change:this.scaleSpinnerChange, stop:this.scaleSpinnerChange});//
 		$('#prop-cast-shadow').click(checkBoxValueChanged(this.castShadowChanged));
 		$('#prop-receive-shadow').click(checkBoxValueChanged(this.receiveShadowChanged));
-		$('#prop-visible').click(this.visibleChanged);
-		$('#prop-template').click(this.templateChanged);
+		$('#prop-visible').change(this.visibleChanged);
+		$('#prop-template').change(this.templateChanged);
+		$('#prop-physics').change(this.physicsChanged);
 		$('#look-at').click(this.lookAtClicked);
 		$('#store-pos').click(this.storePosition);
 		$('#store-rot').click(this.storeRotation);
@@ -6139,7 +6585,8 @@ EditSceneScene.prototype = {
 		
 // scene panel
 		$('#editor-props .panels').append('<div id="panel-scene" class="panel"><h4>Scene</h4>\
-			<label for="scene-max-shadows" class="w32 pad5 right-align">Max shadows</label><input tabindex="3" type="text" class="center" id="scene-max-shadows" size="1"/><br/>\
+			<label for="scene-max-shadows" class="w32 pad5 right-align">Max shadows</label><input tabindex="3" type="text" class="center" id="scene-max-shadows" size="1"/>\
+			&nbsp;&nbsp;&nbsp;&nbsp;<input type="checkbox" id="scene-physics"/><label for="scene-physics" class="w3">Use physics</label><br/>\
 			<label class="w32 right-align pad5">Clear color</label><div id="scene-color" class="color-swatch"/><br/>\
 			<label class="w32 right-align pad5">Ambient</label><div id="scene-ambient-color" class="color-swatch"/><br/>\
 			<label class="w32 right-align pad5">Fog color</label><div id="scene-fog-color" class="color-swatch"/><br/>\
@@ -6172,6 +6619,7 @@ EditSceneScene.prototype = {
 		};
 		var vc = valueChanged(this.setSceneMaxShadows);
 		$('#scene-max-shadows').spinner({step:1, min:0, max:8, change:vc, stop:vc});
+		$('#scene-physics').change(this.scenePhysicsChanged);
 		vc = valueChanged(this.setSceneFogNear);
 		$('#scene-fog-near').spinner({step:10, min:0, change:vc, stop:vc});//
 		vc = valueChanged(this.setSceneFogFar);
@@ -6180,6 +6628,8 @@ EditSceneScene.prototype = {
 			$(dom).css({zIndex: 10000001});
 			var src = $(this);
 			var css = src.css('background-color');
+			var top = parseInt($(dom).css('top')), height = $(dom).outerHeight();
+			if(top + height > window.innerHeight) $(dom).css('top', window.innerHeight - height);
 			if(css != 'transparent'){
 				var clr = new THREE.Color(css);
 				var hex = clr.getHexString();
@@ -6223,6 +6673,79 @@ EditSceneScene.prototype = {
 				editScene.scene.fog.color.setHex(parseInt(hex,16));
 			}
 		});
+		
+// scene physics
+		$('#editor-props .panels').append('<div id="panel-scene-physics" class="panel"><h4>Physics</h4>\
+			<label for="phys-grav-x" class="w3 pad5 right-align">Gravity X</label><input tabindex="0" type="text" class="center gravity" id="phys-grav-x" size="1"/>\
+			<label for="phys-grav-y" class="pad5 right-align">Y</label><input tabindex="1" type="text" class="center gravity" id="phys-grav-y" size="1"/>\
+			<label for="phys-grav-z" class="pad5 right-align">Z</label><input tabindex="2" type="text" class="center gravity" id="phys-grav-z" size="1"/>\
+			</div>');
+		vc = valueChanged(this.sceneGravityChanged);
+		$('#panel-scene-physics input.gravity').spinner({step:1, change:vc, stop:vc});
+		
+// body physics
+		$('#editor-props .panels').append('<div id="panel-physics" class="panel"><h4>Physics</h4>\
+			<label for="phys-type" class="w31 right-align">Body type&nbsp;</label><select id="phys-type">\
+			<option value="0">Dynamic</option>\
+			<option value="1">Static</option>\
+			<option value="2">Kinematic</option>\
+			</select><span class="sub right-align w5">\
+			<a id="phys-add-shape">+ add collision shape</a></span>\
+			<hr/>\
+			<label for="phys-mass" class="w31 right-align">Mass</label><input tabindex="0" type="text" class="center" id="phys-mass" size="1"/>\
+			<label for="phys-damping" class="right-align">&nbsp;&nbsp;Linear Damping</label><input tabindex="1" type="text" class="center" id="phys-damping" size="1"/><br/>\
+			<hr/>\
+			<input tabindex="2" type="checkbox" id="phys-fixed"/><label for="phys-fixed" class="w4">Fixed Rotation</label>\
+			<input tabindex="3" type="checkbox" id="phys-sensor"/><label for="phys-sensor" class="w3">Sensor</label>\
+			<hr/>\
+			<label for="phys-v0" class="w31 right-align">Velocity X</label><input tabindex="4" type="text" class="center vel" id="phys-v0" size="1"/>\
+			<label for="prop-rv0" class="right-align">&nbsp;Rot Velocity X</label><input tabindex="7" type="text" class="center rvel" id="phys-rv0" size="1"/>\
+			<label for="phys-v1" class="w31 right-align">Velocity Y</label><input tabindex="5" type="text" class="center vel" id="phys-v1" size="1"/>\
+			<label for="prop-rv1" class="right-align">&nbsp;Rot Velocity Y</label><input tabindex="8" type="text" class="center rvel" id="phys-rv1" size="1"/>\
+			<label for="phys-v2" class="w31 right-align">Velocity Z</label><input tabindex="6" type="text" class="center vel" id="phys-v2" size="1"/>\
+			<label for="prop-rv2" class="right-align">&nbsp;Rot Velocity Z</label><input tabindex="9" type="text" class="center rvel" id="phys-rv2" size="1"/>\
+			<hr/>\
+			<label class="w32 pad5 right-align">Coll. group</label>\
+			<input name="collisionGroup" type="checkbox" alt="0" class="coll"/>\
+			<input name="collisionGroup" type="checkbox" alt="1" class="coll"/>\
+			<input name="collisionGroup" type="checkbox" alt="2" class="coll"/>\
+			<input name="collisionGroup" type="checkbox" alt="3" class="coll"/>\
+			<input name="collisionGroup" type="checkbox" alt="4" class="coll"/>\
+			<input name="collisionGroup" type="checkbox" alt="5" class="coll"/>\
+			<input name="collisionGroup" type="checkbox" alt="6" class="coll"/>\
+			<input name="collisionGroup" type="checkbox" alt="7" class="coll"/><br/>\
+			<label class="w32 pad5 right-align">Collides with</label>\
+			<input name="collisionMask" type="checkbox" alt="0" class="coll"/>\
+			<input name="collisionMask" type="checkbox" alt="1" class="coll"/>\
+			<input name="collisionMask" type="checkbox" alt="2" class="coll"/>\
+			<input name="collisionMask" type="checkbox" alt="3" class="coll"/>\
+			<input name="collisionMask" type="checkbox" alt="4" class="coll"/>\
+			<input name="collisionMask" type="checkbox" alt="5" class="coll"/>\
+			<input name="collisionMask" type="checkbox" alt="6" class="coll"/>\
+			<input name="collisionMask" type="checkbox" alt="7" class="coll"/>\
+			<hr/>\
+			<label for="phys-friction" class="w31 right-align">Friction</label><input tabindex="10" type="text" class="center" id="phys-friction" size="1"/>\
+			<label for="phys-restitution" class="right-align">&nbsp;&nbsp;Restitution</label><input tabindex="11" type="text" class="center" id="phys-restitution" size="1"/>\
+			</div>');		
+
+		$('#phys-add-shape').click(this.addCollisionShape.bind(this));
+
+		vc = valueChanged(this.velocityChanged);
+		$('#panel-physics .vel').spinner({change:vc, stop:vc});
+		vc = valueChanged(this.frictionChanged);
+		$('#phys-friction').spinner({step: 0.1, change:vc, stop:vc});
+		vc = valueChanged(this.restitutionChanged);
+		$('#phys-restitution').spinner({step: 0.1, change:vc, stop:vc});
+		vc = valueChanged(this.angularVelocityChanged);
+		$('#panel-physics .rvel').spinner({change:vc, stop:vc});
+		vc = valueChanged(this.massChanged);
+		$('#panel-physics #phys-mass').spinner({min:0, change:vc, stop:vc});
+		vc = valueChanged(this.dampingChanged);
+		$('#panel-physics #phys-damping').spinner({step:0.05, min:0, change:vc, stop:vc});
+		$('#phys-fixed').change(checkBoxValueChanged(this.fixedRotationChanged));
+		$('#phys-sensor').change(checkBoxValueChanged(this.sensorChanged));
+		$('#phys-type').change(this.bodyTypeChanged.bind(this));
+		$('#panel-physics input.coll').change(this.collisionChanged.bind(this));
 
 // camera panel
 		$('#editor-props .panels').append('<div id="panel-camera" class="panel"><h4>Camera</h4>\
@@ -6273,6 +6796,8 @@ EditSceneScene.prototype = {
 				$(dom).css({zIndex: 10000001});
 				var src = $(this);
 				var css = src.css('background-color');
+				var top = parseInt($(dom).css('top')), height = $(dom).outerHeight();
+				if(top + height > window.innerHeight) $(dom).css('top', window.innerHeight - height);
 				// store preselection color
 				for(var i = 0; i < editScene.selectedObjects.length; i++){
 					var obj = editScene.selectedObjects[i];
@@ -6310,6 +6835,8 @@ EditSceneScene.prototype = {
 				$(dom).css({zIndex: 10000001});
 				var src = $(this);
 				var css = src.css('background-color');
+				var top = parseInt($(dom).css('top')), height = $(dom).outerHeight();
+				if(top + height > window.innerHeight) $(dom).css('top', window.innerHeight - height);
 				// store preselection color
 				for(var i = 0; i < editScene.selectedObjects.length; i++){
 					var obj = editScene.selectedObjects[i];
@@ -6416,6 +6943,8 @@ EditSceneScene.prototype = {
 				$(dom).css({zIndex: 10000001});
 				var src = $(this);
 				var css = src.css('background-color');
+				var top = parseInt($(dom).css('top')), height = $(dom).outerHeight();
+				if(top + height > window.innerHeight) $(dom).css('top', window.innerHeight - height);
 				// store preselection color
 				for(var i = 0; i < editScene.selectedObjects.length; i++){
 					var obj = editScene.selectedObjects[i];
@@ -6453,6 +6982,8 @@ EditSceneScene.prototype = {
 				$(dom).css({zIndex: 10000001});
 				var src = $(this);
 				var css = src.css('background-color');
+				var top = parseInt($(dom).css('top')), height = $(dom).outerHeight();
+				if(top + height > window.innerHeight) $(dom).css('top', window.innerHeight - height);
 				// store preselection color
 				for(var i = 0; i < editScene.selectedObjects.length; i++){
 					var obj = editScene.selectedObjects[i];
@@ -6491,55 +7022,72 @@ EditSceneScene.prototype = {
 			<option value="Plane">Plane</option>\
 			<option value="Box">Box</option>\
 			<option value="Sphere">Sphere</option>\
+			<option value="Cylinder">Cylinder</option>\
 			</select>\
-			<input tabindex="0" type="checkbox" id="geometry-invert"/><label for="geometry-invert" class="w3">Invert normals</label>\
+			<input tabindex="0" type="checkbox" id="geometry-invert" class="geom-only"/><label for="geometry-invert" class="w3 geom-only">Invert normals</label>\
 			<hr/>\
 			<div id="geometry-Plane" class="subpanel">\
 			<label for="geometry-plane-width" class="w31 pad5 right-align">Width</label>\
 			<input alt="width" tabindex="0" type="text" class="center geometry-width" id="geometry-plane-width" size="1"/>\
-			<label for="geometry-plane-widths" class="w32 pad5 right-align">Width Seg</label>\
-			<input alt="widthSegments" tabindex="2" type="text" class="center geometry-widthSegments" id="geometry-plane-widths" size="1"/><br/>\
+			<label for="geometry-plane-widths" class="w32 pad5 right-align geom-only">Width Seg</label>\
+			<input alt="widthSegments" tabindex="2" type="text" class="center geometry-widthSegments geom-only" id="geometry-plane-widths" size="1"/><br/>\
 			<label for="geometry-plane-height" class="w31 pad5 right-align">Height</label>\
 			<input alt="height" tabindex="1" type="text" class="center geometry-height" id="geometry-plane-height" size="1"/>\
-			<label for="geometry-plane-heights" class="w32 pad5 right-align">Height Seg</label>\
-			<input alt="heightSegments" tabindex="3" type="text" class="center geometry-heightSegments" id="geometry-plane-heights" size="1"/>\
+			<label for="geometry-plane-heights" class="w32 pad5 right-align geom-only">Height Seg</label>\
+			<input alt="heightSegments" tabindex="3" type="text" class="center geometry-heightSegments geom-only" id="geometry-plane-heights" size="1"/>\
 			</div>\
 			<div id="geometry-Box" class="subpanel">\
 			<label for="geometry-box-width" class="w31 pad5 right-align">Width</label>\
 			<input alt="width" tabindex="0" type="text" class="center geometry-width" id="geometry-box-width" size="1"/>\
-			<label for="geometry-box-widths" class="w32 pad5 right-align">Width Seg</label>\
-			<input alt="widthSegments" tabindex="3" type="text" class="center geometry-widthSegments" id="geometry-box-widths" size="1"/><br/>\
+			<label for="geometry-box-widths" class="w32 pad5 right-align geom-only">Width Seg</label>\
+			<input alt="widthSegments" tabindex="3" type="text" class="center geometry-widthSegments geom-only" id="geometry-box-widths" size="1"/><br/>\
 			<label for="geometry-box-height" class="w31 pad5 right-align">Height</label>\
 			<input alt="height" tabindex="1" type="text" class="center geometry-height" id="geometry-box-height" size="1"/>\
-			<label for="geometry-box-heights" class="w32 pad5 right-align">Height Seg</label>\
-			<input alt="heightSegments" tabindex="4" type="text" class="center geometry-heightSegments" id="geometry-box-heights" size="1"/><br/>\
+			<label for="geometry-box-heights" class="w32 pad5 right-align geom-only">Height Seg</label>\
+			<input alt="heightSegments" tabindex="4" type="text" class="center geometry-heightSegments geom-only" id="geometry-box-heights" size="1"/><br/>\
 			<label for="geometry-box-depth" class="w31 pad5 right-align">Depth</label>\
 			<input alt="depth" tabindex="2" type="text" class="center geometry-depth" id="geometry-box-depth" size="1"/>\
-			<label for="geometry-box-depths" class="w32 pad5 right-align">Depth Seg</label>\
-			<input alt="depthSegments" tabindex="5" type="text" class="center geometry-depthSegments" id="geometry-box-depths" size="1"/>\
+			<label for="geometry-box-depths" class="w32 pad5 right-align geom-only">Depth Seg</label>\
+			<input alt="depthSegments" tabindex="5" type="text" class="center geometry-depthSegments geom-only" id="geometry-box-depths" size="1"/>\
 			</div>\
 			<div id="geometry-Sphere" class="subpanel">\
 			<label for="geometry-radius" class="w31 pad5 right-align">Radius</label>\
-			<input alt="radius" tabindex="0" type="text" class="center" id="geometry-radius" size="1"/><br/>\
-			<label for="geometry-sphere-widths" class="w31 pad5 right-align">Width Seg</label>\
-			<input alt="widthSegments" tabindex="1" type="text" class="center geometry-widthSegments" id="geometry-sphere-widths" size="1"/>\
-			<label for="geometry-sphere-heights" class="w32 pad5 right-align">Height Seg</label>\
-			<input alt="heightSegments" tabindex="2" type="text" class="center geometry-heightSegments" id="geometry-sphere-heights" size="1"/><br/>\
-			<label for="geometry-phiStart" class="w31 pad5 right-align">Phi Start</label>\
-			<input alt="phiStart" tabindex="3" type="text" class="center" id="geometry-phiStart" size="1"/>\
-			<label for="geometry-phiLength" class="w32 pad5 right-align">Phi Length</label>\
-			<input alt="phiLength" tabindex="4" type="text" class="center" id="geometry-phiLength" size="1"/><br/>\
-			<label for="geometry-thetaStart" class="w31 pad5 right-align">Theta Start</label>\
-			<input alt="thetaStart" tabindex="5" type="text" class="center" id="geometry-thetaStart" size="1"/>\
-			<label for="geometry-thetaLength" class="w32 pad5 right-align">Theta Length</label>\
-			<input alt="thetaLength" tabindex="6" type="text" class="center" id="geometry-thetaLength" size="1"/>\
+			<input alt="radius" tabindex="0" type="text" class="center" id="geometry-radius" size="1"/><br class="geom-only"/>\
+			<label for="geometry-sphere-widths" class="w31 pad5 right-align geom-only">Width Seg</label>\
+			<input alt="widthSegments" tabindex="1" type="text" class="center geometry-widthSegments geom-only" id="geometry-sphere-widths" size="1"/>\
+			<label for="geometry-sphere-heights" class="w32 pad5 right-align geom-only">Height Seg</label>\
+			<input alt="heightSegments" tabindex="2" type="text" class="center geometry-heightSegments geom-only" id="geometry-sphere-heights" size="1"/><br class="geom-only"/>\
+			<label for="geometry-phiStart" class="w31 pad5 right-align geom-only">Phi Start</label>\
+			<input alt="phiStart" tabindex="3" type="text" class="center geom-only" id="geometry-phiStart" size="1"/>\
+			<label for="geometry-phiLength" class="w32 pad5 right-align geom-only">Phi Length</label>\
+			<input alt="phiLength" tabindex="4" type="text" class="center geom-only" id="geometry-phiLength" size="1"/><br class="geom-only"/>\
+			<label for="geometry-thetaStart" class="w31 pad5 right-align geom-only">Theta Start</label>\
+			<input alt="thetaStart" tabindex="5" type="text" class="center geom-only" id="geometry-thetaStart" size="1"/>\
+			<label for="geometry-thetaLength" class="w32 pad5 right-align geom-only">Theta Length</label>\
+			<input alt="thetaLength" tabindex="6" type="text" class="center geom-only" id="geometry-thetaLength" size="1"/>\
 			</div>\
+			<div id="geometry-Cylinder" class="subpanel">\
+			<label for="geometry-radius-top" class="w32 pad5 right-align">Radius Top</label>\
+			<input alt="radiusTop" tabindex="0" type="text" class="center radius geometry-radiusTop" id="geometry-radius-top" size="1"/>\
+			<label for="geometry-radius-bottom" class="w3 pad5 right-align">Bottom</label>\
+			<input alt="radiusBottom" tabindex="1" type="text" class="center radius geometry-radiusBottom" id="geometry-radius-bottom" size="1"/><br/>\
+			<label for="geometry-cylinder-radiusSegments" class="w32 pad5 right-align">Radius Seg</label>\
+			<input alt="radiusSegments" tabindex="2" type="text" class="center geometry-radiusSegments" id="geometry-cylinder-radiusSegments" size="1"/>\
+			<label for="geometry-cylinder-height" class="w3 pad5 right-align">Height</label>\
+			<input alt="height" tabindex="3" type="text" class="center geometry-height" id="geometry-cylinder-height" size="1"/><br class="geom-only"/>\
+			<label for="geometry-cylinder-heightSegments" class="w32 pad5 right-align geom-only">Height Seg</label>\
+			<input alt="heightSegments" tabindex="4" type="text" class="center geometry-heightSegments geom-only" id="geometry-cylinder-heightSegments" size="1"/><br/>\
+			<input alt="openEnded" tabindex="5" type="checkbox" class="center geom-only" id="geometry-cylinder-openEnded"/>\
+			<label for="geometry-cylinder-openEnded" class="pad5 geom-only">Open ended</label>\
+			</div>\
+			<div id="geometry-shared" class="geom-only">\
 			<hr/>\
 			<label class="w32 right-align pad5">Color tint</label><div id="geometry-tint" class="color-swatch"/>\
 			<label class="w31 right-align pad5">Add</label><div id="geometry-addColor" class="color-swatch"/><hr/>\
 			<label for="geometry-alpha" class="w32 pad5 right-align">Alpha</label><input tabindex="0" type="text" class="center" id="geometry-alpha" size="1"/>\
 			<label for="geometry-brightness" class="w32 pad5 right-align">Brightness</label><input tabindex="1" type="text" class="center" id="geometry-brightness" size="1"/>\
 			<label for="geometry-stipple" class="w32 pad5 right-align">Stipple</label><input tabindex="2" type="text" class="center" id="geometry-stipple" size="1"/>\
+			</div>\
 			</div>');
 		vc = valueChanged(this.geometryStippleChanged);
 		$('#geometry-stipple').spinner({step:1, min:0, max:2, change:vc, stop:vc});
@@ -6554,12 +7102,13 @@ EditSceneScene.prototype = {
 		var panel = $('#panel-geometry');
 		vc = valueChanged(this.geometryPropChanged);
 		$('.geometry-width,.geometry-height,.geometry-depth', panel).spinner({step:1, min:1, change:vc, stop:vc});
-		$('.geometry-widthSegments,.geometry-heightSegments,.geometry-depthSegments', panel).spinner({step:1, min:1, max:30, change:vc, stop:vc});
-		$('#geometry-radius', panel).spinner({min:0, change:vc, stop:vc});
+		$('.geometry-widthSegments,.geometry-heightSegments,.geometry-depthSegments,.geometry-radiusSegments', panel).spinner({step:1, min:1, max:30, change:vc, stop:vc});
+		$('#geometry-radius,.radius', panel).spinner({min:0, change:vc, stop:vc});
 		$('#geometry-phiStart', panel).spinner({step:5, min:0, max:360, change:vc, stop:vc});
 		$('#geometry-thetaStart', panel).spinner({step:5, min:0, max:180, change:vc, stop:vc});
 		$('#geometry-phiLength', panel).spinner({step:5, min:0, max:360, change:vc, stop:vc});
 		$('#geometry-thetaLength', panel).spinner({step:5, min:0, max:180, change:vc, stop:vc});		
+		$('#geometry-cylinder-openEnded').change( checkBoxValueChanged(this.geometryPropChanged) );
 
 		$('#geometry-tint').colpick({
 			colorScheme:'dark',
@@ -6567,6 +7116,8 @@ EditSceneScene.prototype = {
 				$(dom).css({zIndex: 10000001});
 				var src = $(this);
 				var css = src.css('background-color');
+				var top = parseInt($(dom).css('top')), height = $(dom).outerHeight();
+				if(top + height > window.innerHeight) $(dom).css('top', window.innerHeight - height);
 				// store preselection color
 				for(var i = 0; i < editScene.selectedObjects.length; i++){
 					var obj = editScene.selectedObjects[i];
@@ -6604,6 +7155,8 @@ EditSceneScene.prototype = {
 				$(dom).css({zIndex: 10000001});
 				var src = $(this);
 				var css = src.css('background-color');
+				var top = parseInt($(dom).css('top')), height = $(dom).outerHeight();
+				if(top + height > window.innerHeight) $(dom).css('top', window.innerHeight - height);
 				// store preselection color
 				for(var i = 0; i < editScene.selectedObjects.length; i++){
 					var obj = editScene.selectedObjects[i];
@@ -6810,6 +7363,19 @@ EditSceneScene.prototype = {
 			parent.resizable('option','resize')();
 		});
 		
+// collapsible panels
+		$('#editor-props .panel h4').click(function(){ 
+			var panel = $(this).closest('.panel');
+			panel.toggleClass('collapsed');
+			localStorage_setItem(panel.attr('id'), panel.hasClass('collapsed')); 
+		});		
+		
+		$('#editor-props .panel').each(function(i, el){
+			if(localStorage_getItem($(el).attr('id')) === 'true') {
+				$(el).addClass('collapsed');
+			}
+		});
+		
 // focus/blur
 		$('input').on('focus',function(e){editScene.focusedTextField = e.target; editScene.disableKeyboardShortcuts();})
 				  .on('blur',function(e){editScene.focusedTextField = null; editScene.enableKeyboardShortcuts();})
@@ -6853,7 +7419,7 @@ EditSceneScene.prototype = {
 			if(this.selectedObjects.length) addPos.copy(addTarget.position);
 		}
 		if(addTarget instanceof THREE.LinePathHandle) addTarget = addTarget.parent.parent;
-		else if(addTarget instanceof THREE.LinePath) addTarget = addTarget.parent;
+		else if(addTarget instanceof THREE.LinePath || addTarget.collisionShape) addTarget = addTarget.parent;
 		
 		var addWorldPos = addTarget.parent.localToWorld(addPos.clone());
 		
@@ -6915,7 +7481,20 @@ EditSceneScene.prototype = {
 			break;
 			
 		case 'scene-add-geometry':
-			objDef = { asset: 'Geometry', mesh:'Plane', name:'floor', color:'999999', receiveShadow:true, width: 100, height: 100, rotation:[-90,0,0] };
+			objDef = { asset: 'Geometry', mesh:'Sphere', name:'sphere', color:'999999', receiveShadow:true, width: 10, height: 10, radius:10 };
+			break;
+
+		case 'scene-add-collision-shape':
+			var minMax = new THREE.Box3(new THREE.Vector3(-5, -5, -5),new THREE.Vector3(5, 5, 5));
+			var radius = 10;
+			if(addTarget.geometry){
+				addTarget.geometry.computeBoundingBox();
+				addTarget.geometry.computeBoundingSphere();
+				minMax = addTarget.geometry.boundingBox;
+				radius = addTarget.geometry.boundingSphere.radius;
+			}
+			objDef = { asset: 'Geometry', mesh:'Box', collisionShape: true, name:'collision_shape', radius:radius,
+						width: minMax.size().x, height: minMax.size().y, depth: minMax.size().z, position: minMax.center().toArray() };
 			break;
 		
 		case 'scene-add-hemi':
@@ -7011,7 +7590,9 @@ EditSceneScene.prototype = {
 			
 			this.selectionChanged();
 			this.refreshProps();
-		}	
+		}
+		
+		return addedObject;
 	},
 
 	showHelp:function(){
@@ -7467,9 +8048,34 @@ THREE.Object3D.prototype.serialize = function(templates){
 	if(!this.visible) def.visible = false;
 	if(this.children.length) def.layers = [];
 	if(this.isTemplate) def.isTemplate = true;
+	if(this.physics) def.physics = true;
 	
 	var myTemplate = undefined;
 
+	var addPhysicsInfo = function(){
+		
+		if(this.def.bodyType !== undefined && this.def.bodyType.toString() != "0") def.bodyType = this.def.bodyType;
+		
+		if(this.def.velocity != undefined && 
+			(this.def.velocity[0] != 0 || this.def.velocity[1] != 0 || this.def.velocity[2] != 0)){
+			def.velocity = this.def.velocity.concat();
+		} 
+
+		if(this.def.angularVelocity != undefined && 
+			(this.def.angularVelocity[0] != 0 || this.def.angularVelocity[1] != 0 || this.def.angularVelocity[2] != 0)){
+			def.angularVelocity = this.def.angularVelocity.concat();
+		}
+		
+		if(this.def.mass) def.mass = this.def.mass;
+		if(this.def.fixedRotation) def.fixedRotation = true;
+		if(this.def.sensor) def.sensor = true;
+		if(this.def.damping) def.damping = this.def.damping;
+		if(this.def.collisionGroup !== undefined && this.def.collisionGroup != 1) def.collisionGroup = this.def.collisionGroup;
+		if(this.def.collisionMask !== undefined && this.def.collisionMask != 1) def.collisionMask = this.def.collisionMask;
+		if(this.def.friction != 0.3) def.friction = this.def.friction;
+		if(this.def.restitution != 0.3) def.restitution = this.def.restitution;
+		
+	}.bind(this);
 	
 	// types
 	if(this.isInstance){
@@ -7546,28 +8152,42 @@ THREE.Object3D.prototype.serialize = function(templates){
 		var props = [];
 		switch(this.geometryType){
 		case 'Plane':
-			props = ['width','height','widthSegments','heightSegments'];
+			if(this.collisionShape) props = ['width','height'];
+			else props = ['width','height','widthSegments','heightSegments'];
 			break;
 		case 'Box':
-			props = ['width','height','depth','widthSegments','heightSegments','depthSegments'];
+			if(this.collisionShape) props = ['width','height','depth'];
+			else props = ['width','height','depth','widthSegments','heightSegments','depthSegments'];
 			break;
 		case 'Sphere':
-			props = ['radius','widthSegments','heightSegments','phiStart','phiLength','thetaStart','thetaLength'];
+			if(this.collisionShape) props = ['radius'];
+			else props = ['radius','widthSegments','heightSegments','phiStart','phiLength','thetaStart','thetaLength'];
+			break;
+		case 'Cylinder':
+			if(this.collisionShape) props = ['radiusTop','radiusBottom','height','radiusSegments'];
+			else props = ['radiusTop','radiusBottom','height','radiusSegments','heightSegments','openEnded'];
 			break;
 		}
 		for(var p in props){
 			var prop = props[p]
 			def[prop] = this.def[prop];
 		}
-		def.inverted = !!this.def.inverted;	
-		def.tint = this.material.tint.getHexString();
-		def.addColor = this.material.addColor.getHexString();
-		if(this.material.alpha != 1.0) def.alpha = this.material.alpha;
-		if(this.material.brightness != 0) def.brightness = this.material.brightness;
-		if(this.material.stipple != 0) def.stipple = this.material.stipple;
 		
+		if(this.collisionShape) { 
+			def.collisionShape = true;
+		} else {
+			def.inverted = !!this.def.inverted;	
+			def.tint = this.material.tint.getHexString();
+			def.addColor = this.material.addColor.getHexString();
+			
+			addPhysicsInfo();
+			if(this.material.alpha != 1.0) def.alpha = this.material.alpha;
+			if(this.material.brightness != 0) def.brightness = this.material.brightness;
+			if(this.material.stipple != 0) def.stipple = this.material.stipple;
+		}		
 	} else if(this.isContainer){
 		def.asset = 'Object3D';
+		addPhysicsInfo();
 	
 	} else if(this.pixelBox || this.isPlaceholder){
 		if(this.isPlaceholder){
@@ -7628,6 +8248,7 @@ THREE.Object3D.prototype.serialize = function(templates){
 				}
 			}
 		}
+		addPhysicsInfo();
 		if(this.def.staticGroup != undefined) def.staticGroup = this.def.staticGroup;
 		if(this.def.animName != undefined) def.animName = this.def.animName;
 		if(this.def.animOption != undefined) def.animOption = this.def.animOption;
@@ -7713,316 +8334,8 @@ THREE.Object3D.prototype.serialize = function(templates){
 	if(def.layers && !def.layers.length) delete def.layers;
 	
 	// update and return
-	this.def = def;
 	return def;
 };
-
-/* Line path additions */
-
-/* cutomized raycast - adjust linePrecision with object scale */
-THREE.LinePath.prototype.raycast = function ( raycaster, intersects ) {
-	var geometry = this.geometry;
-
-	if ( geometry.boundingSphere === null ) geometry.computeBoundingSphere();
-
-	// Checking boundingSphere distance to ray
-	var sphere = new THREE.Sphere();
-	sphere.copy( geometry.boundingSphere );
-	sphere.applyMatrix4( this.matrixWorld );
-
-	if ( raycaster.ray.isIntersectionSphere( sphere ) === false ) {
-		return;
-	}
-
-	var inverseMatrix = new THREE.Matrix4();
-	inverseMatrix.getInverse( this.matrixWorld );
-	var ray = new THREE.Ray();
-	ray.copy( raycaster.ray ).applyMatrix4( inverseMatrix );
-	
-	var pscale = new THREE.Vector3();
-	pscale.setFromMatrixScale(inverseMatrix);
-	
-	var precision = raycaster.linePrecision * Math.min(pscale.x, pscale.y, pscale.z);
-	var precisionSq = precision * precision;
-
-	var vStart = new THREE.Vector3();
-	var vEnd = new THREE.Vector3();
-	var interSegment = new THREE.Vector3();
-	var interRay = new THREE.Vector3();
-	var step = this.mode === THREE.LineStrip ? 1 : 2;
-
-	var vertices = geometry.vertices;
-	var nbVertices = vertices.length;
-
-	for ( var i = 0; i < nbVertices - 1; i += step ) {
-		var distSq = ray.distanceSqToSegment( vertices[ i ], vertices[ i + 1 ], interRay, interSegment );
-		if ( distSq > precisionSq ) continue;
-		var distance = ray.origin.distanceTo( interRay );
-		if ( distance < raycaster.near || distance > raycaster.far ) continue;
-
-		intersects.push( {
-			distance: distance,
-			point: interSegment.clone().applyMatrix4( this.matrixWorld ),
-			face: null,
-			faceIndex: null,
-			object: this
-		} );
-	}		
-};
-
-
-/* 
-	Called when control points have moved (no structural change needed)
-	refreshes geometry vertices, and updates path length
-*/
-THREE.LinePath.prototype.update = function(){
-	this.updateMatrixWorld(true);
-	
-	// update curves points from handles
-	for(var i = 0, nc = this.children.length; i < nc; i++){
-		// point
-		var handle = this.children[i];
-		var curve = (handle.curveIndex < this.path.curves.length) ? this.path.curves[handle.curveIndex] : null;
-		var prevCurve = (handle.curveIndex > 0) ? this.path.curves[handle.curveIndex - 1] : null;
-		if(curve) curve.v0.copy(handle.position);
-		if(prevCurve) prevCurve.v3.copy(handle.position);
-		
-		// control point 1
-		var cpHandle = handle.preHandle;
-		if(cpHandle.curveIndex >= 0 && cpHandle.curveIndex < this.path.curves.length){
-			curve = this.path.curves[cpHandle.curveIndex];
-			var pos = cpHandle.position.clone();
-			handle.localToWorld(pos);
-			this.worldToLocal(pos);
-			if(cpHandle.pointIndex == 1) curve.v1.copy(pos);
-			else curve.v2.copy(pos);
-		}
-		
-		// control point 2
-		var cpHandle = handle.postHandle;
-		if(cpHandle.curveIndex >= 0 && cpHandle.curveIndex < this.path.curves.length){
-			curve = this.path.curves[cpHandle.curveIndex];
-			var pos = cpHandle.position.clone();
-			handle.localToWorld(pos);
-			this.worldToLocal(pos);
-			if(cpHandle.pointIndex == 1) curve.v1.copy(pos);
-			else curve.v2.copy(pos);
-		}
-	}	
-	
-	// update curves and geometry
-	for(var i = 0; i < this.path.curves.length; i++){
-		var curve = this.path.curves[i];
-		curve.updateArcLengths();
-		var points = curve.getPoints(9), ppi = 0;
-		for(var pi = i * 10, pic = pi + 10; pi < pic; pi++){
-			this.geometry.vertices[pi].copy(points[ppi]);
-			ppi++;
-		}
-	}
-	
-	// force path to refresh
-	if(this.path.cacheLengths) this.path.cacheLengths.length = 0;
-	// force geometry to refresh
-	this.geometry.verticesNeedUpdate = true;
-	this.geometry.boundingSphere = null;
-};
-
-/*  called after structural change to the path
-
-	recreates curves to match control points
-	recreates geometry to match curves 
-*/
-
-THREE.LinePath.prototype.rebuild = function(recreateCurves){
-	// remake geometry
-	this.geometry.dispose();
-	this.geometry = new THREE.Geometry();
-	
-	var p = this.parent;
-	if(p){
-		this.parent.remove(this);
-		p.add(this);
-	}
-	
-	if(recreateCurves){
-		// sort points
-		var sortedChildren = this.children.sort(function(a, b){
-			if(a.curveIndex < b.curveIndex) return -1;
-			if(a.curveIndex > b.curveIndex) return 1;
-			if(a.pointIndex < b.pointIndex) return -1;
-			if(a.pointIndex > b.pointIndex) return 1;
-			return 0;
-		});
-		
-		this.path.curves.length = 0;
-		if(this.path.cacheLengths) this.path.cacheLengths.length = 0;
-		
-		for(var i = 0, nc = sortedChildren.length - 1; i < nc; i++){
-			var p0 = sortedChildren[i];
-			var p3 = sortedChildren[i+1];
-			
-			var curve = new THREE.CubicBezierCurve3();
-			curve.v0 = p0.position.clone();
-			curve.v3 = p3.position.clone();
-			
-			var pos = p0.localToWorld(p0.postHandle.position.clone());
-			curve.v1 = this.worldToLocal(pos);
-			pos = p3.localToWorld(p3.preHandle.position.clone());
-			curve.v2 = this.worldToLocal(pos);
-			this.path.add(curve);
-		}
-		
-	}
-	
-	// recreate verts
-	for(var i = 0, nc = this.path.curves.length; i < nc; i++){
-		var curve = this.path.curves[i];
-		var points = curve.getPoints(9);
-		//if(i > 0) points.splice(0, 1); // skip first vertex on i > 0
-		this.geometry.vertices = this.geometry.vertices.concat(points);
-	}
-}
-
-/* LinePath point handle in editor */
-
-THREE.LinePathHandle = function (color){
-
-	THREE.PixelBox.call(this, THREE.LinePathHandle.prototype.pbPoint);
-
-	this.origColor = color;
-	this.tint.setHex(color);
-	this.castShadow = false;
-	this._selected = false;
-	this._lockTangents = false;
-	this.cullBack = false;
-	
-	Object.defineProperty(this, 'selected',{
-		get:function(){ return this._selected; },
-		set:function(s){ 
-			this._selected = s; 
-			this.tint.setHex(s ? 0xFFFFFF : (this.parent && this.parent.lockTangents ? 0x006699 : this.origColor));
-		}
-	});
-	Object.defineProperty(this, 'lockTangents',{
-		get:function(){ return this._lockTangents; },
-		set:function(s){ 
-			this._lockTangents = s; 
-			for(var i = 0; i < this.children.length; i++){
-				this.children[i].selected = this.children[i]._selected;//refresh tint
-			}
-		}
-	});
-		
-	return this;
-};
-
-THREE.LinePathHandle.prototype = Object.create(THREE.PixelBox.prototype);
-THREE.LinePathHandle.prototype.constructor = THREE.PixelBox;
-
-/* fix sprite raycast to use sprite scale */
-THREE.LinePathHandle.prototype.raycast = ( function () {
-
-	var matrixPosition = new THREE.Vector3();
-	var matrixScale = new THREE.Vector3();
-
-	return function ( raycaster, intersects ) {
-
-		matrixPosition.setFromMatrixPosition( this.matrixWorld );
-		matrixScale.setFromMatrixScale( this.matrixWorld );
-
-		var distance = raycaster.ray.distanceToPoint( matrixPosition );
-
-		if ( distance > Math.min(matrixScale.x, matrixScale.y, matrixScale.z) * this.pointSize) {
-			return;
-		}
-
-		intersects.push( {
-			distance: distance,
-			point: matrixPosition.clone(),
-			face: null,
-			object: this
-		} );
-	};
-
-}() );
-
-THREE.LinePathHandle.prototype.updateMatrix = function(){
-	var pscale = new THREE.Vector3();
-	return function(){
-		this.matrix.compose( this.position, this.quaternion, this.scale );
-		this.matrixWorldNeedsUpdate = true;
-		pscale.setFromMatrixScale(this.matrixWorld);
-		this.pointSize = 4 / Math.max(pscale.x, pscale.y, pscale.z);
-	};
-}();
-
-THREE.LinePathHandle.prototype.pbPoint = {width:1,height:1,depth:1,frames:["ffffffff"],pointSize:4,anchors:{},anims:[],meta:0};
-THREE.LinePath.prototype.sharedMaterial = new THREE.LineBasicMaterial( { color: 0x999999, fog: true } );
-THREE.LinePath.prototype.sharedSelectedMaterial = new THREE.LineBasicMaterial( { color: 0xffffff, fog: false, linewidth: 2 } );
-
-/* helper for parented lights fixes */
-
-THREE.SpotLightHelper.prototype.update = function(){
-
-	var vector = new THREE.Vector3();
-	var vector2 = new THREE.Vector3();
-	
-	return function(){
-		// update cone like before
-		var coneLength = this.light.distance ? this.light.distance : 10000;
-		var coneWidth = coneLength * Math.tan( this.light.angle );
-	
-		this.cone.scale.set( coneWidth, coneWidth, coneLength );
-	
-		vector.setFromMatrixPosition( this.light.matrixWorld );
-		vector2.setFromMatrixPosition( this.light.target.matrixWorld );
-	
-		this.cone.lookAt( vector2.sub( vector ) );
-	
-		this.cone.material.color.copy( this.light.color ).multiplyScalar( this.light.intensity );
-	
-		// reset matrix - fixes spotlights under rotated parents
-		if(this.matrix == this.light.matrixWorld){
-			this.matrix = new THREE.Matrix4();
-		}
-		
-		this.position.copy(vector);
-		this.updateMatrix(true);
-	}
-}();
-
-THREE.DirectionalLightHelper.prototype.update = function () {
-
-	var v1 = new THREE.Vector3();
-	var v2 = new THREE.Vector3();
-	var v3 = new THREE.Vector3();
-
-	return function () {
-
-		v1.setFromMatrixPosition( this.light.matrixWorld );
-		v2.setFromMatrixPosition( this.light.target.matrixWorld );
-		v3.subVectors( v2, v1 );
-
-		this.lightPlane.lookAt( v3 );
-		this.lightPlane.material.color.copy( this.light.color ).multiplyScalar( this.light.intensity );
-
-		this.targetLine.geometry.vertices[ 1 ].copy( v3 );
-		this.targetLine.geometry.verticesNeedUpdate = true;
-		this.targetLine.material.color.copy( this.lightPlane.material.color );
-
-		// reset matrix - fixes spotlights under rotated parents
-		if(this.matrix == this.light.matrixWorld){
-			this.matrix = new THREE.Matrix4();
-		}
-		
-		this.position.copy(v1);
-		this.updateMatrix(true);
-
-	};
-
-}();
-
 
 function fake0(v){ if(Math.abs(v) < 0.01) return 0; else return v; }
 function not0(v){ if(Math.abs(v) < 0.01 || isNaN(v)) return 0.001; else return v; }
@@ -8061,7 +8374,7 @@ function documentReady(){
 	
 }
 
-/* frustum ext */
+/* frustum ext for marquee selection */
 
 THREE.Frustum.prototype.containsBox = function () {
 
