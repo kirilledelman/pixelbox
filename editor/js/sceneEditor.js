@@ -462,7 +462,7 @@ EditSceneScene.prototype = {
 			if(found){
 				var parentInstance = obj.parentInstance();
 				if(parentInstance) editScene.selectObject(parentInstance, true);
-				else editScene.selectObject(obj, !altWasDown);
+				else if(!obj.parent.selected || altWasDown) editScene.selectObject(obj, !altWasDown);
 			}
 		});
 		
@@ -992,7 +992,7 @@ EditSceneScene.prototype = {
 		else pasteTarget = this.selectedObjects.length ? this.selectedObjects[0].parent : this.container;
 		
 		if(pasteTarget instanceof THREE.LinePathHandle) pasteTarget = pasteTarget.parent.parent;
-		else if(pasteTarget instanceof THREE.LinePath || pasteTarget.collisionShape) pasteTarget = pasteTarget.parent;
+		else if(pasteTarget instanceof THREE.LinePath || pasteTarget.collisionShape || pasteTarget.constraint) pasteTarget = pasteTarget.parent;
 
 		this.deselectAll();
 		
@@ -1019,10 +1019,11 @@ EditSceneScene.prototype = {
 			if(obj instanceof THREE.Camera && obj.isDefault) obj.isDefault = false;
 			if(obj.parent == pasteTarget){ // top level obj
 				doAdd.push([obj, pasteTarget]);
-				undoAdd.push(obj);
-				
+				undoAdd.push(obj);				
 			}
 		}
+		
+		this.linkObjects( addedObjects, pasteTarget, true );
 		
 		if(importedAssetsUndoItem.length){
 			importedAssetsUndoItem.push({name:"paste", redo:[this.addObjects, doAdd], undo:[this.deleteObjects, undoAdd] });
@@ -1039,8 +1040,9 @@ EditSceneScene.prototype = {
 		
 		this.updateTextLabels(this.container, 0);
 		for(var i = 0; i < addedObjects.length; i++) {
+			var obj = addedObjects[i];
 			if(obj.parent == pasteTarget){
-				this.selectObject(addedObjects[i], true);
+				this.selectObject(obj, true);
 			}
 		}
 		this.selectionChanged();
@@ -1347,7 +1349,10 @@ EditSceneScene.prototype = {
 			$('#drop-files').empty();
 			
 			var file = $('<span class="file scene handcursor"/>').text(editScene.doc.name+'.scene');
-			file.click(function(){ editScene.download(editScene.doc.name+'.scene', editScene.exportScene(single, compress)); });
+			file.click(function(e){ 
+				if(e.shiftKey) console.log(editScene.exportScene(true, false));
+				else editScene.download(editScene.doc.name+'.scene', editScene.exportScene(single, compress)); 
+			});
 			$('#drop-files').append(file);
 			
 			if(!single){
@@ -1980,10 +1985,20 @@ EditSceneScene.prototype = {
 			fogColor: this.doc.fogColor.getHexString(),
 			fogNear: this.doc.fogNear,
 			fogFar: this.doc.fogFar,
-			physics: !!this.doc.physics,
-			gravity: (this.doc.gravity ? this.doc.gravity.toArray() : [0, 0, 0]),
 			layers:[],
 			templates:{}
+		}
+		
+		if(this.doc.physics != undefined){ 
+			obj.physics = this.doc.physics;
+		}
+		
+		if(this.doc.gravity != undefined) {
+			obj.gravity = this.doc.gravity.toArray();
+		}
+		
+		if(this.doc.broadphase != undefined){ 
+			obj.broadphase = this.doc.broadphase;
 		}
 		
 		this.validateAllObjectNames();
@@ -2134,6 +2149,7 @@ EditSceneScene.prototype = {
 			else if(obj3d instanceof THREE.LinePathHandle) type = obj3d.isControlPoint ? 'ControlPoint' : 'Point';
 			else if(obj3d.pixelBox) type = obj3d.geometry.data.name;
 			else if(obj3d.collisionShape) type = 'CollisionShape';
+			else if(obj3d.constraint) type = 'Constraint';
 			else type = obj3d.def.asset;
 			
 			if(obj3d.isInstance) type = '['+obj3d.def.template+']';
@@ -2242,7 +2258,7 @@ EditSceneScene.prototype = {
 		for(var i = draggedObjects.length - 1; i >= 0; i--){
 			var obj3d = draggedObjects[i];
 			if(obj3d.isAnchor) { draggedObjects.splice(i, 1); continue; }
-			if(obj3d.collisionShape) containsCollisionShapes = true;
+			if(obj3d.collisionShape || obj3d.constraint) containsCollisionShapes = true;
 			var color = editScene.automaticColorForIndex(obj3d.id, 1.0);
 			var type = obj3d.isAnchor ? 'Anchor' : (obj3d.def ? obj3d.def.asset : '?');
 			var h = $('<li><div class="tiny-swatch" style="background-color:'+color+'"/><label/></li>');
@@ -2266,7 +2282,7 @@ EditSceneScene.prototype = {
 				obj instanceof THREE.LinePathHandle || obj instanceof THREE.LinePath || 
 				
 				// no parenting to collision shapes
-				obj.collisionShape ||
+				obj.collisionShape || obj.constraint || 
 				
 				// collision shapes can be parented to Mesh, container, or PixelBox
 				(containsCollisionShapes && !(obj instanceof THREE.Mesh || obj.isContainer || obj.isAnchor || obj instanceof THREE.PixelBox))
@@ -2523,6 +2539,55 @@ EditSceneScene.prototype = {
 		});
 		
 		window.selectedObject = null;
+	},
+	
+	selectParents:function(e) {
+		if(!this.selectedObjects.length) return;
+		var origSelection = this.selectedObjects.concat();
+
+		if(!(e.shiftKey || e.altKey)) this.deselectAll();
+
+		for(var i = 0; i < origSelection.length; i++){
+			var obj = origSelection[i];
+			if(obj.parent == this.container) {
+				if(!e.altKey) this.selectObject(obj, true);
+				continue;
+			}
+			this.selectObject(obj.parent, !e.altKey);
+			if(!e.altKey){ 
+				// expand the scene tree
+				var collapsedParents = obj.parent.htmlRow.parents('div.row.collapsed');
+				collapsedParents.removeClass('collapsed').find('a.toggle:first').text('-');
+			}
+		}
+		
+		this.selectionChanged();
+		this.refreshProps();
+	},
+
+	selectChildren:function(e) {
+		if(!this.selectedObjects.length) return;
+		var origSelection = this.selectedObjects.concat();
+
+		if(!(e.shiftKey || e.altKey)) this.deselectAll();
+
+		for(var i = 0; i < origSelection.length; i++){
+			var obj = origSelection[i];
+			if(!obj.children.length && !e.altKey) {
+				this.selectObject(obj, true);
+			}
+			for(var j = 0; j < obj.children.length; j++){
+				this.selectObject(obj.children[j], !e.altKey);
+				if(!e.altKey){ 
+					// expand the scene tree
+					var collapsedParents = obj.children[j].htmlRow.parents('div.row.collapsed');
+					collapsedParents.removeClass('collapsed').find('a.toggle:first').text('-');
+				}
+			}
+		}
+		
+		this.selectionChanged();
+		this.refreshProps();
 	},
 	
 	selectObject:function(obj, select){
@@ -3426,9 +3491,10 @@ EditSceneScene.prototype = {
 				objRotArr.push([obj, obj.rotation.clone()]);
 			}
 		}
-		if(!objRotArr.length) return;
+		if(!objRotArr.length) return false;
 		this.addUndo({name:"lookAt", redo:[this.rotateObjects, objRotArr], undo:[this.rotateObjects, undoRotArr] });
 		this.refreshProps();
+		return true;
 	},
 	
 	lookAtClicked:function(e){
@@ -4490,7 +4556,7 @@ EditSceneScene.prototype = {
 			p.remove(obj);
 
 			obj.def.mesh = val;
-			var geom = this.makeGeometryObject(obj.def, !!obj.collisionShape);
+			var geom = this.makeGeometryObject(obj.def, !!(obj.collisionShape || obj.constraint));
 			obj.geometry.dispose();
 			obj.geometry = geom;
 			obj.geometryType = val;
@@ -5356,6 +5422,115 @@ EditSceneScene.prototype = {
 		}		
 	},
 	
+	constraintTypeChanged:function(e){
+		var val = $('#constraint-type').val();
+		if(val === '0') return;
+		
+		var doArr = [];
+		var undoArr = [];
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj.geometryType]);
+		}
+		editScene.addUndo({name:"geometryType", undo:[editScene.setGeometryType, undoArr],
+											redo:[editScene.setGeometryType, doArr]});
+		editScene.setGeometryType(doArr);
+		editScene.refreshProps();		
+	},
+	
+	constraintTargetClicked:function(e){
+		if($(e.target).attr('disabled')) return;
+		
+		if(e.shiftKey){
+			if(e.target.value.length){
+				var anyObj = editScene.selectedObjects[0];
+				editScene.deselectAll();
+				if(anyObj.target && anyObj.target.parent) editScene.objectClicked(anyObj.target);
+			}
+			return;
+		}
+		
+		e.target.blur();
+		
+		if(editScene.objectPickMode){
+			editScene.objectPickMode(undefined);
+			return;
+		}
+		
+		$('#constraint-target').addClass('active');
+		$('canvas,.object-label,#scene-list div.row:not(.selected),#scene-list div.row:not(.selected) > label').css('cursor','cell');
+		editScene.objectPickMode = function(obj){
+			if(obj !== undefined){
+				if(obj && (obj.collisionShape || obj.constraint)) obj = obj.parent;
+			
+				editScene.constraintSetTarget(obj);
+			}
+			$('#constraint-target').removeClass('active');
+			editScene.objectPickMode = null;
+			$('canvas,.object-label,#scene-list div.row:not(.selected),#scene-list div.row:not(.selected) > label').css('cursor','');
+		};
+	},
+	
+	constraintCollideChanged:function(e){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'collideConnected';
+		var val = e.target.checked;
+		
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, !!obj[prop] ]);
+		}
+		editScene.addUndo({name:prop, undo:[editScene.setObjectProperty, undoArr, prop],
+									redo:[editScene.setObjectProperty, doArr, prop]});
+		editScene.setObjectProperty(doArr, prop);
+	},
+	
+	constraintPropertyChanged:function(val, e){
+		var doArr = [];
+		var undoArr = [];
+		var prop = e.target.id.substr( 11 );
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, obj[prop] !== undefined ? obj[prop] : 0 ]);
+		}
+		editScene.addUndo({name:prop, mergeable: true, undo:[editScene.setObjectProperty, undoArr, prop],
+											redo:[editScene.setObjectProperty, doArr, prop]});
+		editScene.setObjectProperty(doArr, prop);
+	},
+	
+	constraintSetTarget:function(val){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'target';
+		var newSelection = [];
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			if(!val || obj.nearestTemplate() == val.nearestTemplate()){
+				doArr.push([obj, val]);
+				undoArr.push([obj, obj.target ? obj.target : null ]);
+				newSelection.push(obj);
+			}
+		}
+		
+		if(doArr.length) {
+			editScene.selectedObjects = newSelection;
+			editScene.addUndo({name:'constraintTarget', mergeable: true, undo:[editScene.setObjectProperty, undoArr, prop],
+											redo:[editScene.setObjectProperty, doArr, prop]});
+			editScene.setObjectProperty(doArr, prop);
+			if(val){
+				// also look at target
+				if(editScene.lookAtSelection(val)) editScene.joinUndoActions(2);
+			}
+		}
+		
+		editScene.selectionChanged();
+		editScene.refreshProps();		
+	},
+	
 	physicsChanged:function(e){
 		var doArr = [];
 		var undoArr = [];
@@ -5370,6 +5545,7 @@ EditSceneScene.prototype = {
 				if(obj.def.collisionMask === undefined) obj.def.collisionMask = 1;
 				if(obj.def.friction === undefined) obj.def.friction = 0.3;
 				if(obj.def.restitution === undefined) obj.def.restitution = 0.3;
+				if(obj.def.mass === undefined) obj.mass = 10;
 			}
 			doArr.push([obj, val]);
 			undoArr.push([obj, obj[prop]]);
@@ -5381,14 +5557,27 @@ EditSceneScene.prototype = {
 	
 	scenePhysicsChanged:function(e){
 		var prop = 'physics';
-		var doArr = [ [ editScene.doc, e.target.checked ] ];
-		var undoArr = [ [ editScene.doc, !!editScene.doc.physics ] ];
+		var val = $(e.target).val();
+		var doArr = [ [ editScene.doc, val ] ];
+		var undoArr = [ [ editScene.doc, editScene.doc.physics == undefined ? '0' : editScene.doc.physics ] ];
 		
 		editScene.addUndo({name:"scenePhysics", mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
 											redo:[editScene.setObjectProperty, doArr, prop]});
 											
-		editScene.doc.physics = e.target.checked;
+		editScene.doc.physics = val;
 		editScene.refreshProps();
+	},
+	
+	sceneBroadphaseChanged:function(e){
+		var prop = 'broadphase';
+		var val = $(e.target).val();
+		var doArr = [ [ editScene.doc, val ] ];
+		var undoArr = [ [ editScene.doc, editScene.doc.broadphase == undefined ? '0' : editScene.doc.broadphase ] ];
+		
+		editScene.addUndo({name:"broadphase", mergeable:true, undo:[editScene.setObjectProperty, undoArr, prop],
+											redo:[editScene.setObjectProperty, doArr, prop]});
+											
+		editScene.doc.broadphase = val;
 	},
 	
 	sceneGravityChanged:function(val, e){
@@ -5435,6 +5624,19 @@ EditSceneScene.prototype = {
 		for(var i = 0; i < prevSelection.length; i++){
 			this.selectedObjects = [ prevSelection[i] ];
 			objs.push(this.addObjectMenuItemClicked({target:{id:'scene-add-collision-shape'}, shiftKey: true }));
+		}
+		if(prevSelection.length > 1) this.joinUndoActions(prevSelection.length + 1);
+		this.selectedObjects = objs;
+		this.selectionChanged();
+		this.refreshProps();
+	},
+
+	addConstraint:function(e){
+		var prevSelection = this.selectedObjects.concat();
+		var objs = [];
+		for(var i = 0; i < prevSelection.length; i++){
+			this.selectedObjects = [ prevSelection[i] ];
+			objs.push(this.addObjectMenuItemClicked({target:{id:'scene-add-constraint'}, shiftKey: true }));
 		}
 		if(prevSelection.length > 1) this.joinUndoActions(prevSelection.length + 1);
 		this.selectedObjects = objs;
@@ -5618,7 +5820,7 @@ EditSceneScene.prototype = {
 			$('#prop-object-type').text('Scene');
 			$('#panel-scene').show();
 			// scene panel
-			$('#scene-physics')[0].checked = !!this.doc.physics;
+			$('#scene-physics').val(this.doc.physics ? this.doc.physics : '0');
 			$('#scene-color').css({backgroundColor: this.doc.clearColor.getHexString()});
 			$('#scene-fog-color').css({backgroundColor: this.doc.fogColor.getHexString()});
 			$('#scene-ambient-color').css({backgroundColor: this.doc.ambient.getHexString()});
@@ -5626,13 +5828,14 @@ EditSceneScene.prototype = {
 			$('#scene-fog-near').val(this.doc.fogNear != undefined ? this.doc.fogNear : this.scene.fog.near).data('prevVal', $('#scene-fog-near').val().toString());
 			$('#scene-fog-far').val(this.doc.fogFar != undefined ? this.doc.fogFar : this.scene.fog.far).data('prevVal', $('#scene-fog-far').val().toString());
 			// scene physics panel
-			if(this.doc.physics){
+			if(this.doc.physics != undefined && this.doc.physics != '0'){
 				$('#panel-scene-physics').show();
 				if(this.doc.gravity){
 					$('#phys-grav-x:not(:focus)').data('prevVal', this.doc.gravity.x.toString()).val(this.doc.gravity.x);
 					$('#phys-grav-y:not(:focus)').data('prevVal', this.doc.gravity.y.toString()).val(this.doc.gravity.y);
 					$('#phys-grav-z:not(:focus)').data('prevVal', this.doc.gravity.z.toString()).val(this.doc.gravity.z);
 				}
+				$('#scene-broadphase').val(this.doc.broadphase ? this.doc.broadphase : '0');
 			}
 			return;
 		}
@@ -5645,7 +5848,7 @@ EditSceneScene.prototype = {
 		$('#pixelbox-animName').empty().append('<option value=""/>');
 		$('#props-container').empty();
 		
-		$('#geometry-type option[value="0"],#phys-type option[value="-"]').remove();
+		$('#geometry-type option[value="0"],#phys-type option[value="-"],#constraint-type option[value="0"]').remove();
 		
 		var prevObj = null, prevPhysObj = null;
 		var mults = {};
@@ -5656,6 +5859,7 @@ EditSceneScene.prototype = {
 		var containsCameras = false;
 		var containsGeometry = false;
 		var containsCollisionShapes = false;
+		var containsConstraints = false;
 		var containsSpotLights = false;
 		var containsDirLights = false;
 		var containsHemiLights = false;
@@ -5670,6 +5874,7 @@ EditSceneScene.prototype = {
 				switch(o.def.asset){
 				case 'Geometry':
 					if(o.collisionShape) return 'CollisionShape';
+					if(o.constraint) return 'Constraint';
 					return 'Geometry';
 				case 'Camera':
 				case 'OrthographicCamera':
@@ -5702,8 +5907,9 @@ EditSceneScene.prototype = {
 			containsPointClouds = containsPointClouds | (obj.pixelBox);
 			containsInstances = containsInstances | (obj.isInstance);
 			containsCameras = containsCameras | (obj instanceof THREE.Camera);
-			containsGeometry = containsGeometry | (obj instanceof THREE.Mesh && !obj.collisionShape);
+			containsGeometry = containsGeometry | (obj instanceof THREE.Mesh && !(obj.collisionShape || obj.constraint));
 			containsCollisionShapes = containsCollisionShapes | (obj instanceof THREE.Mesh && obj.collisionShape);
+			containsConstraints = containsConstraints | (obj instanceof THREE.Mesh && obj.constraint);
 			containsSpotLights = containsSpotLights | (obj instanceof THREE.SpotLight);
 			containsDirLights = containsDirLights | (obj instanceof THREE.DirectionalLight);
 			containsHemiLights = containsHemiLights | (obj instanceof THREE.HemisphereLight);
@@ -5991,6 +6197,17 @@ EditSceneScene.prototype = {
 						$('#geometry-invert')[0].checked = obj.def.inverted;
 					}
 				}
+			
+				// filter shape types
+				if(commonType == 'CollisionShape'){
+					if( this.doc.physics == 'CANNON' ){
+						$('#geometry-type option[value="Plane"]').text('Infinite Plane');
+						$('#geometry-type option.cannon-only').show();
+					}
+				} else {
+					$('#geometry-type option[value="Plane"]').text('Plane');
+					$('#geometry-type option.cannon-only').hide();
+				}
 				
 				// type
 				if(prevObj && prevObj.geometryType != obj.geometryType){
@@ -6036,6 +6253,44 @@ EditSceneScene.prototype = {
 					}
 					
 				}				
+			} else 
+			
+			// Constraint
+			if(commonType == 'Constraint'){
+			
+				$('#panel-constraint .subpanel').hide();
+				if(prevObj && prevObj.geometryType != obj.geometryType){
+					if(!mults['constraint-type']){
+						$('#constraint-type').prepend('<option value="0" selected>- multiple -</option>');
+					}
+					$('#constraint-type').val('0');
+					mults['constraint-type'] = true;
+				} else if(!mults['constraint-type']){
+					var newVal = obj.geometryType;
+					$('#constraint-type').val(newVal);
+					$('#constraint-'+newVal).show();
+				}
+				
+				if(prevObj && prevObj.target != obj.target){
+					$('#constraint-target').attr('placeholder','Multiple').val('').data('prevVal',''); mults['constraint-target'] = true;
+				} else if(!mults['constraint-target']){
+					var newVal = (obj.target && obj.target.name) ? obj.target.name : '';
+					$('#constraint-target').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}
+				
+				if(prevObj && prevObj.motorTargetVelocity != obj.motorTargetVelocity){
+					$('#constraint-motorTargetVelocity').attr('placeholder','M').val('').data('prevVal',''); mults['motorTargetVelocity'] = true;
+				} else if(!mults['motorTargetVelocity']){
+					var newVal = obj.motorTargetVelocity != undefined ? obj.motorTargetVelocity : 0;
+					$('#constraint-motorTargetVelocity:not(:focus)').attr('placeholder','').val(newVal).data('prevVal', newVal);
+				}
+				if(prevObj && prevObj.cullBack != obj.cullBack){
+					$('#constraint-collideConnected').addClass('multiple')[0].checked = false;
+					mults['collideConnected'] = true;
+				} else if(!mults['collideConnected']){
+					$('#constraint-collideConnected')[0].checked = !!obj.collideConnected;
+				}
+				
 			} else 
 			
 			// PixelBox
@@ -6342,6 +6597,8 @@ EditSceneScene.prototype = {
 			}			
 		} else if(commonType == 'Geometry' || commonType == 'CollisionShape'){
 			$('#panel-geometry').show();
+		} else if(commonType == 'Constraint'){
+			$('#panel-constraint').show();
 		} else if(commonType == 'PixelBox'){
 			$('#panel-pixelbox').show();
 			if(mults['animName']){
@@ -6354,7 +6611,7 @@ EditSceneScene.prototype = {
 		}
 		
 		if((containsDirLights || containsHemiLights || containsPointLights || containsSpotLights) &&
-			!(containsAnchors || containsCameras || containsContainers || containsInstances || containsGeometry || containsPointClouds || containsPoints || containsPaths || containsCollisionShapes)){
+			!(containsAnchors || containsCameras || containsContainers || containsInstances || containsGeometry || containsPointClouds || containsPoints || containsPaths || containsCollisionShapes || containsConstraints)){
 			$('#panel-light').show();
 			
 			$('#light-distance,#light-exponent,#light-angle').spinner('enable');
@@ -6368,9 +6625,9 @@ EditSceneScene.prototype = {
 			if(containsDirLights) $('#light-distance').spinner('disable');
 			if(containsSpotLights) $('#light-shadow-vol-width,#light-shadow-vol-height').spinner('disable');
 			if((containsDirLights || containsSpotLights) && !(containsHemiLights || containsPointLights)){
-				$('#light-target').show();
+				$('#light-target,#panel-light label[for="light-target"]:first').show();
 			} else {
-				$('#light-target').hide();
+				$('#light-target,#panel-light label[for="light-target"]:first').hide();
 			}
 		}
 		
@@ -6383,7 +6640,7 @@ EditSceneScene.prototype = {
 			$('#panel-move input[type=text].rotation,#panel-move input[type=text].scale').attr('disabled','disabled').spinner('disable');
 			$('#panel-move input[type=checkbox]').attr('disabled','disabled');
 			$('#look-at,#prop-name,#obj-from-cam').attr('disabled','disabled');
-		} else if(containsCollisionShapes){
+		} else if(containsCollisionShapes || containsConstraints){
 			$('#panel-move input[type=checkbox]').not('#prop-visible').attr('disabled','disabled');
 			// hide geometry sub-stuff
 			$('#panel-geometry .geom-only').hide();
@@ -6397,7 +6654,7 @@ EditSceneScene.prototype = {
 		}
 		
 		// phys
-		if(this.doc.physics && !(containsDirLights || containsHemiLights || containsPointLights || containsSpotLights || containsAnchors || containsCameras || containsInstances || containsPoints || containsPaths || containsCollisionShapes) && (containsContainers || containsGeometry || containsPointClouds)){
+		if(this.doc.physics && !(containsDirLights || containsHemiLights || containsPointLights || containsSpotLights || containsAnchors || containsCameras || containsInstances || containsPoints || containsPaths || containsCollisionShapes || containsConstraints) && (containsContainers || containsGeometry || containsPointClouds)){
 			$('#prop-physics').removeAttr('disabled');
 			if($('#prop-physics')[0].checked) $('#panel-physics').show();
 		} else {
@@ -6585,8 +6842,11 @@ EditSceneScene.prototype = {
 		
 // scene panel
 		$('#editor-props .panels').append('<div id="panel-scene" class="panel"><h4>Scene</h4>\
-			<label for="scene-max-shadows" class="w32 pad5 right-align">Max shadows</label><input tabindex="3" type="text" class="center" id="scene-max-shadows" size="1"/>\
-			&nbsp;&nbsp;&nbsp;&nbsp;<input type="checkbox" id="scene-physics"/><label for="scene-physics" class="w3">Use physics</label><br/>\
+			<label for="scene-max-shadows" class="w32 pad5 right-align">Max shadows</label><input tabindex="3" type="text" class="center" id="scene-max-shadows" size="1"/><span class="separator-left"/>\
+			<select id="scene-physics" class="sub">\
+			<option value="0">No physics</option>\
+			<option value="CANNON">CANNON.js</option>\
+			</select><br/>\
 			<label class="w32 right-align pad5">Clear color</label><div id="scene-color" class="color-swatch"/><br/>\
 			<label class="w32 right-align pad5">Ambient</label><div id="scene-ambient-color" class="color-swatch"/><br/>\
 			<label class="w32 right-align pad5">Fog color</label><div id="scene-fog-color" class="color-swatch"/><br/>\
@@ -6676,21 +6936,29 @@ EditSceneScene.prototype = {
 		
 // scene physics
 		$('#editor-props .panels').append('<div id="panel-scene-physics" class="panel"><h4>Physics</h4>\
+			<!--<label for="scene-broadphase" class="w32 align-right">Broadphase</label> <select id="scene-broadphase" class="sub">\
+			<option value="0">NaiveBroadphase</option>\
+			<option value="SAPBroadphase">SAPBroadphase</option>\
+			</select><hr/>-->\
 			<label for="phys-grav-x" class="w3 pad5 right-align">Gravity X</label><input tabindex="0" type="text" class="center gravity" id="phys-grav-x" size="1"/>\
 			<label for="phys-grav-y" class="pad5 right-align">Y</label><input tabindex="1" type="text" class="center gravity" id="phys-grav-y" size="1"/>\
 			<label for="phys-grav-z" class="pad5 right-align">Z</label><input tabindex="2" type="text" class="center gravity" id="phys-grav-z" size="1"/>\
 			</div>');
 		vc = valueChanged(this.sceneGravityChanged);
 		$('#panel-scene-physics input.gravity').spinner({step:1, change:vc, stop:vc});
-		
+		$('#scene-broadphase').change(this.sceneBroadphaseChanged);
+
 // body physics
 		$('#editor-props .panels').append('<div id="panel-physics" class="panel"><h4>Physics</h4>\
 			<label for="phys-type" class="w31 right-align">Body type&nbsp;</label><select id="phys-type">\
 			<option value="0">Dynamic</option>\
 			<option value="1">Static</option>\
 			<option value="2">Kinematic</option>\
-			</select><span class="sub right-align w5">\
+			</select><hr/>\
+			<span class="sub w5">\
 			<a id="phys-add-shape">+ add collision shape</a></span>\
+			<span class="sub right-align w4">\
+			<a id="phys-add-constraint">+ add constraint</a></span>\
 			<hr/>\
 			<label for="phys-mass" class="w31 right-align">Mass</label><input tabindex="0" type="text" class="center" id="phys-mass" size="1"/>\
 			<label for="phys-damping" class="right-align">&nbsp;&nbsp;Linear Damping</label><input tabindex="1" type="text" class="center" id="phys-damping" size="1"/><br/>\
@@ -6729,6 +6997,7 @@ EditSceneScene.prototype = {
 			</div>');		
 
 		$('#phys-add-shape').click(this.addCollisionShape.bind(this));
+		$('#phys-add-constraint').click(this.addConstraint.bind(this));
 
 		vc = valueChanged(this.velocityChanged);
 		$('#panel-physics .vel').spinner({change:vc, stop:vc});
@@ -7023,10 +7292,10 @@ EditSceneScene.prototype = {
 			<option value="Box">Box</option>\
 			<option value="Sphere">Sphere</option>\
 			<option value="Cylinder">Cylinder</option>\
+			<option value="Particle" class="cannon-only">Particle</option>\
 			</select>\
 			<input tabindex="0" type="checkbox" id="geometry-invert" class="geom-only"/><label for="geometry-invert" class="w3 geom-only">Invert normals</label>\
-			<hr/>\
-			<div id="geometry-Plane" class="subpanel">\
+			<div id="geometry-Plane" class="subpanel"><hr/>\
 			<label for="geometry-plane-width" class="w31 pad5 right-align">Width</label>\
 			<input alt="width" tabindex="0" type="text" class="center geometry-width" id="geometry-plane-width" size="1"/>\
 			<label for="geometry-plane-widths" class="w32 pad5 right-align geom-only">Width Seg</label>\
@@ -7036,7 +7305,7 @@ EditSceneScene.prototype = {
 			<label for="geometry-plane-heights" class="w32 pad5 right-align geom-only">Height Seg</label>\
 			<input alt="heightSegments" tabindex="3" type="text" class="center geometry-heightSegments geom-only" id="geometry-plane-heights" size="1"/>\
 			</div>\
-			<div id="geometry-Box" class="subpanel">\
+			<div id="geometry-Box" class="subpanel"><hr/>\
 			<label for="geometry-box-width" class="w31 pad5 right-align">Width</label>\
 			<input alt="width" tabindex="0" type="text" class="center geometry-width" id="geometry-box-width" size="1"/>\
 			<label for="geometry-box-widths" class="w32 pad5 right-align geom-only">Width Seg</label>\
@@ -7050,7 +7319,7 @@ EditSceneScene.prototype = {
 			<label for="geometry-box-depths" class="w32 pad5 right-align geom-only">Depth Seg</label>\
 			<input alt="depthSegments" tabindex="5" type="text" class="center geometry-depthSegments geom-only" id="geometry-box-depths" size="1"/>\
 			</div>\
-			<div id="geometry-Sphere" class="subpanel">\
+			<div id="geometry-Sphere" class="subpanel"><hr/>\
 			<label for="geometry-radius" class="w31 pad5 right-align">Radius</label>\
 			<input alt="radius" tabindex="0" type="text" class="center" id="geometry-radius" size="1"/><br class="geom-only"/>\
 			<label for="geometry-sphere-widths" class="w31 pad5 right-align geom-only">Width Seg</label>\
@@ -7066,7 +7335,7 @@ EditSceneScene.prototype = {
 			<label for="geometry-thetaLength" class="w32 pad5 right-align geom-only">Theta Length</label>\
 			<input alt="thetaLength" tabindex="6" type="text" class="center geom-only" id="geometry-thetaLength" size="1"/>\
 			</div>\
-			<div id="geometry-Cylinder" class="subpanel">\
+			<div id="geometry-Cylinder" class="subpanel"><hr/>\
 			<label for="geometry-radius-top" class="w32 pad5 right-align">Radius Top</label>\
 			<input alt="radiusTop" tabindex="0" type="text" class="center radius geometry-radiusTop" id="geometry-radius-top" size="1"/>\
 			<label for="geometry-radius-bottom" class="w3 pad5 right-align">Bottom</label>\
@@ -7189,6 +7458,27 @@ EditSceneScene.prototype = {
 			}
 		});
 
+// Constraint
+	$('#editor-props .panels').append('<div id="panel-constraint" class="panel"><h4>Constraint</h4>\
+		<label class="pad5">Type</label> <select id="constraint-type">\
+		<option value="LockConstraint">Weld</option>\
+		<option value="PointToPointConstraint">Ball Joint</option>\
+		<option value="HingeConstraint">Hinge</option>\
+		<option value="DistanceConstraint">Distance</option>\
+		</select><label for="constraint-target" class="w32 right-align pad5">Target</label><input type="text" size="10" id="constraint-target" readonly="readonly"/><hr/>\
+		<input type="checkbox" id="constraint-collideConnected"/><label for="constraint-collideConnected" class="w3">Collide Connected</label><br/>\
+		<div id="constraint-HingeConstraint" class="subpanel"><hr/>\
+		<label for="constraint-motorTargetVelocity" class="w5 pad5 right-align">Motor Target Velocity</label>\
+		<input tabindex="0" type="text" class="center geometry-width" id="constraint-motorTargetVelocity" size="1"/><span class="sub">Deg/s</span>\
+		</div>\
+		</div>');
+		
+		$('#constraint-type').change(this.constraintTypeChanged);
+		$('#constraint-target').click(this.constraintTargetClicked);
+		vc = valueChanged(this.constraintPropertyChanged);
+		$('#constraint-motorTargetVelocity').spinner({ step:1, change: vc, stop: vc });
+		$('#constraint-collideConnected').change(this.constraintCollideChanged);
+		
 // LinePath props panel
 		$('#editor-props .panels').append('<div id="panel-path" class="panel"><h4>LinePath</h4>\
 		<div class="sub center"><a id="point-add-left">&#8612; prepend</a> <span class="separator-left"/> \
@@ -7213,7 +7503,7 @@ EditSceneScene.prototype = {
 
 // Custom props panel
 		$('#editor-props .panels').append('<div id="panel-custom" class="panel"><h4>Custom Properties</h4>\
-		<div class="sub right-align"><a id="prop-add">+ Add Property</a></div>\
+		<div class="sub right-align"><a id="prop-add">+ add property</a></div>\
 		</hr><div id="props-container" class="center"/>\
 		</div>');
 		
@@ -7389,6 +7679,10 @@ EditSceneScene.prototype = {
 		
 		$('.editor').mouseenter(function(e){ e.stopPropagation(); editScene.disableCanvasInteractions(false); })
 					.mouseleave(function(e){ e.stopPropagation(); editScene.enableCanvasInteractions(false); });
+					
+					
+		$('body').append('<div id="blur-overlay" class="ui-widget-overlay ui-front" style="z-index:100000010;display:none;"></div>');
+		$(window).blur(function(){ $('#blur-overlay').show(); }).focus( function(){ $('#blur-overlay').hide(); });
 	},
 	
 	/* dispose of main UI */
@@ -7419,7 +7713,7 @@ EditSceneScene.prototype = {
 			if(this.selectedObjects.length) addPos.copy(addTarget.position);
 		}
 		if(addTarget instanceof THREE.LinePathHandle) addTarget = addTarget.parent.parent;
-		else if(addTarget instanceof THREE.LinePath || addTarget.collisionShape) addTarget = addTarget.parent;
+		else if(addTarget instanceof THREE.LinePath || addTarget.collisionShape || addTarget.constraint) addTarget = addTarget.parent;
 		
 		var addWorldPos = addTarget.parent.localToWorld(addPos.clone());
 		
@@ -7495,6 +7789,10 @@ EditSceneScene.prototype = {
 			}
 			objDef = { asset: 'Geometry', mesh:'Box', collisionShape: true, name:'collision_shape', radius:radius,
 						width: minMax.size().x, height: minMax.size().y, depth: minMax.size().z, position: minMax.center().toArray() };
+			break;
+			
+		case 'scene-add-constraint':
+			objDef = { asset: 'Geometry', mesh:'PointToPointConstraint', constraint: true, name:'constraint' };
 			break;
 		
 		case 'scene-add-hemi':
@@ -7618,6 +7916,8 @@ EditSceneScene.prototype = {
 			<em>Shift + Drag, Ctrl</em> selection marquee, contained only<br/>\
 			<em>Shift + Click</em> add objects to selection<br/>\
 			<em>Alt + Click</em> remove objects from selection<br/>\
+			<em>Page Up</em> select parent<br/>\
+			<em>Page Down</em> select child<br/>\
 			<em>Esc</em> deselect all<br/>\
 			<br/>\
 			<em><span class="ctrl"/>C</em> copy selection<br/>\
@@ -7820,7 +8120,12 @@ EditSceneScene.prototype = {
 			break;
 		case 32: // space
 			break;
-			
+		case 33: // pageup
+			editScene.selectParents(e);
+			break;
+		case 34: // pagedown
+			editScene.selectChildren(e);
+			break;
 		case 27: // esc
 			if($('.submenu:visible').length){
 				$('.submenu').hide();
@@ -8167,7 +8472,10 @@ THREE.Object3D.prototype.serialize = function(templates){
 			if(this.collisionShape) props = ['radiusTop','radiusBottom','height','radiusSegments'];
 			else props = ['radiusTop','radiusBottom','height','radiusSegments','heightSegments','openEnded'];
 			break;
+		default:
+			break;		
 		}
+		
 		for(var p in props){
 			var prop = props[p]
 			def[prop] = this.def[prop];
@@ -8175,6 +8483,11 @@ THREE.Object3D.prototype.serialize = function(templates){
 		
 		if(this.collisionShape) { 
 			def.collisionShape = true;
+		} else if(this.constraint) { 
+			def.constraint = true;
+			if(this.target) def.target = '#'+this.target.getReferenceName();
+			if(this.collideConnected != undefined) def.collideConnected = this.collideConnected;
+			if(this.motorTargetVelocity != undefined) def.motorTargetVelocity = this.motorTargetVelocity;
 		} else {
 			def.inverted = !!this.def.inverted;	
 			def.tint = this.material.tint.getHexString();

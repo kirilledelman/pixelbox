@@ -6,17 +6,21 @@ function PreviewScene(){
 	
 /* populate scene */
 
-	this.onWillAdd = function(){
-		if(window.opener && window.loadScene){
-			this.populateWith(JSON.parse(window.loadScene));
-		}
-		
-		this.updateMatrixWorld(true);
-		this.controls = new THREE.EditorControls(this.camera, renderer.webgl.domElement);
-		this.controls.center.set(0, 0, -100);
-		this.camera.localToWorld(this.controls.center);
-		this.controls.panEnabled = this.controls.rotateEnabled = this.controls.zoomEnabled = true;
-		
+	this.onAdded = function(){
+		setTimeout( function(){
+			if(window.opener && window.loadScene){
+				this.populateWith(JSON.parse(window.loadScene));
+			}
+			
+			this.updateMatrixWorld(true);
+			this.controls = new THREE.EditorControls(this.camera, renderer.webgl.domElement);
+			this.controls.center.set(0, 0, -100);
+			this.camera.localToWorld(this.controls.center);
+			this.controls.panEnabled = this.controls.rotateEnabled = this.controls.zoomEnabled = true;
+			
+			renderer._windowResized();
+
+		}.bind(this), 500);		
 	};
 }
 

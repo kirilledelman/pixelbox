@@ -68,7 +68,7 @@ THREE.PixelBoxScene = function () {
 			<script src="js/postprocessing/PixelBoxScreenPass.js"></script>
 		*/			
 		
-		if( !(THREE.EffectComposer && THREE.RenderPass && THREE.CopyShader && THREE.MaskPass && THREE.ShaderPass) ){
+		if( !(THREE.EffectComposer && THREE.RenderPass && THREE.CopyShader && THREE.MaskPass && THREE.ShaderPass) ) {
 		
 			throw "Using .screenPass requires the following THREE.js classes: THREE.EffectComposer, THREE.RenderPass, THREE.MaskPass, THREE.ShaderPass, THREE.CopyShader.";
 			
@@ -344,7 +344,7 @@ THREE.PixelBoxScene.prototype.populateWith = function ( sceneDef, options ) {
 	this.ambientLight.color.set( parseInt( value( sceneDef, 'ambient', '0' ), 16 ) );
 	
 	// init world / physics
-	if ( sceneDef.physics ) {
+	if ( sceneDef.physics === 'CANNON' ) {
 		
 		if ( !window['CANNON'] ) {
 			
@@ -354,7 +354,17 @@ THREE.PixelBoxScene.prototype.populateWith = function ( sceneDef, options ) {
 		
 			this.world = new CANNON.World();
 			this.world.allMaterials = {};
-			this.world.broadphase = new CANNON.NaiveBroadphase();
+			this.world.collideEventDispatch = this.CANNON_collideEventDispatch.bind( this );
+			
+			if ( sceneDef.broadphase === 'SAPBroadphase' ) { 
+				
+				this.world.broadphase = new CANNON.SAPBroadphase();
+			
+			} else {
+			
+				this.world.broadphase = new CANNON.NaiveBroadphase();
+			
+			}
 			
 			this.world.gravity.set( sceneDef.gravity[0], sceneDef.gravity[1], sceneDef.gravity[2] );
 			
@@ -416,13 +426,14 @@ THREE.PixelBoxScene.prototype.populateWith = function ( sceneDef, options ) {
 	// populate scene
 	var addedObjects = this.populateObject( this, sceneDef.layers ? sceneDef.layers : [], options );
 
+	// update all matrices
+	this.updateMatrixWorld( true );
+
 	// link up objects targets
 	this.linkObjects( addedObjects, this );
 
 	var numShadows = 0;
 	this.staticGroups = {};
-	
-	this.updateMatrixWorld( true );
 	
 	// process maxShadows and staticGroups
 	for ( var i = addedObjects.length - 1; i >= 0; i-- ) {
@@ -509,6 +520,11 @@ THREE.PixelBoxScene.prototype.populateWith = function ( sceneDef, options ) {
 		
 	}
 	
+	if ( sceneDef.physics === 'CANNON' && sceneDef.broadphase == 'SAPBroadphase' && this.world ) {
+		
+		this.world.broadphase.autoDetectAxis();
+		
+	}	
 	
 };
 
@@ -562,7 +578,7 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 		var obj3d = null;
 		var helper = null;
 		
-		if ( !layer.collisionShape ) {
+		if ( !(layer.collisionShape || layer.constraint) ) {
 		
 			// try to get an object of the same type from pool
 			if ( options.makeObject ) { 
@@ -619,8 +635,8 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 						obj3d = objs[ 0 ];
 						obj3d.isInstance = true;
 						obj3d.isTemplate = false;
-						objs.splice( 0, 1 );
 						this.linkObjects( objs, obj3d, !!options.skipProps );
+						objs.splice( 0, 1 );
 						objectsCreated = objectsCreated.concat( objs );
 						
 					}
@@ -852,17 +868,21 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 		
 			var mat, geom;
 			
-			if ( layer.collisionShape ) { 
+			if ( layer.collisionShape || layer.constraint ) { 
 				
 				if ( !(object instanceof THREE.Mesh || object.isContainer || object.isAnchor || object instanceof THREE.PixelBox) ) continue;
 				
 				if ( options.helpers ) {
 					
 					geom = this.makeGeometryObject( layer, true );
-					mat = new THREE.MeshBasicMaterial({ color: 0x666666, wireframe: true });
+					mat = new THREE.MeshBasicMaterial({ color: layer.collisionShape ? 0x666666 : 0xFF6600, wireframe: true, side: THREE.DoubleSide });
 					obj3d = new THREE.Mesh( geom, mat );
-					obj3d.collisionShape = true;
+					obj3d.collisionShape = layer.collisionShape;
+					obj3d.constraint = layer.constraint;
 					obj3d.geometryType = layer.mesh;
+					
+					if ( layer.collideConnected ) obj3d.collideConnected = true;
+					if ( layer.motorTargetVelocity != undefined ) obj3d.motorTargetVelocity = layer.motorTargetVelocity;
 					
 				} else {
 					
@@ -1155,28 +1175,7 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 			
 		}
 		
-		objectsCreated.splice( 0, 0, obj3d );
-		
-		// force matrix update
-		obj3d.updateMatrixWorld( true );
-		
-		// physics
-		if ( layer.physics ) {
-			
-			this.initObjectPhysics( obj3d, layer );
-			
-		} else {
-			
-			obj3d.physics = false;
-			
-		}
-		
-		if ( this.world ) {
-			
-			obj3d.addEventListener( 'removed', this.objectRemovedFromWorld );
-			obj3d.addEventListener( 'added', this.objectAddedToWorld );		
-			
-		}
+		objectsCreated.splice( 0, 0, obj3d );		
 		
 		var addAsChild = (!obj3d.parent && object);
 		
@@ -1196,6 +1195,27 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 			}
 			
 			obj3d.anchored = layer.anchor ? layer.anchor : false;
+			
+		}
+		
+		// force matrix update
+		obj3d.updateMatrixWorld( true );
+
+		// physics
+		if ( layer.physics && layer.layers ) {
+			
+			this.initObjectPhysics( obj3d, layer );
+			
+		} else {
+			
+			obj3d.physics = false;
+			
+		}
+		
+		if ( this.world ) {
+			
+			obj3d.addEventListener( 'removed', this.objectRemovedFromWorld );
+			obj3d.addEventListener( 'added', this.objectAddedToWorld );		
 			
 		}
 		
@@ -1319,8 +1339,34 @@ THREE.PixelBoxScene.prototype.makeGeometryObject = function ( layer, isCollShape
 			geom = new THREE.PlaneBufferGeometry( layer.width, layer.height,layer.widthSegments, layer.heightSegments );
 		else 
 			geom = new THREE.PlaneGeometry( layer.width, layer.height,layer.widthSegments, layer.heightSegments );
-
+			
 		break;
+		
+	case 'Particle':
+		
+		geom = new THREE.TetrahedronGeometry( 0.5, 0 );
+		break;
+		
+	case 'HingeConstraint':
+		
+		geom = new THREE.CylinderGeometry( 1, 1, 10, 3, 1, true );
+		break;
+		
+	case 'PointToPointConstraint':
+		
+		geom = new THREE.TetrahedronGeometry( 2, 2 );
+		break;
+
+	case 'DistanceConstraint':
+		
+		geom = new THREE.CircleGeometry( 2, 8 );
+		break;
+
+	case 'LockConstraint':
+		
+		geom = new THREE.BoxGeometry( 2, 2, 2 );
+		break;
+		
 	}
 	
 	// flip normals
@@ -1356,60 +1402,64 @@ THREE.PixelBoxScene.prototype.makeGeometryObject = function ( layer, isCollShape
 	links "#targetName.$anchorname.targetName" style references to objects in the hierarchy
 	Used by Spot and Direct lights 
 	
-	Also creates constraints
+	Also adds bodies and creates constraints
 	
-	And links physics materials
+	Also links physics materials
 	
 */
 THREE.PixelBoxScene.prototype.linkObjects = function ( objs, top, skipProps ) {
 	
-	function dereferenceObject( nameFragments, currentLevel ) {
+	var dereferenceObject = function ( top ) { 
+		
+		return function ( nameFragments, currentLevel ) {
 	
-		// start
-		if ( typeof( nameFragments ) == 'string' ) {
-		
-			nameFragments = nameFragments.split( '.' );
-			if ( !nameFragments.length ) return top;
-			return dereferenceObject( nameFragments, currentLevel );
+			// start
+			if ( typeof( nameFragments ) == 'string' ) {
 			
-		// descend
-		} else if ( nameFragments.length ) {
-		
-			var first = nameFragments[ 0 ];
-			nameFragments.splice( 0, 1 );
-			var obj = null;
-			
-			if ( first.substr( 0, 1 ) == '$' ) { 
-			
-				if ( currentLevel.anchors ) obj = currentLevel.anchors[ first.substr( 1 ) ];
-				else first = first.substr( 1 );
+				nameFragments = nameFragments.split( '.' );
+				if ( !nameFragments.length ) return top;
+				return dereferenceObject( nameFragments, currentLevel );
 				
-			}
+			// descend
+			} else if ( nameFragments.length ) {
 			
-			if ( !obj ) {
-			
-				for ( var ci = 0, cl = currentLevel.children.length; ci < cl; ci++ ) {
+				var first = nameFragments[ 0 ];
+				nameFragments.splice( 0, 1 );
+				var obj = null;
 				
-					if ( currentLevel.children[ ci ].name == first ) {
+				if ( first.substr( 0, 1 ) == '$' ) { 
+				
+					if ( currentLevel.anchors ) obj = currentLevel.anchors[ first.substr( 1 ) ];
+					else first = first.substr( 1 );
 					
-						obj = currentLevel.children[ ci ];
-						break;
+				}
+				
+				if ( !obj ) {
+				
+					for ( var ci = currentLevel.children.length - 1; ci >= 0; ci-- ) {
+					
+						if ( currentLevel.children[ ci ].name == first ) {
+						
+							obj = currentLevel.children[ ci ];
+							break;
+							
+						}
 						
 					}
 					
 				}
 				
+				if ( !obj ) return null;
+				if ( nameFragments.length ) return dereferenceObject( nameFragments, obj );
+				return obj;
+				
 			}
 			
-			if ( !obj ) return null;
-			if ( nameFragments.length ) return dereferenceObject( nameFragments, obj );
-			return obj;
+			return null;
 			
 		}
 		
-		return null;
-		
-	}
+	}( top ); // bake "top" into func
 	
 	// link light targets and custom props
 	for ( var i = 0, l = objs.length; i < l; i++ ) {
@@ -1419,15 +1469,14 @@ THREE.PixelBoxScene.prototype.linkObjects = function ( objs, top, skipProps ) {
 		// do .target prop first (for lights)
 		var propVal;
 		var found;
-		var nearestTemplate = undefined;
+		var nearestTemplate = obj.nearestTemplate();
 		this.updateMaterials = this.updateLights = this.updateLights || (obj instanceof THREE.Light);
 		
-		if ( obj instanceof THREE.SpotLight || obj instanceof THREE.DirectionalLight ) {
+		if ( obj instanceof THREE.SpotLight || obj instanceof THREE.DirectionalLight || obj.constraint ) {
 		
 			propVal = obj.def.target;
 			if ( typeof( propVal ) == 'string' && propVal.substr( 0, 1 ) == '#' ) {
 			
-				nearestTemplate = obj.nearestTemplate();
 				found = dereferenceObject( propVal.substr( 1 ), nearestTemplate ? nearestTemplate : top );
 				
 				if ( found ) { 
@@ -1464,54 +1513,74 @@ THREE.PixelBoxScene.prototype.linkObjects = function ( objs, top, skipProps ) {
 			
 		}
 		
-		// process constraints
-		if ( obj.physics && this.world ) {
-		
-			if( obj.parent ) { 
+		// add bodies to world and create constraints
+		if ( this.world && obj.physics && obj.body ) {
 			
-				var weldParent = null;
-				if ( obj.parent.physics ) weldParent = obj.parent;
-				else if ( obj.parent.isAnchor && obj.parent.parent.physics ) weldParent = obj.parent.parent;
-				
-				if ( weldParent ) {
-					
-					// Weld / PointToPoint constaint
-					var constraint = new CANNON.PointToPointConstraint(
-						weldParent.body, new CANNON.Vec3( obj.position.x, obj.position.y, obj.position.z ),
-						obj.body, new CANNON.Vec3(), Infinity );
-					
-					constraint.collideConnected = false;
-					
-					weldParent.body.constraints.push( constraint );
-					obj.body.constraints.push( constraint );
-					
-				}
-				
-			}
-		
+			this.CANNON_addConstraints( obj, dereferenceObject, (nearestTemplate ? nearestTemplate : top) );
+			
 		}
 				
 	}
 	
-	// link physics materials
+	
 	if ( this.world ) { 
 		
-		for ( var m1n in this.world.allMaterials ) { 
-			
-			var m1 = this.world.allMaterials[ m1n ];
+		this.CANNON_linkMaterials();
+		
+	}
+	
+};
 
-			for ( var m2n in this.world.allMaterials ) { 
+// adds object body and creates/adds constraints from definition to Cannon world
+THREE.PixelBoxScene.prototype.CANNON_addConstraints = function ( obj, dereferenceObject, dereferenceTopObject ) {
+	
+	var isAddedToScene = obj.isDescendantOf( this );
+	var constraintsDef = obj.def.layers.concat();
+
+	// add body to world
+	if ( isAddedToScene && this.world.bodies.indexOf( obj.body ) < 0 ) {
+		
+		this.world.addBody( obj.body );
+
+		if ( !obj.body.hasEventListener( 'collide', this.world.collideEventDispatch ) ) { 
 			
-				var m2 = this.world.allMaterials[ m2n ];
+			obj.body.addEventListener( 'collide', this.world.collideEventDispatch );
+		
+		}
+		
+	}
+
+	// helper func to get scale vector from definition
+	function scaleFromDef( def ) { 
+		
+		var localScale = new THREE.Vector3( 1, 1, 1 );
+		if ( _.isArray( def.scale ) ) localScale.fromArray( def.scale );
+		else localScale.set( def.scale, def.scale, def.scale );
+		
+		return localScale;
+		
+	}
+
+	// automaticly weld to parent object, if parent has a body
+	// but only if no other constraints between this object and weldParent exist
+	
+	var weldParent = null;
+	
+	if( obj.parent ) { 
+	
+		if ( obj.parent.physics && obj.parent.body ) weldParent = obj.parent;
+		else if ( obj.parent.isAnchor && obj.parent.parent.physics && obj.parent.parent.body ) weldParent = obj.parent.parent;
+		
+		if ( weldParent ) {
+			
+			// check if weldParent already has constraints to this object
+			
+			for ( var j = 0; j < weldParent.body.constraints.length; j++ ) { 
 				
-				var contactMaterial = this.world.getContactMaterial( m1, m2 );
+				if ( weldParent.body.constraints[ j ].bodyB == obj.body ) { 
 				
-				if ( !contactMaterial ) {
-					
-					contactMaterial = new CANNON.ContactMaterial( m1, m2 );
-					contactMaterial.friction = m1.friction * m2.friction;
-					contactMaterial.restitution = Math.max( m1.restitution, m2.restitution);
-					this.world.addContactMaterial( contactMaterial );
+					weldParent = null; // don't weld to parent then
+					break;
 					
 				}
 				
@@ -1520,6 +1589,194 @@ THREE.PixelBoxScene.prototype.linkObjects = function ( objs, top, skipProps ) {
 		}
 		
 	}
+	
+	var otherParentConstraintsFound = false;
+	
+	// create constraints
+	for ( var j = 0, jl = constraintsDef.length; j < jl; j++ ) { 
+		
+		// at last loop iteration, if no other constraints to parent were created
+		if ( j >= jl - 1 && weldParent && !otherParentConstraintsFound ) {
+			
+			// add weld constraint to loop
+			
+			// hinge
+			constraintsDef.push( { 
+				asset: 'Geometry',
+				mesh: 'LockConstraint',
+				constraint: true,
+				name: 'parent',
+				isParentConstraint: true,
+				target: weldParent
+			} );
+
+			// update count
+			jl = constraintsDef.length;	
+			
+		}
+		
+		var def = constraintsDef[ j ];
+		
+		if ( !def.constraint || !def.target || (def.isParentConstraint && otherParentConstraintsFound) ) continue;
+		
+		var constraint = null;
+		
+		// find constraint's target object
+		var target = typeof(def.target) == 'string' ? dereferenceObject( def.target.substr( 1 ), dereferenceTopObject ) : def.target;
+		
+		// skip if invalid
+		if ( !(target && target.body) ) { 
+			console.log( target ? 
+						 ("Target for " + def.mesh + " constraint on " + obj.name + " doesn't have physics.") : 
+						 ("Couldn't find target for " + def.mesh + " constraint on " + obj.name) );
+			continue;
+		}
+		
+		// overrides auto weld to parent constraint, if found
+		if ( target == weldParent ) otherParentConstraintsFound = true;
+		
+		// compose constraint's world matrix
+		var constraintMatrix = new THREE.Matrix4();
+		var cpos = new THREE.Vector3(), cscale = new THREE.Vector3( 1, 1, 1 ), cquat = new THREE.Quaternion(), ceuler = new THREE.Euler();
+		var degToRad = Math.PI / 180;
+		
+		if ( def.position != undefined ) cpos.fromArray( def.position );
+		if ( def.scale != undefined ) cscale = scaleFromDef( def );
+		if ( def.rotation != undefined ) ceuler.set( def.rotation[ 0 ] * degToRad, def.rotation[ 1 ] * degToRad, def.rotation[ 2 ] * degToRad );
+		cquat.setFromEuler( ceuler );
+		
+		constraintMatrix.compose( cpos, cquat, cscale );
+		constraintMatrix.multiplyMatrices( obj.matrixWorld, constraintMatrix );
+		constraintMatrix.decompose( cpos, cquat, cscale ); // world coord system
+		
+		// local position of constraint object in its parent
+		var constraintLocalPoint = obj.worldToLocal( cpos.clone() );
+		constraintLocalPoint.multiply( obj.scale );
+		
+		// world position of constraint object
+		var constraintWorldPoint = cpos.clone();
+		
+		// local position of constraint inside target object
+		var constraintTargetLocalPoint = target.worldToLocal( cpos.clone() );
+		constraintTargetLocalPoint.multiply( target.scale );
+		
+		// target's world position
+		var targetWorldPoint = target.localToWorld( new THREE.Vector3() );				
+		
+		switch ( def.mesh ) {
+			
+		case 'PointToPointConstraint':
+			
+			constraint = new CANNON.PointToPointConstraint(
+				obj.body, (new CANNON.Vec3()).copy( constraintLocalPoint ),
+				target.body, (new CANNON.Vec3()).copy( constraintTargetLocalPoint ),
+				Infinity
+			);
+			
+			break;
+
+		case 'DistanceConstraint':
+			
+			var distance = targetWorldPoint.distanceTo( constraintWorldPoint );
+			
+			constraint = new CANNON.DistanceConstraint ( obj.body, target.body, distance );
+			
+			break;
+
+		case 'LockConstraint':
+			
+			constraint = new CANNON.LockConstraint ( obj.body, target.body );
+			
+			break;
+
+		case 'HingeConstraint':
+			
+			// axis in obj's space
+			var axisA = (new THREE.Vector3(0, 1, 0)).applyQuaternion( cquat );
+			
+			// get constraint's quaternion in target's coord. system
+			var inv = new THREE.Matrix4();
+			
+			inv.getInverse( target.matrixWorld );
+			inv.multiply( constraintMatrix );
+			inv.decompose( cpos, cquat, cscale );
+			
+			// axis in target's space
+			var axisB = (new THREE.Vector3(0, 1, 0)).applyQuaternion( cquat );
+			
+			// constraint
+			constraint = new CANNON.HingeConstraint(
+				obj.body, target.body,
+				{
+					pivotA: (new CANNON.Vec3()).copy( constraintLocalPoint ),
+					pivotB: (new CANNON.Vec3()).copy( constraintTargetLocalPoint ),
+					axisA: (new CANNON.Vec3()).copy( axisA ),
+					axisB: (new CANNON.Vec3()).copy( axisB ),
+					maxForce: Infinity
+				}
+			);
+		
+			// enable motor
+			if ( def.motorTargetVelocity ) { 
+				
+				constraint.enableMotor();
+				constraint.motorTargetVelocity = def.motorTargetVelocity * degToRad;
+				
+			}
+			
+			break;
+			
+		} // end switch
+		
+		if ( constraint ) {
+			
+			constraint.name = def.name;
+			constraint.collideConnected = !!def.collideConnected;
+			
+			target.body.constraints.push( constraint );
+			obj.body.constraints.push( constraint );
+			
+			if ( isAddedToScene ) this.world.addConstraint( constraint );
+			
+		}
+		
+	} // end for		
+	
+};
+
+// link physics materials
+THREE.PixelBoxScene.prototype.CANNON_linkMaterials = function () {
+	
+	for ( var m1n in this.world.allMaterials ) { 
+			
+		var m1 = this.world.allMaterials[ m1n ];
+
+		for ( var m2n in this.world.allMaterials ) { 
+		
+			var m2 = this.world.allMaterials[ m2n ];
+			
+			var contactMaterial = this.world.getContactMaterial( m1, m2 );
+			
+			if ( !contactMaterial ) {
+				
+				contactMaterial = new CANNON.ContactMaterial( m1, m2 );
+				contactMaterial.friction = m1.friction * m2.friction;
+				contactMaterial.restitution = Math.max( m1.restitution, m2.restitution);
+				this.world.addContactMaterial( contactMaterial );
+				
+			}
+			
+		}
+		
+	}
+	
+};
+
+
+THREE.PixelBoxScene.prototype.CANNON_collideEventDispatch = function( e ) {
+	
+	// console.log( e.contact );
+	// TODO - after we can receive collide end event
 	
 };
 
@@ -1577,6 +1834,7 @@ THREE.PixelBoxScene.prototype.dispose = function ( unloadAssets ) {
 
 /* ================================================================================ CANNON physics hooks */
 
+// creates object's body from shapes
 THREE.PixelBoxScene.prototype.initObjectPhysics = function( obj3d, layer ) {
 	
 	obj3d.physics = true;
@@ -1632,10 +1890,13 @@ THREE.PixelBoxScene.prototype.initObjectPhysics = function( obj3d, layer ) {
 		body.material = mat;
 		
 		// add shapes
+		var numShapes = 0;
 		for ( var i = 0, ns = layer.layers.length; i < ns; i++) { 
 			
 			var shapeDef = layer.layers[ i ];
 			if ( !shapeDef.collisionShape ) continue;
+			
+			numShapes++;
 			
 			if ( shapeDef.position ) { 
 			
@@ -1699,6 +1960,11 @@ THREE.PixelBoxScene.prototype.initObjectPhysics = function( obj3d, layer ) {
 				worldQuat.multiply( rotateQuat );
 				break;
 				
+			case 'Particle':
+				
+				shape = new CANNON.Particle();
+				break;
+				
 			}
 			
 			if ( shape ) { 
@@ -1708,10 +1974,22 @@ THREE.PixelBoxScene.prototype.initObjectPhysics = function( obj3d, layer ) {
 				body.addShape( shape, new CANNON.Vec3( worldPos.x, worldPos.y, worldPos.z ), new CANNON.Quaternion( worldQuat.x, worldQuat.y, worldQuat.z, worldQuat.w ) );
 				
 			}
-		}		
+			
+		}	
+		
+		if ( !numShapes ) {
+			
+			obj3d.physics = false;
+			return;
+			
+		}
 		
 		obj3d.body = body;
 		body.obj3d = obj3d;
+		
+		// add null collide func if none already specified
+		if ( obj3d.onCollideStart === undefined ) obj3d.onCollideStart = null;
+		if ( obj3d.onCollideEnd === undefined ) obj3d.onCollideEnd = null;
 		
 	}
 	

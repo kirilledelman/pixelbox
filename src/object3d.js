@@ -5,6 +5,61 @@
  * @license MIT
 */
 
+/* ================================================================================ Util */
+
+/* easing: t = current time, b = start value, c = change in value, d = duration */
+Math.easeInOutSine = function ( t, b, c, d ) { return -c * 0.5 * (Math.cos( Math.PI * t / d ) - 1) + b; };
+
+Math.easeInSine = function ( t, b, c, d ) { return -c * Math.cos( t / d * Math.PI * 0.5 ) + c + b; };
+
+Math.easeOutSine = function ( t, b, c, d ) { return c * Math.sin( t / d * Math.PI * 0.5 ) + b; };
+
+Math.linearTween = function ( t, b, c, d ) { return c * t / d + b; };
+
+/* pseudo - random number */
+Math.seededRandom = function ( seed ) {
+
+	var x = Math.sin( seed + 1 ) * 10000;
+	return x - Math.floor( x );
+	
+};
+
+/* deep clone */
+function _deepClone( obj, depth ) {
+
+	if ( typeof obj !== 'object' ) return obj;
+	if ( obj === null) return null;
+	if ( _.isString( obj ) ) return obj.splice();
+	if ( _.isDate( obj ) ) return new Date( obj.getTime() );
+	if ( _.isFunction ( obj.clone ) ) return obj.clone();
+	var clone = _.isArray( obj ) ? obj.slice() : _.extend( {}, obj );
+	// clone array's extended props
+	if ( _.isArray( obj ) ) {
+	
+		for ( var p in obj ) {
+		
+			if ( obj.hasOwnProperty( p ) && _.isUndefined( clone[ p ] ) && isNaN( p ) ) clone[ p ] = obj[ p ];
+			
+		}
+		
+	}
+	if ( !_.isUndefined( depth ) && ( depth > 0 ) ) {
+	
+	  for ( var key in clone ) {
+	  
+	    clone[ key ] = _deepClone( clone[ key ], depth - 1 );
+	    
+	  }
+	  
+	}
+	
+	return clone;
+	
+};
+
+/* ================================================================================ Object3D extensions */
+
+
 THREE.Object3D.prototype.nearestParentWithProperty = function ( prop, val ) {
 
 	if ( this.parent ) {
@@ -151,111 +206,6 @@ THREE.Object3D.prototype.getObjectByUUID = function ( uuid, recursive ) {
 	}
 	
 	return undefined;
-	
-};
-
-/* called by 'added' handler to add physics body and constraints to world */
-THREE.Object3D.prototype.addBodyAndConstraintsToWorld = function( world ) {
-	
-	var obj = this;
-	var body = obj.body;
-	
-	if ( body ) {
-	
-		world.addBody( body );
-		
-		for ( var i = 0, l = body.constraints.length; i < l; i++ ) { 
-			
-			world.addConstraint( body.constraints[ i ] );
-			
-		}
-	
-	}
-	
-	for ( var i = 0; i < obj.children.length; i ++) {
-			
-		obj.children[ i ].removeBodyAndConstraintsFromWorld( world );
-		
-	}
-	
-};
-
-/* called by 'removed' handler to remove physics body and constraints from world */
-THREE.Object3D.prototype.removeBodyAndConstraintsFromWorld = function( world ) {
-	
-	var obj = this;
-	var body = obj.body;
-	
-	if ( body ) {
-		
-		// remove body
-		body.world.remove( body );
-		
-		// remove constraints
-		for ( var i = body.constraints.length - 1; i >= 0; i-- ) {
-			
-			var constraint = body.constraints[ i ];
-			var other = constraint.bodyA == obj ? constraint.bodyB : constraint.bodyA;
-			body.world.removeConstraint( constraint );
-			
-			if ( other && other.body ) {
-			
-				var index = other.body.constraints.indexOf( constraint );
-				if ( index >= 0 ) other.body.constraints.splice( index, 1 );
-				
-			}		
-			
-		}
-		
-		body.constraints.length = 0;
-		obj.body = null;
-		
-		for ( var i = 0; i < obj.children.length; i ++) {
-			
-			obj.children[ i ].removeBodyAndConstraintsFromWorld( world );
-			
-		}
-		
-	}
-	
-};
-
-
-/* copies this objects position and rotation to physics body */
-THREE.Object3D.prototype.syncBody = function() {
-	
-	if ( !this.body ) return;
-	
-	this.matrixWorldNeedsUpdate = true;
-	this.updateMatrixWorld();
-	
-	var worldPos = new THREE.Vector3(), worldScale = new THREE.Vector3();
-	var worldQuat = new THREE.Quaternion();
-	
-	this.matrixWorld.decompose( worldPos, worldQuat, worldScale );
-	
-	this.body.position.set( worldPos.x, worldPos.y, worldPos.z );
-	this.body.quaternion.set( worldQuat.x, worldQuat.y, worldQuat.z, worldQuat.w );
-	
-};
-
-/* copies this objects position and rotation to physics body */
-THREE.Object3D.prototype.syncToBody = function() {
-	
-	if ( !this.body || !this.parent ) return;
-	
-	this.matrix.getInverse( this.parent.matrixWorld );
-
-	var worldPos = new THREE.Vector3(), worldScale = new THREE.Vector3();
-	var worldQuat = new THREE.Quaternion();
-		
-	worldScale.setFromMatrixScale( this.matrixWorld );
-					
-	mat.compose( this.body.position, this.body.quaternion, worldScale );
-	this.matrix.multiply( mat );
-	
-	this.matrix.decompose( this.position, this.quaternion, this.scale );
-	this.rotation.setFromQuaternion( this.quaternion );
 	
 };
 
@@ -535,55 +485,129 @@ THREE.Object3D.prototype.stopTween = function ( obj, snapToFinish, callDone ) {
 	
 };
 
-/* ================================================================================ Util */
-
-/* easing: t = current time, b = start value, c = change in value, d = duration */
-Math.easeInOutSine = function ( t, b, c, d ) { return -c * 0.5 * (Math.cos( Math.PI * t / d ) - 1) + b; };
-
-Math.easeInSine = function ( t, b, c, d ) { return -c * Math.cos( t / d * Math.PI * 0.5 ) + c + b; };
-
-Math.easeOutSine = function ( t, b, c, d ) { return c * Math.sin( t / d * Math.PI * 0.5 ) + b; };
-
-Math.linearTween = function ( t, b, c, d ) { return c * t / d + b; };
-
-/* pseudo - random number */
-Math.seededRandom = function ( seed ) {
-
-	var x = Math.sin( seed + 1 ) * 10000;
-	return x - Math.floor( x );
+/* called by 'added' handler to add physics body and constraints to world */
+THREE.Object3D.prototype.addBodyAndConstraintsToWorld = function( world ) {
+	
+	var body = this.body;
+	
+	if ( body ) {
+	
+		if ( world.bodies.indexOf ( body ) < 0 ) world.addBody( body );
+		
+		for ( var i = 0, l = body.constraints.length; i < l; i++ ) { 
+			
+			var constraint = body.constraints[ i ];
+			
+			if ( world.constraints.indexOf ( constraint ) < 0 ) { 
+			
+				// also check if other body in the constraint has been added
+				
+				var otherBody = (constraint.bodyA == body ? constraint.bodyB : constraint.bodyA);
+			
+				if ( otherBody.world ) {
+				
+					world.addConstraint( constraint );
+				
+				}
+				
+			}
+			
+		}
+		
+		// collision callbacks
+		if ( !body.hasEventListener( 'collide', world.collideEventDispatch ) ) body.addEventListener( 'collide', world.collideEventDispatch );
+	
+	}
+	
+	for ( var i = 0; i < this.children.length; i ++) {
+			
+		this.children[ i ].addBodyAndConstraintsToWorld( world );
+		
+	}
 	
 };
 
-/* deep clone */
-function _deepClone( obj, depth ) {
-
-	if ( typeof obj !== 'object' ) return obj;
-	if ( obj === null) return null;
-	if ( _.isString( obj ) ) return obj.splice();
-	if ( _.isDate( obj ) ) return new Date( obj.getTime() );
-	if ( _.isFunction ( obj.clone ) ) return obj.clone();
-	var clone = _.isArray( obj ) ? obj.slice() : _.extend( {}, obj );
-	// clone array's extended props
-	if ( _.isArray( obj ) ) {
+/* called by 'removed' handler to remove physics body and constraints from world */
+THREE.Object3D.prototype.removeBodyAndConstraintsFromWorld = function( world ) {
 	
-		for ( var p in obj ) {
+	var body = this.body;
+	
+	if ( body ) {
 		
-			if ( obj.hasOwnProperty( p ) && _.isUndefined( clone[ p ] ) && isNaN( p ) ) clone[ p ] = obj[ p ];
+		// remove body
+		world.remove( body );
+		
+		// remove this body's collision event
+		body.removeEventListener( 'collide', world.collideEventDispatch );
+		
+		// remove constraints
+		for ( var i = body.constraints.length - 1; i >= 0; i-- ) {
+			
+			var constraint = body.constraints[ i ];
+			var otherBody = (constraint.bodyA == body ? constraint.bodyB : constraint.bodyA);
+			world.removeConstraint( constraint );
+			
+			if ( otherBody ) {
+			
+				var index = otherBody.constraints.indexOf( constraint );
+				if ( index >= 0 ) otherBody.constraints.splice( index, 1 );
+				
+			}		
+			
+		}
+		
+		body.constraints.length = 0;
+		this.body = null;
+		
+		for ( var i = 0; i < this.children.length; i ++) {
+			
+			this.children[ i ].removeBodyAndConstraintsFromWorld( world );
 			
 		}
 		
 	}
-	if ( !_.isUndefined( depth ) && ( depth > 0 ) ) {
-	
-	  for ( var key in clone ) {
-	  
-	    clone[ key ] = _deepClone( clone[ key ], depth - 1 );
-	    
-	  }
-	  
-	}
-	
-	return clone;
 	
 };
+
+/* copies this objects position and rotation to physics body */
+THREE.Object3D.prototype.syncBody = function() {
+	
+	if ( !this.body ) return;
+	
+	this.matrixWorldNeedsUpdate = true;
+	this.updateMatrixWorld();
+	
+	var worldPos = new THREE.Vector3(), worldScale = new THREE.Vector3();
+	var worldQuat = new THREE.Quaternion();
+	
+	this.matrixWorld.decompose( worldPos, worldQuat, worldScale );
+	
+	this.body.position.set( worldPos.x, worldPos.y, worldPos.z );
+	this.body.quaternion.set( worldQuat.x, worldQuat.y, worldQuat.z, worldQuat.w );
+	
+};
+
+/* copies this objects position and rotation to physics body */
+THREE.Object3D.prototype.syncToBody = function() {
+	
+	if ( !this.body || !this.parent ) return;
+	
+	this.matrix.getInverse( this.parent.matrixWorld );
+
+	var worldPos = new THREE.Vector3(), worldScale = new THREE.Vector3();
+	var worldQuat = new THREE.Quaternion();
+		
+	worldScale.setFromMatrixScale( this.matrixWorld );
+					
+	mat.compose( this.body.position, this.body.quaternion, worldScale );
+	this.matrix.multiply( mat );
+	
+	this.matrix.decompose( this.position, this.quaternion, this.scale );
+	this.rotation.setFromQuaternion( this.quaternion );
+	
+};
+
+
+
+
 
