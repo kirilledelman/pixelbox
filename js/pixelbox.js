@@ -5587,20 +5587,23 @@ THREE.Object3D.prototype.removeBodyAndConstraintsFromWorld = function ( world ) 
 /* copies this objects position and rotation to physics body */
 THREE.Object3D.prototype.syncBody = function () {
 	
-	if ( !this.body ) return;
-	
-	this.matrixWorldNeedsUpdate = true;
-	this.updateMatrixWorld();
-	
 	var worldPos = new THREE.Vector3(), worldScale = new THREE.Vector3();
 	var worldQuat = new THREE.Quaternion();
 	
-	this.matrixWorld.decompose( worldPos, worldQuat, worldScale );
+	return function () {
+		if ( !this.body ) return;
+		
+		this.matrixWorldNeedsUpdate = true;
+		this.updateMatrixWorld();
+		
+		this.matrixWorld.decompose( worldPos, worldQuat, worldScale );
+		
+		this.body.position.set( worldPos.x, worldPos.y, worldPos.z );
+		this.body.quaternion.set( worldQuat.x, worldQuat.y, worldQuat.z, worldQuat.w );
+		
+	};
 	
-	this.body.position.set( worldPos.x, worldPos.y, worldPos.z );
-	this.body.quaternion.set( worldQuat.x, worldQuat.y, worldQuat.z, worldQuat.w );
-	
-};
+}();
 
 /* copies this objects position and rotation to physics body */
 THREE.Object3D.prototype.syncToBody = function () {
@@ -5622,6 +5625,8 @@ THREE.Object3D.prototype.syncToBody = function () {
 		
 		this.matrix.decompose( this.position, this.quaternion, this.scale );
 		this.rotation.setFromQuaternion( this.quaternion );
+		
+		this.updateWorldMatrix();
 		
 	};
 
