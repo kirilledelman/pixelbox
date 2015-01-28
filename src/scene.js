@@ -343,12 +343,14 @@ THREE.PixelBoxScene.prototype.populateWith = function ( sceneDef, options ) {
 	
 	this.ambientLight.color.set( parseInt( value( sceneDef, 'ambient', '0' ), 16 ) );
 	
+	this.physics = sceneDef.physics;	
+	
 	// init world / physics
 	if ( sceneDef.physics === 'CANNON' ) {
 		
 		if ( !window['CANNON'] ) {
 			
-			throw "Scene definition has physics enabled, but CANNON library is not included.";
+			throw "Scene definition has physics set to CANNON, but CANNON library is not included. http://schteppe.github.io/cannon.js/";
 			
 		} else { 
 		
@@ -1331,15 +1333,22 @@ THREE.PixelBoxScene.prototype.makeGeometryObject = function ( layer, isCollShape
 	case 'Plane':
 	default:
 	
-		layer.widthSegments = isCollShape ? 5 : param( 'widthSegments', 1, 1 );
-		layer.heightSegments = isCollShape ? 5 : param( 'heightSegments', 1, 1 );
+		layer.widthSegments = isCollShape ? 1 : param( 'widthSegments', 1, 1 );
+		layer.heightSegments = isCollShape ? 1 : param( 'heightSegments', 1, 1 );
 		layer.width = param( 'width', 10 );
 		layer.height = param( 'height', 10 );
-		if ( !layer.inverted )
+		if ( !(layer.inverted || isCollShape) )
 			geom = new THREE.PlaneBufferGeometry( layer.width, layer.height,layer.widthSegments, layer.heightSegments );
 		else 
 			geom = new THREE.PlaneGeometry( layer.width, layer.height,layer.widthSegments, layer.heightSegments );
 			
+		if ( isCollShape ) { 
+			
+			var g2 = new THREE.CylinderGeometry( 0, 2, 5, 3, 1, true );
+			geom.merge( g2, new THREE.Matrix4().makeRotationX( Math.PI * 0.5 ), 0 );
+			
+		}
+		
 		break;
 		
 	case 'Particle':
@@ -1516,20 +1525,214 @@ THREE.PixelBoxScene.prototype.linkObjects = function ( objs, top, skipProps ) {
 		// add bodies to world and create constraints
 		if ( this.world && obj.physics && obj.body ) {
 			
-			this.CANNON_addConstraints( obj, dereferenceObject, (nearestTemplate ? nearestTemplate : top) );
+			// if ( this.physics === 'CANNON' ) {
+				
+				this.CANNON_addConstraints( obj, dereferenceObject, (nearestTemplate ? nearestTemplate : top) );
+			
+			// }
 			
 		}
 				
 	}
 	
 	
-	if ( this.world ) { 
+	if ( this.world && this.physics === 'CANNON') { 
 		
 		this.CANNON_linkMaterials();
 		
 	}
 	
 };
+
+/* ================================================================================ CANNON specific */
+
+THREE.PixelBoxScene.prototype.CANNON_initObjectPhysics = function ( obj3d, layer ) {
+	
+	// world space coords
+	var worldPos = new THREE.Vector3();
+	var worldQuat = new THREE.Quaternion();
+	var worldScale = new THREE.Vector3();
+	var localScale = new THREE.Vector3();
+	var rot = new THREE.Euler(), degToRad = Math.PI / 180;
+	
+	obj3d.matrixWorld.decompose( worldPos, worldQuat, worldScale );
+
+	// create body	
+	var bodyType = (obj3d.def.bodyType == "1") ? CANNON.Body.STATIC : ((obj3d.def.bodyType == "2") ? CANNON.Body.KINEMATIC : CANNON.Body.DYNAMIC);
+	var opts = {
+		position: new CANNON.Vec3( worldPos.x, worldPos.y, worldPos.z ),
+		quaternion: new CANNON.Quaternion( worldQuat.x, worldQuat.y, worldQuat.z, worldQuat.w ),
+		velocity: new CANNON.Vec3(),	
+		angularVelocity: new CANNON.Vec3(),
+		mass: (bodyType == CANNON.Body.DYNAMIC) ? (obj3d.def.mass ? obj3d.def.mass : 0) : 0,
+		type: bodyType,
+		linearDamping: obj3d.def.linearDamping ? obj3d.def.linearDamping : 0
+	};
+	
+	if ( obj3d.def.velocity != undefined ) opts.velocity.set( obj3d.def.velocity[ 0 ], obj3d.def.velocity[ 1 ], obj3d.def.velocity[ 2 ] );
+	if ( obj3d.def.angularVelocity != undefined ) opts.angularVelocity.set( obj3d.def.angularVelocity[ 0 ], obj3d.def.angularVelocity[ 1 ], obj3d.def.angularVelocity[ 2 ] );
+	
+	var body = new CANNON.Body( opts );
+	body.collisionFilterGroup = obj3d.def.collisionGroup;
+	body.collisionFilterMask = obj3d.def.collisionMask;
+	body.collisionResponse = !obj3d.def.sensor;
+	body.fixedRotation = !!obj3d.def.fixedRotation;
+	body.constraints = [];
+	
+	// material
+	var matName = "M_" + obj3d.def.friction + "_" + obj3d.def.restitution;
+	var mat = this.world.allMaterials[ matName ];
+	if ( !mat ) {
+		
+		this.world.allMaterials[ matName ] = mat = new CANNON.Material( matName );
+		mat.friction = obj3d.def.friction;
+		mat.restitution = obj3d.def.restitution;
+		
+	}
+	
+	body.material = mat;
+	
+	// add shapes
+	var numShapes = 0;
+	for ( var i = 0, ns = layer.layers.length; i < ns; i++) { 
+		
+		var shapeDef = layer.layers[ i ];
+		if ( !shapeDef.collisionShape ) continue;
+		
+		numShapes++;
+		
+		if ( shapeDef.position ) { 
+		
+			worldPos.set( shapeDef.position[0], shapeDef.position[1], shapeDef.position[2] );
+		
+		} else {
+			
+			worldPos.set( 0, 0, 0 );
+			
+		}
+
+		if ( shapeDef.scale ) { 
+		
+			if ( typeof( shapeDef.scale ) == 'number' ) localScale.set( shapeDef.scale, shapeDef.scale, shapeDef.scale );
+			else localScale.set( shapeDef.scale[0], shapeDef.scale[1], shapeDef.scale[2] );
+		
+		} else {
+			
+			localScale.set( 1, 1, 1 );
+			
+		}
+
+		localScale.multiply( worldScale );
+
+		if ( shapeDef.rotation ) {
+		 
+			rot.set( shapeDef.rotation[0] * degToRad, shapeDef.rotation[1] * degToRad, shapeDef.rotation[2] * degToRad );
+			worldQuat.setFromEuler( rot );
+		
+		} else {
+			
+			worldQuat.set( 0, 0, 0, 1 );
+			
+		}
+		
+		var shape = null;
+		switch ( shapeDef.mesh ) {
+			
+		case 'Plane':
+		
+			shape = new CANNON.Plane();
+			break;
+		
+		case 'Box':
+			
+			shape = new CANNON.Box( new CANNON.Vec3( shapeDef.width * 0.5 * localScale.x, shapeDef.height * 0.5 * localScale.y, shapeDef.depth * 0.5 * localScale.z) );
+			break;
+		
+		case 'Sphere':
+		
+			var maxScale = Math.max( localScale.x, localScale.y, localScale.z );
+			shape = new CANNON.Sphere( shapeDef.radius * maxScale );
+			break;
+			
+		case 'Cylinder':
+		
+			var maxScaleXZ = Math.max( localScale.x, localScale.z );
+			shape = new CANNON.Cylinder( shapeDef.radiusTop * maxScaleXZ, shapeDef.radiusBottom * maxScaleXZ, shapeDef.height * localScale.y, shapeDef.radiusSegments );
+			var rotateQuat = new THREE.Quaternion();
+			rotateQuat.setFromAxisAngle( new THREE.Vector3( 1, 0, 0 ),  -Math.PI * 0.5 );
+			worldQuat.multiply( rotateQuat );
+			break;
+			
+		case 'Particle':
+			
+			shape = new CANNON.Particle();
+			break;
+			
+		}
+		
+		if ( shape ) { 
+			
+			worldPos.multiply( worldScale );
+			
+			body.addShape( shape, new CANNON.Vec3( worldPos.x, worldPos.y, worldPos.z ), new CANNON.Quaternion( worldQuat.x, worldQuat.y, worldQuat.z, worldQuat.w ) );
+			
+		}
+		
+	}	
+	
+	if ( !numShapes ) {
+		
+		obj3d.physics = false;
+		return;
+		
+	}
+	
+	obj3d.body = body;
+	body.obj3d = obj3d;	
+	
+};
+
+THREE.PixelBoxScene.prototype.CANNON_tick = function ( delta ) {
+	
+	this.world.step( Math.min( delta, 0.1 ) );
+		
+	var mat = new THREE.Matrix4(), worldScale = new THREE.Vector3();
+	
+	// copy new positions / rotations back to objects
+	for ( var i = this.world.bodies.length - 1; i >= 0; i-- ) {
+		
+		var body = this.world.bodies[ i ];
+		
+		if ( body.obj3d ) {
+			
+			var obj3d = body.obj3d;
+			var objParent = obj3d.parent;
+			
+			if ( !objParent || objParent == this ) {
+				
+				obj3d.matrix.identity();
+				
+			} else {
+			
+				obj3d.matrix.getInverse( objParent.matrixWorld );
+				
+			}
+			
+			worldScale.setFromMatrixScale( obj3d.matrixWorld );
+							
+			mat.compose( body.position, body.quaternion, worldScale );
+			obj3d.matrix.multiply( mat );
+			
+			obj3d.matrix.decompose( obj3d.position, obj3d.quaternion, obj3d.scale );
+			obj3d.rotation.setFromQuaternion( obj3d.quaternion );
+			
+			// body.obj3d.syncToBody();
+			
+		}
+		
+	}
+	
+}
 
 // adds object body and creates/adds constraints from definition to Cannon world
 THREE.PixelBoxScene.prototype.CANNON_addConstraints = function ( obj, dereferenceObject, dereferenceTopObject ) {
@@ -1541,6 +1744,12 @@ THREE.PixelBoxScene.prototype.CANNON_addConstraints = function ( obj, dereferenc
 	if ( isAddedToScene && this.world.bodies.indexOf( obj.body ) < 0 ) {
 		
 		this.world.addBody( obj.body );
+
+		if ( obj.def && obj.def.sleep ) {
+			
+			obj.body.sleep();
+			
+		}
 
 		if ( !obj.body.hasEventListener( 'collide', this.world.collideEventDispatch ) ) { 
 			
@@ -1775,7 +1984,7 @@ THREE.PixelBoxScene.prototype.CANNON_linkMaterials = function () {
 
 THREE.PixelBoxScene.prototype.CANNON_collideEventDispatch = function( e ) {
 	
-	// console.log( e.contact );
+	console.log( e.contact );
 	// TODO - after we can receive collide end event
 	
 };
@@ -1832,7 +2041,7 @@ THREE.PixelBoxScene.prototype.dispose = function ( unloadAssets ) {
 	
 };
 
-/* ================================================================================ CANNON physics hooks */
+/* ================================================================================ physics hooks */
 
 // creates object's body from shapes
 THREE.PixelBoxScene.prototype.initObjectPhysics = function( obj3d, layer ) {
@@ -1846,147 +2055,16 @@ THREE.PixelBoxScene.prototype.initObjectPhysics = function( obj3d, layer ) {
 	obj3d.def.friction = (layer.friction !== undefined) ? layer.friction : 0.3;
 	obj3d.def.restitution = (layer.restitution !== undefined) ? layer.restitution : 0.3;
 	obj3d.def.sensor = (layer.sensor !== undefined) ? layer.sensor : false;
+	obj3d.def.sleep = (layer.sleep !== undefined) ? layer.sleep : false;
 	
 	if ( this.world && layer.layers ) {
 	
-		// world space coords
-		var worldPos = new THREE.Vector3();
-		var worldQuat = new THREE.Quaternion();
-		var worldScale = new THREE.Vector3();
-		var localScale = new THREE.Vector3();
-		var rot = new THREE.Euler(), degToRad = Math.PI / 180;
-		
-		obj3d.matrixWorld.decompose( worldPos, worldQuat, worldScale );
+		// if ( this.physics === 'CANNON' ) { */
+			
+			this.CANNON_initObjectPhysics( obj3d, layer );
+			
+		// }
 	
-		// create body	
-		var bodyType = (obj3d.def.bodyType == "1") ? CANNON.Body.STATIC : ((obj3d.def.bodyType == "2") ? CANNON.Body.KINEMATIC : CANNON.Body.DYNAMIC);
-		var opts = {
-			position: new CANNON.Vec3( worldPos.x, worldPos.y, worldPos.z ),
-			quaternion: new CANNON.Quaternion( worldQuat.x, worldQuat.y, worldQuat.z, worldQuat.w ),
-			velocity: new CANNON.Vec3( obj3d.def.velocity[ 0 ], obj3d.def.velocity[ 1 ], obj3d.def.velocity[ 2 ] ),	
-			angularVelocity: new CANNON.Vec3( obj3d.def.angularVelocity[ 0 ], obj3d.def.angularVelocity[ 1 ], obj3d.def.angularVelocity[ 2 ] ),
-			mass: (bodyType == CANNON.Body.DYNAMIC) ? (obj3d.def.mass ? obj3d.def.mass : 0) : 0,
-			type: bodyType,
-			linearDamping: obj3d.def.linearDamping ? obj3d.def.linearDamping : 0
-		};
-		var body = new CANNON.Body( opts );
-		body.collisionFilterGroup = obj3d.def.collisionGroup;
-		body.collisionFilterMask = obj3d.def.collisionMask;
-		body.collisionResponse = !obj3d.def.sensor;
-		body.fixedRotation = obj3d.def.fixedRotation;
-		body.constraints = [];
-		
-		// material
-		var matName = "M_" + obj3d.def.friction + "_" + obj3d.def.restitution;
-		var mat = this.world.allMaterials[ matName ];
-		if ( !mat ) {
-			
-			this.world.allMaterials[ matName ] = mat = new CANNON.Material( matName );
-			mat.friction = obj3d.def.friction;
-			mat.restitution = obj3d.def.restitution;
-			
-		}
-		
-		body.material = mat;
-		
-		// add shapes
-		var numShapes = 0;
-		for ( var i = 0, ns = layer.layers.length; i < ns; i++) { 
-			
-			var shapeDef = layer.layers[ i ];
-			if ( !shapeDef.collisionShape ) continue;
-			
-			numShapes++;
-			
-			if ( shapeDef.position ) { 
-			
-				worldPos.set( shapeDef.position[0], shapeDef.position[1], shapeDef.position[2] );
-			
-			} else {
-				
-				worldPos.set( 0, 0, 0 );
-				
-			}
-
-			if ( shapeDef.scale ) { 
-			
-				if ( typeof( shapeDef.scale ) == 'number' ) localScale.set( shapeDef.scale, shapeDef.scale, shapeDef.scale );
-				else localScale.set( shapeDef.scale[0], shapeDef.scale[1], shapeDef.scale[2] );
-			
-			} else {
-				
-				localScale.set( 1, 1, 1 );
-				
-			}
-
-			localScale.multiply( worldScale );
-
-			if ( shapeDef.rotation ) {
-			 
-				rot.set( shapeDef.rotation[0] * degToRad, shapeDef.rotation[1] * degToRad, shapeDef.rotation[2] * degToRad );
-				worldQuat.setFromEuler( rot );
-			
-			} else {
-				
-				worldQuat.set( 0, 0, 0, 1 );
-				
-			}
-			
-			var shape = null;
-			switch ( shapeDef.mesh ) {
-				
-			case 'Plane':
-			
-				shape = new CANNON.Plane();
-				break;
-			
-			case 'Box':
-				
-				shape = new CANNON.Box( new CANNON.Vec3( shapeDef.width * 0.5 * localScale.x, shapeDef.height * 0.5 * localScale.y, shapeDef.depth * 0.5 * localScale.z) );
-				break;
-			
-			case 'Sphere':
-			
-				var maxScale = Math.max( localScale.x, localScale.y, localScale.z );
-				shape = new CANNON.Sphere( shapeDef.radius * maxScale );
-				break;
-				
-			case 'Cylinder':
-			
-				var maxScaleXZ = Math.max( localScale.x, localScale.z );
-				shape = new CANNON.Cylinder( shapeDef.radiusTop * maxScaleXZ, shapeDef.radiusBottom * maxScaleXZ, shapeDef.height * localScale.y, shapeDef.radiusSegments );
-				var rotateQuat = new THREE.Quaternion();
-				rotateQuat.setFromAxisAngle( new THREE.Vector3( 1, 0, 0 ),  -Math.PI * 0.5 );
-				worldQuat.multiply( rotateQuat );
-				break;
-				
-			case 'Particle':
-				
-				shape = new CANNON.Particle();
-				break;
-				
-			}
-			
-			if ( shape ) { 
-				
-				worldPos.multiply( worldScale );
-				
-				body.addShape( shape, new CANNON.Vec3( worldPos.x, worldPos.y, worldPos.z ), new CANNON.Quaternion( worldQuat.x, worldQuat.y, worldQuat.z, worldQuat.w ) );
-				
-			}
-			
-		}	
-		
-		if ( !numShapes ) {
-			
-			obj3d.physics = false;
-			return;
-			
-		}
-		
-		obj3d.body = body;
-		body.obj3d = obj3d;
-		
 		// add null collide func if none already specified
 		if ( obj3d.onCollideStart === undefined ) obj3d.onCollideStart = null;
 		if ( obj3d.onCollideEnd === undefined ) obj3d.onCollideEnd = null;
@@ -2032,41 +2110,11 @@ THREE.PixelBoxScene.prototype.render = function ( delta, rtt ) {
 
 	if ( this.world ) {
 		
-		this.world.step( Math.min( delta, 0.1 ) );
-		
-		var mat = new THREE.Matrix4(), worldScale = new THREE.Vector3();
-		
-		// copy new positions / rotations back to objects
-		for ( var i = this.world.bodies.length - 1; i >= 0; i-- ) {
+		// if( this.physics === 'CANNON' ) {
 			
-			var body = this.world.bodies[ i ];
+			this.CANNON_tick( delta );
 			
-			if ( body.obj3d ) {
-				
-				var obj3d = body.obj3d;
-				var objParent = obj3d.parent;
-				
-				if ( !objParent || objParent == this ) {
-					
-					obj3d.matrix.identity();
-					
-				} else {
-				
-					obj3d.matrix.getInverse( objParent.matrixWorld );
-					
-				}
-				
-				worldScale.setFromMatrixScale( obj3d.matrixWorld );
-								
-				mat.compose( body.position, body.quaternion, worldScale );
-				obj3d.matrix.multiply( mat );
-				
-				obj3d.matrix.decompose( obj3d.position, obj3d.quaternion, obj3d.scale );
-				obj3d.rotation.setFromQuaternion( obj3d.quaternion );
-				
-			}
-			
-		}
+		// } 
 		
 	}
 

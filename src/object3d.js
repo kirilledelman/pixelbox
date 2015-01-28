@@ -486,7 +486,7 @@ THREE.Object3D.prototype.stopTween = function ( obj, snapToFinish, callDone ) {
 };
 
 /* called by 'added' handler to add physics body and constraints to world */
-THREE.Object3D.prototype.addBodyAndConstraintsToWorld = function( world ) {
+THREE.Object3D.prototype.addBodyAndConstraintsToWorld = function ( world ) {
 	
 	var body = this.body;
 	
@@ -528,7 +528,7 @@ THREE.Object3D.prototype.addBodyAndConstraintsToWorld = function( world ) {
 };
 
 /* called by 'removed' handler to remove physics body and constraints from world */
-THREE.Object3D.prototype.removeBodyAndConstraintsFromWorld = function( world ) {
+THREE.Object3D.prototype.removeBodyAndConstraintsFromWorld = function ( world ) {
 	
 	var body = this.body;
 	
@@ -570,7 +570,7 @@ THREE.Object3D.prototype.removeBodyAndConstraintsFromWorld = function( world ) {
 };
 
 /* copies this objects position and rotation to physics body */
-THREE.Object3D.prototype.syncBody = function() {
+THREE.Object3D.prototype.syncBody = function () {
 	
 	if ( !this.body ) return;
 	
@@ -588,24 +588,30 @@ THREE.Object3D.prototype.syncBody = function() {
 };
 
 /* copies this objects position and rotation to physics body */
-THREE.Object3D.prototype.syncToBody = function() {
-	
-	if ( !this.body || !this.parent ) return;
-	
-	this.matrix.getInverse( this.parent.matrixWorld );
+THREE.Object3D.prototype.syncToBody = function () {
 
+	var mat = new THREE.Matrix4();
 	var worldPos = new THREE.Vector3(), worldScale = new THREE.Vector3();
 	var worldQuat = new THREE.Quaternion();
+	
+	return function () {
 		
-	worldScale.setFromMatrixScale( this.matrixWorld );
-					
-	mat.compose( this.body.position, this.body.quaternion, worldScale );
-	this.matrix.multiply( mat );
-	
-	this.matrix.decompose( this.position, this.quaternion, this.scale );
-	this.rotation.setFromQuaternion( this.quaternion );
-	
-};
+		if ( !this.body || !this.parent ) return;
+		
+		this.matrix.getInverse( this.parent.matrixWorld );
+			
+		worldScale.setFromMatrixScale( this.matrixWorld );
+						
+		mat.compose( this.body.position, this.body.quaternion, worldScale );
+		this.matrix.multiply( mat );
+		
+		this.matrix.decompose( this.position, this.quaternion, this.scale );
+		this.rotation.setFromQuaternion( this.quaternion );
+		
+		this.updateWorldMatrix()
+	};
+
+}();
 
 
 

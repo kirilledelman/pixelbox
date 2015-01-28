@@ -227,6 +227,8 @@ EditSceneScene.prototype = {
 		// ignore right button
 		if(e.button === 2 || !this.canvasInteractionsEnabled) return;
 		
+		this.mouseDownTime = (new Date()).getTime();
+		
 		if(this.insertingPoint){
 			this.endInsertPoint(true);
 			e.stopPropagation();
@@ -291,7 +293,7 @@ EditSceneScene.prototype = {
 		} else if(!this.mouseMoved && e.target.nodeName == 'CANVAS' && e.button === 0){
 			// clicked on object
 			if(this.mouseDownOnObject){
-				this.objectClicked(this.mouseDownOnObject);
+				this.objectClicked(this.mouseDownOnObject, ((new Date()).getTime() - this.mouseDownTime > 500));
 			// clicked in empty space
 			} else if(this.objectPickMode){
 				this.objectPickMode(null);
@@ -859,6 +861,12 @@ EditSceneScene.prototype = {
 	},
 	
 	deleteSelection:function(){
+	
+		if(this.objectPickMode) {
+			this.objectPickMode(null);
+			return;
+		}
+	
 		var doArr = [];
 		var undoArr = [];
 		var toDelete = this.selectedObjects.concat([]);
@@ -1333,6 +1341,7 @@ EditSceneScene.prototype = {
 	      	$(this).dialog("close"); 
 	      },
 	      "Restore": function() {
+      		editScene.resetAssets();
 	      	editScene.newDocFromData(JSON.parse(data));
 	      	$(this).dialog("close"); 
 	      } },
@@ -2118,7 +2127,34 @@ EditSceneScene.prototype = {
 		return 1;
 	},
 	
-	refreshScene:function(){
+	filterSceneChanged: function(e){
+		var search = e.target.value.toLowerCase().trim();
+		if(search.length) {
+			editScene.refreshScene(true);
+			$('#scene').addClass('filter');
+			$('#scene div.row').each( function(i, el){
+				var lbl = $('label:first', el);
+				if(lbl.text().toLowerCase().indexOf(search) >= 0){
+					$(el).removeClass('filtered');
+				} else {
+					$(el).addClass('filtered');
+				}
+			});
+		} else {
+			$('#scene').removeClass('filter');
+			editScene.refreshScene();
+			$('#scene div.row').removeClass('filtered');
+		}
+	},
+	
+	clearSceneFilter: function(e){
+		$('#filter-scene').val('');
+		$('#scene').removeClass('filter');
+		$('#scene div.row').removeClass('filtered');
+		editScene.refreshScene();
+	},
+	
+	refreshScene:function( flatList ){
 		var list = $('#scene-list');
 		
 		var sceneRow = $('#scene', list);
@@ -2235,7 +2271,7 @@ EditSceneScene.prototype = {
 			
 			// add to parent row
 			var prow = sceneRow;
-			if(obj3d.parent != editScene.container){
+			if(!flatList && obj3d.parent != editScene.container){
 				prow = $('#row-'+obj3d.parent.uuid, list);
 			}
 			prow.append(obj3d.htmlRow);
@@ -2243,6 +2279,7 @@ EditSceneScene.prototype = {
 	},
 
 	dragRowStarted:function(event, ui){
+		editScene.clearSceneFilter(true);
 		var draggedObj = editScene.container.getObjectByUUID(ui.helper.attr('alt'),true);
 		this.autoScrollTimer = setInterval(editScene.autoScrollScenePanel.bind(ui.helper), 100);
 		
@@ -2407,6 +2444,8 @@ EditSceneScene.prototype = {
 		var rid = row.attr('id');
 		var uuid = rid.substr(4);
 		
+		if(row.hasClass('filtered')) return;
+		
 		if(targ.hasClass('toggle')){ return; }
 		
 		// find object
@@ -2422,6 +2461,8 @@ EditSceneScene.prototype = {
 		var row = targ.closest('.row');
 		var rid = row.attr('id');
 		var uuid = rid.substr(4);
+		
+		if(row.hasClass('filtered')) return;
 		
 		e.stopPropagation();
 		
@@ -2468,6 +2509,7 @@ EditSceneScene.prototype = {
 				// select up to this one
 				var sibs = prevSib.nextUntil(row, '.row').add(row);
 				sibs.each(function(i, el){
+					if($(el).hasClass('filtered')) return;
 					var uuid = el.id.substr(4);
 					var obj = editScene.container.getObjectByUUID(uuid);
 					editScene.selectObject(obj, true);
@@ -2477,6 +2519,7 @@ EditSceneScene.prototype = {
 				if(prevSib.length){
 					var sibs = prevSib.prevUntil(row, '.row').add(row);
 					sibs.each(function(i, el){
+						if($(el).hasClass('filtered')) return;
 						var uuid = el.id.substr(4);
 						var obj = editScene.container.getObjectByUUID(uuid);
 						editScene.selectObject(obj, true);
@@ -2497,7 +2540,7 @@ EditSceneScene.prototype = {
 		editScene.selectionChanged();
 	},
 	
-	objectClicked:function(object){
+	objectClicked:function(object, longClick){
 		if(object){
 			// find topmost non-omit object
 			if(object.omit){
@@ -2507,11 +2550,23 @@ EditSceneScene.prototype = {
 				}
 				if(object == this.container) return;
 			}
-		
-			// expand the scene tree
-			var collapsedParents = object.htmlRow.parents('div.row.collapsed');
-			collapsedParents.removeClass('collapsed').find('a.toggle:first').text('-');
 			
+			// long click will select first collapsed parent node
+			if(longClick) {
+				
+				var row = object.htmlRow.parents('div.row.collapsed:first');
+				if(row.length) {
+					var uuid = row.attr('id').substr(4);
+					object = editScene.container.getObjectByUUID(uuid);
+				}
+				
+			} else {
+		
+				// expand the scene tree
+				var collapsedParents = object.htmlRow.parents('div.row.collapsed');
+				collapsedParents.removeClass('collapsed').find('a.toggle:first').text('-');
+
+			}
 			// select
 			if(this.shift) this.selectObject(object, true);
 			else if(this.ctrl) this.selectObject(object, !object.selected);
@@ -4426,7 +4481,7 @@ EditSceneScene.prototype = {
 		var undoArr = [];
 		var prop = 'staticGroup';
 		val = val.replace(/\W+/g,'_'); // replace non-word chars with _
-		if(val.match(/^\d+/) || !val.length){ // prepend _ if starts with a digit
+		if(val.match(/^\d+/)){ // prepend _ if starts with a digit
 			val = '_'+val;
 		}
 		for(var i = 0; i < editScene.selectedObjects.length; i++){
@@ -4931,7 +4986,7 @@ EditSceneScene.prototype = {
 				if(picked !== undefined && !(picked instanceof THREE.LinePathHandle)){
 					var doArr = [];
 					var undoArr = [];
-					var pickedTemplate = picked.nearestTemplate();
+					var pickedTemplate = picked ? picked.nearestTemplate() : null;
 					for(var i = 0; i < editScene.selectedObjects.length; i++){
 						var obj = editScene.selectedObjects[i];
 						if(obj.isAnchor) continue;
@@ -5545,7 +5600,8 @@ EditSceneScene.prototype = {
 				if(obj.def.collisionMask === undefined) obj.def.collisionMask = 1;
 				if(obj.def.friction === undefined) obj.def.friction = 0.3;
 				if(obj.def.restitution === undefined) obj.def.restitution = 0.3;
-				if(obj.def.mass === undefined) obj.mass = 10;
+				if(obj.def.mass === undefined) obj.def.mass = 10;
+				if(obj.def.sleep === undefined) obj.def.sleep = false;
 			}
 			doArr.push([obj, val]);
 			undoArr.push([obj, obj[prop]]);
@@ -5759,6 +5815,21 @@ EditSceneScene.prototype = {
 			var obj = editScene.selectedObjects[i];
 			doArr.push([obj, val]);
 			undoArr.push([obj, !!obj.def.sensor]);
+		}
+		editScene.addUndo({name:prop, mergeable: true, undo:[editScene.setDefProperty, undoArr, prop],
+											redo:[editScene.setDefProperty, doArr, prop]});
+		editScene.setDefProperty(doArr, prop);
+		editScene.refreshProps();
+	},
+	
+	sleepChanged:function(val){
+		var doArr = [];
+		var undoArr = [];
+		var prop = 'sleep';
+		for(var i = 0; i < editScene.selectedObjects.length; i++){
+			var obj = editScene.selectedObjects[i];
+			doArr.push([obj, val]);
+			undoArr.push([obj, !!obj.def.sleep]);
 		}
 		editScene.addUndo({name:prop, mergeable: true, undo:[editScene.setDefProperty, undoArr, prop],
 											redo:[editScene.setDefProperty, doArr, prop]});
@@ -6203,6 +6274,9 @@ EditSceneScene.prototype = {
 					if( this.doc.physics == 'CANNON' ){
 						$('#geometry-type option[value="Plane"]').text('Infinite Plane');
 						$('#geometry-type option.cannon-only').show();
+					} else {
+						$('#geometry-type option[value="Plane"]').text('Plane');
+						$('#geometry-type option.cannon-only').hide();					
 					}
 				} else {
 					$('#geometry-type option[value="Plane"]').text('Plane');
@@ -6468,6 +6542,13 @@ EditSceneScene.prototype = {
 			
 			// physics properties
 			if(obj.physics){
+				
+				if (this.doc.physics == 'CANNON'){			
+					$('#phys-type option.cannon-only').show();
+				} else {
+					$('#phys-type option.cannon-only').hide();
+				}
+			
 				// body type
 				if(prevPhysObj && prevPhysObj.def.bodyType != obj.def.bodyType){
 					if(!mults['phys-type']){
@@ -6514,12 +6595,18 @@ EditSceneScene.prototype = {
 				} else if(!mults['phys-fixed']){
 					$('#phys-fixed')[0].checked = obj.def.fixedRotation;
 				}
-				// fixed rot
+				// sensor
 				if(prevPhysObj && prevPhysObj.def.sensor != obj.def.sensor){
 					$('#phys-sensor').addClass('multiple')[0].checked = false;
 					mults['phys-sensor'] = true;
 				} else if(!mults['phys-sensor']){
 					$('#phys-sensor')[0].checked = obj.def.sensor;
+				}
+				if(prevPhysObj && prevPhysObj.def.sleep != obj.def.sleep){
+					$('#phys-sleep').addClass('multiple')[0].checked = false;
+					mults['phys-sleep'] = true;
+				} else if(!mults['phys-sleep']){
+					$('#phys-sleep')[0].checked = obj.def.sleep;
 				}
 				// velocity
 				if(prevPhysObj && prevPhysObj.def.velocity[0] != obj.def.velocity[0]){
@@ -6721,7 +6808,7 @@ EditSceneScene.prototype = {
 			<li><input type="radio" name="show-labels" value="all" id="show-labels-all"/><label for="show-labels-all" class="pad5">Show all labels</label></li>\
 			<li><input type="radio" name="show-labels" value="selected" id="show-labels-selected"/><label for="show-labels-selected" class="pad5">Selected objects only</label></li>\
 			<li><input type="radio" name="show-labels" value="none" id="show-labels-none"/><label for="show-labels-none" class="pad5">No labels</label></li><hr/>\
-			<li id="reset-zoom">Reset zoom</li>\
+			<hr/><li id="reset-zoom">Reset zoom</li>\
 		</ul>\
 		<div class="editor absolute-pos upper-right pad5" id="undo-buttons">\
 			<button id="redo">Redo</button>&nbsp;\
@@ -6745,7 +6832,7 @@ EditSceneScene.prototype = {
 
 		// default label mode
 		this.labelsVisible = localStorage_getItem('labelsVisible');
-		if(this.labelsVisible === null) this.labelsVisible = 2; // 0 = none, 1 = selected, 2 = all
+		if(this.labelsVisible === null) this.labelsVisible = 1; // 0 = none, 1 = selected, 2 = all
 		else this.labelsVisible = parseInt(this.labelsVisible);
 		$('#show-labels-'+['none','selected','all'][this.labelsVisible]).attr('checked', 'checked');
 		$('#view-submenu input[name=show-labels]').change(this.labelsVisibleChanged);
@@ -6845,7 +6932,7 @@ EditSceneScene.prototype = {
 			<label for="scene-max-shadows" class="w32 pad5 right-align">Max shadows</label><input tabindex="3" type="text" class="center" id="scene-max-shadows" size="1"/><span class="separator-left"/>\
 			<select id="scene-physics" class="sub">\
 			<option value="0">No physics</option>\
-			<option value="CANNON">CANNON.js</option>\
+			<option value="CANNON">CANNON</option>\
 			</select><br/>\
 			<label class="w32 right-align pad5">Clear color</label><div id="scene-color" class="color-swatch"/><br/>\
 			<label class="w32 right-align pad5">Ambient</label><div id="scene-ambient-color" class="color-swatch"/><br/>\
@@ -6953,7 +7040,7 @@ EditSceneScene.prototype = {
 			<label for="phys-type" class="w31 right-align">Body type&nbsp;</label><select id="phys-type">\
 			<option value="0">Dynamic</option>\
 			<option value="1">Static</option>\
-			<option value="2">Kinematic</option>\
+			<option value="2" class="cannon-only">Kinematic</option>\
 			</select><hr/>\
 			<span class="sub w5">\
 			<a id="phys-add-shape">+ add collision shape</a></span>\
@@ -6963,15 +7050,16 @@ EditSceneScene.prototype = {
 			<label for="phys-mass" class="w31 right-align">Mass</label><input tabindex="0" type="text" class="center" id="phys-mass" size="1"/>\
 			<label for="phys-damping" class="right-align">&nbsp;&nbsp;Linear Damping</label><input tabindex="1" type="text" class="center" id="phys-damping" size="1"/><br/>\
 			<hr/>\
-			<input tabindex="2" type="checkbox" id="phys-fixed"/><label for="phys-fixed" class="w4">Fixed Rotation</label>\
+			<input tabindex="2" type="checkbox" id="phys-fixed"/><label for="phys-fixed" class="w33">Fixed Rotation</label>\
 			<input tabindex="3" type="checkbox" id="phys-sensor"/><label for="phys-sensor" class="w3">Sensor</label>\
+			<input tabindex="4" type="checkbox" id="phys-sleep"/><label for="phys-sleep" class="w3">Sleep</label>\
 			<hr/>\
-			<label for="phys-v0" class="w31 right-align">Velocity X</label><input tabindex="4" type="text" class="center vel" id="phys-v0" size="1"/>\
-			<label for="prop-rv0" class="right-align">&nbsp;Rot Velocity X</label><input tabindex="7" type="text" class="center rvel" id="phys-rv0" size="1"/>\
-			<label for="phys-v1" class="w31 right-align">Velocity Y</label><input tabindex="5" type="text" class="center vel" id="phys-v1" size="1"/>\
-			<label for="prop-rv1" class="right-align">&nbsp;Rot Velocity Y</label><input tabindex="8" type="text" class="center rvel" id="phys-rv1" size="1"/>\
-			<label for="phys-v2" class="w31 right-align">Velocity Z</label><input tabindex="6" type="text" class="center vel" id="phys-v2" size="1"/>\
-			<label for="prop-rv2" class="right-align">&nbsp;Rot Velocity Z</label><input tabindex="9" type="text" class="center rvel" id="phys-rv2" size="1"/>\
+			<label for="phys-v0" class="w31 right-align">Velocity X</label><input tabindex="5" type="text" class="center vel" id="phys-v0" size="1"/>\
+			<label for="prop-rv0" class="right-align">&nbsp;Rot Velocity X</label><input tabindex="8" type="text" class="center rvel" id="phys-rv0" size="1"/>\
+			<label for="phys-v1" class="w31 right-align">Velocity Y</label><input tabindex="6" type="text" class="center vel" id="phys-v1" size="1"/>\
+			<label for="prop-rv1" class="right-align">&nbsp;Rot Velocity Y</label><input tabindex="9" type="text" class="center rvel" id="phys-rv1" size="1"/>\
+			<label for="phys-v2" class="w31 right-align">Velocity Z</label><input tabindex="7" type="text" class="center vel" id="phys-v2" size="1"/>\
+			<label for="prop-rv2" class="right-align">&nbsp;Rot Velocity Z</label><input tabindex="10" type="text" class="center rvel" id="phys-rv2" size="1"/>\
 			<hr/>\
 			<label class="w32 pad5 right-align">Coll. group</label>\
 			<input name="collisionGroup" type="checkbox" alt="0" class="coll"/>\
@@ -6981,7 +7069,8 @@ EditSceneScene.prototype = {
 			<input name="collisionGroup" type="checkbox" alt="4" class="coll"/>\
 			<input name="collisionGroup" type="checkbox" alt="5" class="coll"/>\
 			<input name="collisionGroup" type="checkbox" alt="6" class="coll"/>\
-			<input name="collisionGroup" type="checkbox" alt="7" class="coll"/><br/>\
+			<input name="collisionGroup" type="checkbox" alt="7" class="coll"/>\
+			<input name="collisionGroup" type="checkbox" alt="8" class="coll"/><br/>\
 			<label class="w32 pad5 right-align">Collides with</label>\
 			<input name="collisionMask" type="checkbox" alt="0" class="coll"/>\
 			<input name="collisionMask" type="checkbox" alt="1" class="coll"/>\
@@ -6991,9 +7080,10 @@ EditSceneScene.prototype = {
 			<input name="collisionMask" type="checkbox" alt="5" class="coll"/>\
 			<input name="collisionMask" type="checkbox" alt="6" class="coll"/>\
 			<input name="collisionMask" type="checkbox" alt="7" class="coll"/>\
+			<input name="collisionMask" type="checkbox" alt="8" class="coll"/>\
 			<hr/>\
-			<label for="phys-friction" class="w31 right-align">Friction</label><input tabindex="10" type="text" class="center" id="phys-friction" size="1"/>\
-			<label for="phys-restitution" class="right-align">&nbsp;&nbsp;Restitution</label><input tabindex="11" type="text" class="center" id="phys-restitution" size="1"/>\
+			<label for="phys-friction" class="w31 right-align">Friction</label><input tabindex="11" type="text" class="center" id="phys-friction" size="1"/>\
+			<label for="phys-restitution" class="right-align">&nbsp;&nbsp;Restitution</label><input tabindex="12" type="text" class="center" id="phys-restitution" size="1"/>\
 			</div>');		
 
 		$('#phys-add-shape').click(this.addCollisionShape.bind(this));
@@ -7013,6 +7103,7 @@ EditSceneScene.prototype = {
 		$('#panel-physics #phys-damping').spinner({step:0.05, min:0, change:vc, stop:vc});
 		$('#phys-fixed').change(checkBoxValueChanged(this.fixedRotationChanged));
 		$('#phys-sensor').change(checkBoxValueChanged(this.sensorChanged));
+		$('#phys-sleep').change(checkBoxValueChanged(this.sleepChanged));
 		$('#phys-type').change(this.bodyTypeChanged.bind(this));
 		$('#panel-physics input.coll').change(this.collisionChanged.bind(this));
 
@@ -7555,6 +7646,8 @@ EditSceneScene.prototype = {
 		<div id="scene-list"></div>\
 		<hr/>\
 		<button id="scene-delete">Delete</button>\
+		<span class="separator-left right-align w7"><input type="text" id="filter-scene" size="15" placeholder="filter by name"/>\
+		<a id="filter-scene-clear" class="pad5">X</a></span>\
 		</div>\
 		<ul id="scene-add-menu" class="editor submenu absolute-pos shortcuts">\
 			<li id="scene-add-asset">PixelBox Asset ...<em>&#10095;</em></li><hr/>\
@@ -7582,6 +7675,9 @@ EditSceneScene.prototype = {
 	    $('#scene-dupe').button();
 	    $('#scene-delete').button().click(this.deleteSelection.bind(this));
 		$('#test-scene').button().click(this.previewScene.bind(this));
+
+		$('#filter-scene').on('change keyup', this.filterSceneChanged.bind(this));
+		$('#filter-scene-clear').click(this.clearSceneFilter);
 
 // assets
 		$('body').append(
@@ -8374,6 +8470,7 @@ THREE.Object3D.prototype.serialize = function(templates){
 		if(this.def.mass) def.mass = this.def.mass;
 		if(this.def.fixedRotation) def.fixedRotation = true;
 		if(this.def.sensor) def.sensor = true;
+		if(this.def.sleep) def.sleep = true;
 		if(this.def.damping) def.damping = this.def.damping;
 		if(this.def.collisionGroup !== undefined && this.def.collisionGroup != 1) def.collisionGroup = this.def.collisionGroup;
 		if(this.def.collisionMask !== undefined && this.def.collisionMask != 1) def.collisionMask = this.def.collisionMask;

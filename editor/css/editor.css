@@ -339,6 +339,14 @@ label.object-label.droppable.active {
 	left:0; top: 0;
 }
 
+#scene.filter div.row.filtered { 
+	display: none; 
+}
+
+#scene.filter div.row > a.toggle {
+	display:none;
+}
+
 div.row.helper {
 	max-width: 200px;
 	border: 1px solid black;
@@ -751,8 +759,11 @@ h2 { font-weight: normal; color: rgb(57,172,222); letter-spacing: 1;}
 .w3 { width: 70px; display:inline-block; }
 .w31 { width: 80px; display:inline-block; }
 .w32 { width: 100px; display:inline-block; }
+.w33 { width: 120px; display:inline-block; }
 .w4 { width: 150px; display:inline-block; }
 .w5 { width: 195px; display:inline-block; }
+.w6 { width: 250px; display:inline-block; }
+.w7 { width: 280px; display:inline-block; }
 .pad5 { padding: 5px; }
 .scale75 { font-size: 0.75em; }
 
@@ -805,6 +816,8 @@ input[type=checkbox]{
 	outline:0;
 	position: relative;
 }
+
+input[type=checkbox].coll { margin: 5px 2px; }
 
 input[size='1']{
 	width:2.5em;

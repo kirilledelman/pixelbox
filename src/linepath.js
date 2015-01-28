@@ -173,7 +173,6 @@ THREE.LinePath.prototype.applyTween = function ( tweenObj ) {
 		
 	}
 	
-	// TODO: modify body velocity and angularVelocity
 	tweenObj.target.syncBody();
 	
 };
