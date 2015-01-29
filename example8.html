@@ -27,11 +27,15 @@
 			by Kirill Edelman for <a href="http://threejs.org" target="_blank">three.js</a>
 		</span>		
 	
+		<div class="buttons">
+			Hold mouse button down to <a href="http://youtu.be/My2FRPA3Gf8" target="_blank">swing</a>.
+		</div>
+	
 		<script>
 		
 		/*
 		
-			This example shows how to load and display a single PixelBoxScene
+			CANNON physics scene example
 		
 		*/
 		
@@ -89,18 +93,151 @@
 		 	
 			THREE.PixelBoxScene.call( this );
 			
+			// this function will be assigned as collision callback for bricks
+			// collisionObject is CANNON.CollisionEquation instance
+			
+			this.brickCollide = function ( otherObject, collisionObject ) {
+				
+				if ( !this.body ) return; // can happen when removing objects mid-step
+				
+				// if object overlap of the collision is high enough
+				
+				if ( collisionObject.penetration < -0.7 ) {
+				
+					// spawn a dust puff
+					
+					var puff = exampleScene.instantiate( 'puff', { 
+						
+						position: this.getWorldPosition(),
+						rotation: new THREE.Euler( Math.random() * Math.PI, 0, 0 ),
+						scale: 1 + Math.random() * 0.5
+						
+					});
+					
+					// add to scene 
+					
+					exampleScene.add( puff );
+					
+					// fade and remove puff after a second
+					
+					puff.tweenFps = 3;
+					puff.tween( { 
+						prop:'alpha',
+						to: 0,
+						duration: 1,
+						done: function(){ puff.remove(); } 
+					} );
+					
+					// change frame a random frame of 'broken' animation
+					
+					if ( this.currentAnimation && this.currentAnimation.name != 'broken' ) {
+						
+						this.gotoAndStop( 'broken', Math.floor( Math.random() * 3 ) );
+						
+					// if this brick was already broken (and is one of the smaller bricks),
+					// let's turn this brick into a smaller fragment
+					
+					} else if ( this.body.mass < 100 && Math.random() > 0.3 ) {
+						
+						var fragment = exampleScene.instantiate( 'fragment', {
+						
+							position: this.getWorldPosition(),
+							rotation: this.getWorldRotation(),
+							scale: this.getWorldScale(),
+						
+						} );
+						
+						fragment.gotoAndStop( 'fragment', Math.floor( Math.random() * 3 ) );
+						exampleScene.add( fragment );
+						
+						this.parent.remove( this );
+						
+					}
+				
+				}
+				
+			};
+			
 			// get scene definition from assets cache
 			
 			var sceneDef = assets.get( 'example8' );
 			
-			// populate
+			// populate, with callback
 			
-			this.populateWith( sceneDef );
+			this.populateWith( sceneDef, { 
+				
+				// called after each object is created
+				
+				initObject: function ( obj, def ) {
+					
+					// all the bricks in the scene have .isBrick custom property set
+					
+					if ( def.props && def.props.isBrick ) {
+						
+						// set their collision callback to this function
+						obj.onCollideStart = this.brickCollide;
+						
+					}
+					
+				} // end init object
+				
+			} );
 			
 			// add controls for easy preview
 			// various controls classes can be found in three.js examples/js/controls folder
 			
 			this.controls = new THREE.OrbitControls( this.camera );
+			
+			// add mouse / touch events
+			
+			function onPress( e ) {
+				
+				exampleScene.mouseDown = true;
+				
+			}
+			
+			function onRelease( e ) {
+				
+				exampleScene.mouseDown = false;
+				
+			}
+			
+			document.body.addEventListener( 'mousedown', onPress, false );
+			document.body.addEventListener( 'mouseup', onRelease, false );
+			document.body.addEventListener( 'touchstart', onPress, false );
+			document.body.addEventListener( 'touchend', onRelease, false );
+			
+			// scene tick function will add momentum to the ball when mouse is down
+			
+			this.tick = function ( delta ) {
+				
+				if ( this.mouseDown ) {
+					
+					// get ball velocity
+					
+					var vel = new THREE.Vector3();
+					vel.copy( this.ball.body.velocity );
+					
+					var velocityMagnitude =  vel.length();
+					
+					// nearly stationary
+					if ( velocityMagnitude <= 1 ) { 
+						
+						vel.x *= 2;
+						vel.z = 0.25 * (Math.random() - 0.5);
+						
+					// rock
+					} else if( velocityMagnitude < 40 ){
+						
+						vel.multiplyScalar( 1 + delta * 2 );
+						
+					}
+					
+					this.ball.body.velocity.copy ( vel );					
+					
+				}
+				
+			};
 			
 		}
 		

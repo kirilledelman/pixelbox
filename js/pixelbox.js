@@ -1083,7 +1083,9 @@ THREE.PixelBoxScene.prototype.populateWith = function ( sceneDef, options ) {
 		
 			this.world = new CANNON.World();
 			this.world.allMaterials = {};
-			this.world.collideEventDispatch = this.CANNON_collideEventDispatch.bind( this );
+			this.world.quatNormalizeFast = true;
+
+			this.world.collideEventDispatch = this.CANNON_dispatchObjectsCollision.bind( this );
 			
 			if ( sceneDef.broadphase === 'SAPBroadphase' ) { 
 				
@@ -1329,8 +1331,8 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 			if ( !obj3d ) {
 			
 				// no helpers in instances
-				options = _.clone( options );
-				options.helpers = false;
+				var noHelpersOptions = _.clone( options );
+				noHelpersOptions.helpers = false;
 
 				if ( options.templates && options.templates[ layer.template ] ) {
 				
@@ -1342,7 +1344,7 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 						obj3d = new THREE.Object3D();
 						obj3d.isInstance = true;
 						obj3d.isTemplate = false;
-						objs = this.populateObject( obj3d, [ templateDef ], options );
+						objs = this.populateObject( obj3d, [ templateDef ], noHelpersOptions );
 						var topmost = objs[ 0 ];
 						this.linkObjects( objs, topmost, !!options.skipProps );
 						topmost.omit = true;
@@ -1360,7 +1362,7 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 						extended.scale = layer.scale;
 						extended.name = layer.name;
 						
-						objs = this.populateObject( object, [ extended ], options );
+						objs = this.populateObject( object, [ extended ], noHelpersOptions );
 						obj3d = objs[ 0 ];
 						obj3d.isInstance = true;
 						obj3d.isTemplate = false;
@@ -1604,7 +1606,14 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 				if ( options.helpers ) {
 					
 					geom = this.makeGeometryObject( layer, true );
-					mat = new THREE.MeshBasicMaterial({ color: layer.collisionShape ? 0x666666 : 0xFF6600, wireframe: true, side: THREE.DoubleSide });
+					mat = new THREE.MeshBasicMaterial( { color: 0xFF6600, wireframe: true, side: THREE.DoubleSide });
+					
+					if ( layer.collisionShape && object ) {
+						
+						mat.color.set( object.def.bodyType == '2' ? 0x0066FF : (object.def.bodyType == '1' ? 0x666666 : 0xFFFFFF ) );
+										
+					}
+					
 					obj3d = new THREE.Mesh( geom, mat );
 					obj3d.collisionShape = layer.collisionShape;
 					obj3d.constraint = layer.constraint;
@@ -1931,13 +1940,11 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 		obj3d.updateMatrixWorld( true );
 
 		// physics
-		if ( layer.physics && layer.layers ) {
-			
+		obj3d.physics = !!layer.physics;
+		
+		if ( obj3d.physics && layer.layers ) {
+
 			this.initObjectPhysics( obj3d, layer );
-			
-		} else {
-			
-			obj3d.physics = false;
 			
 		}
 		
@@ -1983,7 +1990,7 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 		}
 
 		// callback
-		if ( options.initObject ) options.initObject( obj3d, layer );
+		if ( options.initObject ) options.initObject.call( this, obj3d, layer );
 		
 	}
 	
@@ -2305,6 +2312,8 @@ THREE.PixelBoxScene.prototype.CANNON_initObjectPhysics = function ( obj3d, layer
 	body.collisionResponse = !obj3d.def.sensor;
 	body.fixedRotation = !!obj3d.def.fixedRotation;
 	body.constraints = [];
+	body.sleepSpeedLimit = 1;
+	body.sleepTimeLimit = 0.5;
 	
 	// material
 	var matName = "M_" + obj3d.def.friction + "_" + obj3d.def.restitution;
@@ -2406,13 +2415,6 @@ THREE.PixelBoxScene.prototype.CANNON_initObjectPhysics = function ( obj3d, layer
 		}
 		
 	}	
-	
-	if ( !numShapes ) {
-		
-		obj3d.physics = false;
-		return;
-		
-	}
 	
 	obj3d.body = body;
 	body.obj3d = obj3d;	
@@ -2708,67 +2710,19 @@ THREE.PixelBoxScene.prototype.CANNON_linkMaterials = function () {
 	
 };
 
+THREE.PixelBoxScene.prototype.CANNON_dispatchObjectsCollision = function( e ) {
 
-THREE.PixelBoxScene.prototype.CANNON_collideEventDispatch = function( e ) {
+	var obj = e.body.obj3d;
+	var other = (e.contact.bi == e.body ? e.contact.bj : e.contact.bi).obj3d;
 	
-	console.log( e.contact );
-	// TODO - after we can receive collide end event
-	
-};
-
-/* ================================================================================ Scene unloading */
-
-/* 
-	Prepares the scene to be garbage collected.
-	
-	Clears object recycle pool and unloads assets that were loaded with the scene definition.
-	
-	Assets that persist between scenes should be loaded with assets.loadAssets,
-	and assets that only exist in a scene as part of scene definition should be part of sceneDef
-	
-*/	
-	
-THREE.PixelBoxScene.prototype.dispose = function ( unloadAssets ) {
-
-	// remove all children
-	this.recycle( this.children.concat() );
-	
-	// clear object pool
-	for ( var otype in this.objectPool ) {
-	
-		var objects = this.objectPool[ otype ];
-		
-		for ( var i = 0, l = objects.length; i < l; i++ ) {
-		
-			var obj = objects[ i ];
-			if ( obj[ 'dispose' ] ) obj.dispose();
-			
-		}
-		
-		delete this.objectPool[ otype ];
-		
-	}
-	
-	if ( unloadAssets ) {
-	
-		// clean up assets that were loaded with this scene
-		for ( var aname in assets.files ) {
-			var asset = assets.files[ aname ];
-			
-			if ( asset.frameData && asset.includedWithScene == this ) {
-			
-				THREE.PixelBoxUtil.dispose( asset );
-				delete assets.files[ aname ];
-				
-			}
-			
-		}
-		
-	}
+	if ( obj.onCollideStart ) obj.onCollideStart.call(obj, other, e.contact );
 	
 };
 
 /* ================================================================================ physics hooks */
+
+// THREE.PixelBoxScene.prototype.
+
 
 // creates object's body from shapes
 THREE.PixelBoxScene.prototype.initObjectPhysics = function( obj3d, layer ) {
@@ -2829,6 +2783,58 @@ THREE.PixelBoxScene.prototype.objectAddedToWorld = function ( event ) {
 };
 
 
+
+/* ================================================================================ Scene unloading */
+
+/* 
+	Prepares the scene to be garbage collected.
+	
+	Clears object recycle pool and unloads assets that were loaded with the scene definition.
+	
+	Assets that persist between scenes should be loaded with assets.loadAssets,
+	and assets that only exist in a scene as part of scene definition should be part of sceneDef
+	
+*/	
+	
+THREE.PixelBoxScene.prototype.dispose = function ( unloadAssets ) {
+
+	// remove all children
+	this.recycle( this.children.concat() );
+	
+	// clear object pool
+	for ( var otype in this.objectPool ) {
+	
+		var objects = this.objectPool[ otype ];
+		
+		for ( var i = 0, l = objects.length; i < l; i++ ) {
+		
+			var obj = objects[ i ];
+			if ( obj[ 'dispose' ] ) obj.dispose();
+			
+		}
+		
+		delete this.objectPool[ otype ];
+		
+	}
+	
+	if ( unloadAssets ) {
+	
+		// clean up assets that were loaded with this scene
+		for ( var aname in assets.files ) {
+			var asset = assets.files[ aname ];
+			
+			if ( asset.frameData && asset.includedWithScene == this ) {
+			
+				THREE.PixelBoxUtil.dispose( asset );
+				delete assets.files[ aname ];
+				
+			}
+			
+		}
+		
+	}
+	
+};
 
 /* ================================================================================ THREE.PixelBoxRenderer callbacks */
 

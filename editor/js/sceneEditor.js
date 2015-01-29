@@ -1304,6 +1304,8 @@ EditSceneScene.prototype = {
 		function doHold(){
 			var data = editScene.exportScene(true, false);
 			localStorage_setItem('holdScene', data);
+			
+			console.log(JSON.parse(data));
 		}
 		
 		if(localStorage_getItem('holdScene')){
@@ -1545,15 +1547,20 @@ EditSceneScene.prototype = {
 		// populate
 		var opts = { helpers: true, keepSceneCamera:true, noNameReferences: true, wrapTemplates: true, templates: dataObject.templates, skipProps: true, noStaticGroups:true, initObject: this.populateObjectCallback };
 		var addedObjects = this.populateObject(this.container, dataObject.layers ? dataObject.layers : [], opts);
+		
+		// add templates
 		if(dataObject.containsTemplates){
 			for(var ti = 0; ti < dataObject.containsTemplates.length; ti++){
 				var td = dataObject.templates[dataObject.containsTemplates[ti]];
 				if(td) { 
 					var addedTemplates = this.populateObject(this.container, [ td ], opts);
 					this.linkObjects(addedTemplates, addedTemplates[0], true);
+					addedObjects = addedObjects.concat( addedTemplates );
 				}
 			}
 		}
+		
+		// link
 		this.linkObjects(addedObjects, this.container, true);
 		
 		function dereferenceObject(nameFragments, currentLevel){
@@ -5463,6 +5470,14 @@ EditSceneScene.prototype = {
 			var obj = arr[i][0];
 			var val = arr[i][1];
 			obj.def[prop] = val;
+			
+			if(prop == 'bodyType') {
+				for(var j = 0; j < obj.children.length; j++){
+					if( obj.children[j].collisionShape ){
+						obj.children[j].material.color.set( val == '2' ? 0x0066FF : (val == '1' ? 0x666666 : 0xFFFFFF ) );
+					}
+				}
+			}
 		}		
 	},
 	
@@ -5863,6 +5878,7 @@ EditSceneScene.prototype = {
 
 	 	var loadScene = editScene.exportScene(true, false);
 	 	console.log(JSON.parse(loadScene));
+	 	
 		if(window['chrome'] && chrome.storage){
 			chrome.app.window.create('editor/preview.html', { 
 				outerBounds: {
@@ -8354,7 +8370,9 @@ EditSceneScene.prototype = {
 		// ready to display scene
 		var data = localStorage_getItem('holdScene');
       	if(data){ 
-      		this.newDocFromData(JSON.parse(data));
+	      	var scene = JSON.parse(data);
+      		console.log(scene);
+      		this.newDocFromData(scene);
       	} else {
 			this.newDoc(true);
 		}
