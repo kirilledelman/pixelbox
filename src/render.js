@@ -67,7 +67,13 @@ THREE.PixelBoxRenderer = function () {
 		window.addEventListener( 'resize', this._resizeCallback, false );
 		canvas.style.width = window.innerWidth + 'px';
 		canvas.style.height = window.innerHeight + 'px';
-			
+		
+		// animation queue
+		this.animQueue = new AnimQueue( 20 ); // max true fps for PixelBox animations
+		
+		// tween queue
+		this.tweenQueue = new AnimQueue( false ); // false means we'll be calling .tick manually
+		
 		// start render loop
 		this._render();
 		
@@ -207,6 +213,8 @@ THREE.PixelBoxRenderer = function () {
 		if ( !renderer.paused ) requestAnimationFrame( renderer._render );
 		
 		var deltaTime = renderer.clock.getDelta();
+		
+		renderer.tweenQueue.tick( deltaTime );
 		
 		if ( renderer.scene ) { // assumes Transition or Scene
 		

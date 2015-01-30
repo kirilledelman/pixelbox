@@ -1130,8 +1130,8 @@ THREE.PixelBox = function ( data ) {
 			if ( this._animationInterval && this.currentAnimation ) {
 			
 				var nextFrameIn = 1.0 / (Math.abs( v ? v : 0.001 ) * this.currentAnimation.fps);
-				clearTimeout( this._animationInterval );
-				this._animationInterval = setTimeout( this.advanceAnimationFrame, nextFrameIn * 1000 );
+				this._animationInterval = nextFrameIn;
+				renderer.animQueue.adjustTime( this.advanceAnimationFrame, nextFrameIn );
 				
 			}
 			
@@ -1275,36 +1275,32 @@ THREE.PixelBox.prototype.constructor = THREE.PixelBox;
 
 THREE.PixelBox.prototype.advanceAnimationFrame = function () {
 
-	if ( this._animationInterval ) clearTimeout( this._animationInterval );
+	this._animationInterval = 0;
 	
 	var nextFrameIn = 1.0 / ( Math.abs( this.animSpeed ? this.animSpeed : 0.001 ) * this.currentAnimation.fps);
 	var keepGoing = true;
 	
-	if ( !renderer.paused ) {
+	var step = this.currentAnimation.length > 1 ? (1.0 / (this.currentAnimation.length - 1)) : 1;
+	this.currentAnimationPosition += step;
+	this._animationInterval = 0;
 	
-		var step = this.currentAnimation.length > 1 ? (1.0 / (this.currentAnimation.length - 1)) : 1;
-		this.currentAnimationPosition += step;
-		this._animationInterval = 0;
+	// end of anim
+	if ( this.currentAnimationPosition == 1 ) {
+	
+		// was looping
+		if ( this._animLoops > 0 ) {
 		
-		// end of anim
-		if ( this.currentAnimationPosition == 1 ) {
+			var ev = { type:'anim-loop', anim:this.currentAnimation, loop: this._animLoops };
+			this.dispatchEvent( ev );
+			this._animLoops--;
+			this._currentAnimationPosition = -step;
+			
+		// end of animation
+		} else {
 		
-			// was looping
-			if ( this._animLoops > 0 ) {
-			
-				var ev = { type:'anim-loop', anim:this.currentAnimation, loop: this._animLoops };
-				this.dispatchEvent( ev );
-				this._animLoops--;
-				this._currentAnimationPosition = -step;
-				
-			// end of animation
-			} else {
-			
-				keepGoing = false;
-				var ev = { type:'anim-finish', anim:this.currentAnimation };
-				this.dispatchEvent( ev );
-				
-			}
+			keepGoing = false;
+			var ev = { type:'anim-finish', anim:this.currentAnimation };
+			this.dispatchEvent( ev );
 			
 		}
 		
@@ -1313,7 +1309,8 @@ THREE.PixelBox.prototype.advanceAnimationFrame = function () {
 	// set up next time
 	if (keepGoing) {
 	
-		this._animationInterval = setTimeout( this.advanceAnimationFrame, nextFrameIn * 1000 );
+		this._animationInterval = nextFrameIn;
+		renderer.animQueue.enqueue( this.advanceAnimationFrame, nextFrameIn );
 		
 	}
 };
@@ -1385,7 +1382,8 @@ THREE.PixelBox.prototype.loopAnim = function ( animName, numLoops, fromCurrentFr
 	// set up timeout
 	var nextFrameIn = 1.0 / (Math.abs( this.animSpeed ) * anim.fps);
 	this._animLoops--;
-	this._animationInterval = setTimeout( this.advanceAnimationFrame, nextFrameIn * 1000 );
+	this._animationInterval = nextFrameIn;
+	renderer.animQueue.enqueue( this.advanceAnimationFrame, nextFrameIn );
 	
 };
 
@@ -1441,7 +1439,7 @@ THREE.PixelBox.prototype.stopAnim = function () {
 	
 	if ( this._animationInterval ) {
 	
-		clearTimeout( this._animationInterval );
+		renderer.animQueue.cancel( this.advanceAnimationFrame );
 		this._animationInterval = 0;
 		
 	}

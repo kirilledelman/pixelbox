@@ -67,7 +67,13 @@ THREE.PixelBoxRenderer = function () {
 		window.addEventListener( 'resize', this._resizeCallback, false );
 		canvas.style.width = window.innerWidth + 'px';
 		canvas.style.height = window.innerHeight + 'px';
-			
+		
+		// animation queue
+		this.animQueue = new AnimQueue( 20 ); // max true fps for PixelBox animations
+		
+		// tween queue
+		this.tweenQueue = new AnimQueue( false ); // false means we'll be calling .tick manually
+		
 		// start render loop
 		this._render();
 		
@@ -207,6 +213,8 @@ THREE.PixelBoxRenderer = function () {
 		if ( !renderer.paused ) requestAnimationFrame( renderer._render );
 		
 		var deltaTime = renderer.clock.getDelta();
+		
+		renderer.tweenQueue.tick( deltaTime );
 		
 		if ( renderer.scene ) { // assumes Transition or Scene
 		
@@ -725,6 +733,123 @@ THREE.LinePath.prototype.tween = function ( obj ) {
 	return THREE.Object3D.prototype.tween.call( this, objs );
 	
 };
+/*
+ * @author Kirill Edelman
+ * @source https://github.com/kirilledelman/pixelbox
+ * @documentation https://github.com/kirilledelman/pixelbox/wiki
+ * @license MIT
+*/
+
+function AnimQueue ( fps ) {
+	
+	this._fps = fps;
+	this._timer = 0;
+	
+	var queue = [];
+	
+	// timer
+	this.restartTimer = function () {
+	
+		if ( this._timer ) { 
+			
+			clearInterval( this._timer );
+			
+		}
+		
+		this._timer = setInterval( this.tick, 1000 / this._fps );
+		
+	};
+	
+	// tick updates / executes all queued objects
+	this.tick = function ( delta ) {
+		
+		if ( this._fps ) {
+		
+			if ( renderer.paused ) return;
+			
+			delta = 1.0 / this._fps;
+			
+		}		
+		
+		var obj;
+		
+		for ( var i = queue.length - 1; i !== -1; i-- ){
+			
+			obj = queue[ i ];
+			
+			obj.timeOut -= delta;
+			
+			if ( obj.timeOut <= 0 ) { 
+				
+				obj.func();
+				
+				queue.splice( i, 1 );
+				
+			}
+			
+		}
+		
+		if ( !queue.length && this._timer ) { 
+			
+			clearInterval( this._timer );
+			this._timer = 0;
+			
+		}
+		
+	}.bind( this );
+	
+	// adds a func to queue
+	this.enqueue = function ( funcToCall, secondsFromNow ) {
+	
+		var obj = { func: funcToCall, timeOut: secondsFromNow };
+		
+		queue.push( obj );
+		
+		if ( this._fps && !this._timer ) this._timer = setInterval( this.tick, 1000 / this._fps );
+		
+	};
+	
+	// cancels specific function
+	this.cancel = function ( func ) {
+	
+		for ( var i = queue.length - 1; i !== -1; i-- ){
+			
+			var obj = queue[ i ];
+			
+			if ( obj.func === func ) { 
+			
+				queue.splice( i, 1 );
+				return;				
+			
+			}
+			
+		}			
+		
+	};
+	
+	// reschedules a specific function
+	this.adjustTime = function ( func, newTimeoutValue ) {
+		
+		for ( var i = queue.length - 1; i !== -1; i-- ){
+			
+			var obj = queue[ i ];
+			
+			if ( obj.func === func ) { 
+				
+				obj.timeOut = newTimeoutValue;
+				return;
+				
+			}
+			
+		}
+		
+	};	
+	
+	return this;
+	
+}
+
+
 /*
  * @author Kirill Edelman
  * @source https://github.com/kirilledelman/pixelbox
@@ -5276,7 +5401,7 @@ THREE.Object3D.prototype.transplant = function ( newParent ) {
 /* 
 	Tweening functions:
 	
-	Tweens are implemented using setTimeout, and are automatically paused/resumed when renderer.pause(bPause) is called
+	Tweens are automatically paused/resumed when renderer.pause(bPause) is called
 	Tweening is done at .tweenFps rate (default is 30 frames per second)
 	If you wish to stop tweens, keep a reference to the object you passed to tween(obj) function, and call stopTween(obj) later
 	
@@ -5333,9 +5458,7 @@ THREE.Object3D.prototype.applyTween = function ( tweenObj ) {
 
 THREE.Object3D.prototype.advanceTweenFrame = function () {
 
-	if ( this._tweenInterval ) clearTimeout( this._tweenInterval );
-	
-	var nextFrameIn = 1.0 / this.tweenFps;
+	var nextFrameIn = 1 / 60;
 	var keepGoing = true;
 	
 	if ( !renderer.paused ) {
@@ -5384,7 +5507,12 @@ THREE.Object3D.prototype.advanceTweenFrame = function () {
 	// set up next time
 	if ( keepGoing ) {
 	
-		this._tweenInterval = setTimeout( this.advanceTweenFrame, nextFrameIn * 1000 );
+		this._tweenInterval = true;
+		renderer.tweenQueue.enqueue( this.advanceTweenFrame, nextFrameIn );
+		
+	} else {
+		
+		this._tweenInterval = false;
 		
 	}
 	
@@ -5401,7 +5529,6 @@ THREE.Object3D.prototype.tween = function ( obj ) {
 	
 		this._tweens = [];
 		this.advanceTweenFrame = this.advanceTweenFrame.bind( this );
-		this.tweenFps = (this.tweenFps !== undefined ? this.tweenFps : 30);
 		
 	}
 	
@@ -5448,8 +5575,9 @@ THREE.Object3D.prototype.tween = function ( obj ) {
 	}
 	
 	this._tweens = this._tweens.concat( objs );
-	
-	if ( !this._tweenInterval && this._tweens.length ) setTimeout( this.advanceTweenFrame, 1000 / this.tweenFps );
+
+	this._tweenInterval = true;	
+	renderer.tweenQueue.enqueue( this.advanceTweenFrame, 1 / 60 );
 	
 	return objs;
 	
@@ -5474,8 +5602,9 @@ THREE.Object3D.prototype.stopTweens = function ( snapToFinish, callDone ) {
 	this._tweens.length = 0;
 	delete this._tweens;
 	this._tweens = [];
-	if ( this._tweenInterval ) clearTimeout( this._tweenInterval );
-	this._tweenInterval = 0;
+	
+	this._tweenInterval = false;
+	renderer.tweenQueue.cancel( this.advanceTweenFrame );
 	
 };
 
@@ -5494,17 +5623,21 @@ THREE.Object3D.prototype.stopTween = function ( obj, snapToFinish, callDone ) {
 			if ( callDone && tweenObj.done !== undefined ) tweenObj.done.call( this, tweenObj );
 			
 		}
-		this._tweens.splice( index, 1 );
-		if ( !this._tweens.length && this._tweenInterval ) { 
 		
-			clearTimeout( this._tweenInterval );
-			this._tweenInterval = 0;
-			
-		}
+		this._tweens.splice( index, 1 );
+		
+	}
+	
+	if ( !this._tweens.length ) {
+		
+		this._tweenInterval = false;
+		renderer.tweenQueue.cancel( this.advanceTweenFrame );
 		
 	}
 	
 };
+
+/* ================================================================================ CANNON.js hooks */
 
 /* called by 'added' handler to add physics body and constraints to world */
 THREE.Object3D.prototype.addBodyAndConstraintsToWorld = function ( world ) {
@@ -6775,8 +6908,8 @@ THREE.PixelBox = function ( data ) {
 			if ( this._animationInterval && this.currentAnimation ) {
 			
 				var nextFrameIn = 1.0 / (Math.abs( v ? v : 0.001 ) * this.currentAnimation.fps);
-				clearTimeout( this._animationInterval );
-				this._animationInterval = setTimeout( this.advanceAnimationFrame, nextFrameIn * 1000 );
+				this._animationInterval = nextFrameIn;
+				renderer.animQueue.adjustTime( this.advanceAnimationFrame, nextFrameIn );
 				
 			}
 			
@@ -6920,36 +7053,32 @@ THREE.PixelBox.prototype.constructor = THREE.PixelBox;
 
 THREE.PixelBox.prototype.advanceAnimationFrame = function () {
 
-	if ( this._animationInterval ) clearTimeout( this._animationInterval );
+	this._animationInterval = 0;
 	
 	var nextFrameIn = 1.0 / ( Math.abs( this.animSpeed ? this.animSpeed : 0.001 ) * this.currentAnimation.fps);
 	var keepGoing = true;
 	
-	if ( !renderer.paused ) {
+	var step = this.currentAnimation.length > 1 ? (1.0 / (this.currentAnimation.length - 1)) : 1;
+	this.currentAnimationPosition += step;
+	this._animationInterval = 0;
 	
-		var step = this.currentAnimation.length > 1 ? (1.0 / (this.currentAnimation.length - 1)) : 1;
-		this.currentAnimationPosition += step;
-		this._animationInterval = 0;
+	// end of anim
+	if ( this.currentAnimationPosition == 1 ) {
+	
+		// was looping
+		if ( this._animLoops > 0 ) {
 		
-		// end of anim
-		if ( this.currentAnimationPosition == 1 ) {
+			var ev = { type:'anim-loop', anim:this.currentAnimation, loop: this._animLoops };
+			this.dispatchEvent( ev );
+			this._animLoops--;
+			this._currentAnimationPosition = -step;
+			
+		// end of animation
+		} else {
 		
-			// was looping
-			if ( this._animLoops > 0 ) {
-			
-				var ev = { type:'anim-loop', anim:this.currentAnimation, loop: this._animLoops };
-				this.dispatchEvent( ev );
-				this._animLoops--;
-				this._currentAnimationPosition = -step;
-				
-			// end of animation
-			} else {
-			
-				keepGoing = false;
-				var ev = { type:'anim-finish', anim:this.currentAnimation };
-				this.dispatchEvent( ev );
-				
-			}
+			keepGoing = false;
+			var ev = { type:'anim-finish', anim:this.currentAnimation };
+			this.dispatchEvent( ev );
 			
 		}
 		
@@ -6958,7 +7087,8 @@ THREE.PixelBox.prototype.advanceAnimationFrame = function () {
 	// set up next time
 	if (keepGoing) {
 	
-		this._animationInterval = setTimeout( this.advanceAnimationFrame, nextFrameIn * 1000 );
+		this._animationInterval = nextFrameIn;
+		renderer.animQueue.enqueue( this.advanceAnimationFrame, nextFrameIn );
 		
 	}
 };
@@ -7030,7 +7160,8 @@ THREE.PixelBox.prototype.loopAnim = function ( animName, numLoops, fromCurrentFr
 	// set up timeout
 	var nextFrameIn = 1.0 / (Math.abs( this.animSpeed ) * anim.fps);
 	this._animLoops--;
-	this._animationInterval = setTimeout( this.advanceAnimationFrame, nextFrameIn * 1000 );
+	this._animationInterval = nextFrameIn;
+	renderer.animQueue.enqueue( this.advanceAnimationFrame, nextFrameIn );
 	
 };
 
@@ -7086,7 +7217,7 @@ THREE.PixelBox.prototype.stopAnim = function () {
 	
 	if ( this._animationInterval ) {
 	
-		clearTimeout( this._animationInterval );
+		renderer.animQueue.cancel( this.advanceAnimationFrame );
 		this._animationInterval = 0;
 		
 	}

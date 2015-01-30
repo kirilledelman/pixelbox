@@ -255,7 +255,7 @@ THREE.Object3D.prototype.transplant = function ( newParent ) {
 /* 
 	Tweening functions:
 	
-	Tweens are implemented using setTimeout, and are automatically paused/resumed when renderer.pause(bPause) is called
+	Tweens are automatically paused/resumed when renderer.pause(bPause) is called
 	Tweening is done at .tweenFps rate (default is 30 frames per second)
 	If you wish to stop tweens, keep a reference to the object you passed to tween(obj) function, and call stopTween(obj) later
 	
@@ -312,9 +312,7 @@ THREE.Object3D.prototype.applyTween = function ( tweenObj ) {
 
 THREE.Object3D.prototype.advanceTweenFrame = function () {
 
-	if ( this._tweenInterval ) clearTimeout( this._tweenInterval );
-	
-	var nextFrameIn = 1.0 / this.tweenFps;
+	var nextFrameIn = 1 / 60;
 	var keepGoing = true;
 	
 	if ( !renderer.paused ) {
@@ -363,7 +361,12 @@ THREE.Object3D.prototype.advanceTweenFrame = function () {
 	// set up next time
 	if ( keepGoing ) {
 	
-		this._tweenInterval = setTimeout( this.advanceTweenFrame, nextFrameIn * 1000 );
+		this._tweenInterval = true;
+		renderer.tweenQueue.enqueue( this.advanceTweenFrame, nextFrameIn );
+		
+	} else {
+		
+		this._tweenInterval = false;
 		
 	}
 	
@@ -380,7 +383,6 @@ THREE.Object3D.prototype.tween = function ( obj ) {
 	
 		this._tweens = [];
 		this.advanceTweenFrame = this.advanceTweenFrame.bind( this );
-		this.tweenFps = (this.tweenFps !== undefined ? this.tweenFps : 30);
 		
 	}
 	
@@ -427,8 +429,9 @@ THREE.Object3D.prototype.tween = function ( obj ) {
 	}
 	
 	this._tweens = this._tweens.concat( objs );
-	
-	if ( !this._tweenInterval && this._tweens.length ) setTimeout( this.advanceTweenFrame, 1000 / this.tweenFps );
+
+	this._tweenInterval = true;	
+	renderer.tweenQueue.enqueue( this.advanceTweenFrame, 1 / 60 );
 	
 	return objs;
 	
@@ -453,8 +456,9 @@ THREE.Object3D.prototype.stopTweens = function ( snapToFinish, callDone ) {
 	this._tweens.length = 0;
 	delete this._tweens;
 	this._tweens = [];
-	if ( this._tweenInterval ) clearTimeout( this._tweenInterval );
-	this._tweenInterval = 0;
+	
+	this._tweenInterval = false;
+	renderer.tweenQueue.cancel( this.advanceTweenFrame );
 	
 };
 
@@ -473,17 +477,21 @@ THREE.Object3D.prototype.stopTween = function ( obj, snapToFinish, callDone ) {
 			if ( callDone && tweenObj.done !== undefined ) tweenObj.done.call( this, tweenObj );
 			
 		}
-		this._tweens.splice( index, 1 );
-		if ( !this._tweens.length && this._tweenInterval ) { 
 		
-			clearTimeout( this._tweenInterval );
-			this._tweenInterval = 0;
-			
-		}
+		this._tweens.splice( index, 1 );
+		
+	}
+	
+	if ( !this._tweens.length ) {
+		
+		this._tweenInterval = false;
+		renderer.tweenQueue.cancel( this.advanceTweenFrame );
 		
 	}
 	
 };
+
+/* ================================================================================ CANNON.js hooks */
 
 /* called by 'added' handler to add physics body and constraints to world */
 THREE.Object3D.prototype.addBodyAndConstraintsToWorld = function ( world ) {
