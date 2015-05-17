@@ -222,9 +222,13 @@ THREE.PixelBoxScene.prototype.recycle = function ( scrap ) {
 			var typeName = null;
 			
 			if ( obj instanceof THREE.PixelBox ) {
-			
+
 				typeName = obj.geometry.data.name;
-				
+
+			} else if ( obj instanceof THREE.FxSprite ) {
+
+				typeName = 'FxSprite';
+
 			} else if ( obj instanceof THREE.DirectionalLight ) {
 			
 				typeName = 'DirectionalLight'; containsLights = true;
@@ -385,7 +389,7 @@ THREE.PixelBoxScene.prototype.populateWith = function ( sceneDef, options ) {
 	
 		var asset = sceneDef.assets[ i ];
 		
-		// compressed PixelBox asset
+		// compressed asset
 		if ( typeof( asset ) == 'string' ) {
 		
 			var json = LZString.decompressFromBase64( asset );
@@ -396,17 +400,17 @@ THREE.PixelBoxScene.prototype.populateWith = function ( sceneDef, options ) {
 				continue;
 				
 			}
-			
+
 			try {
-			
+
 				asset = JSON.parse( json );
-				
+
 			} catch( e ) {
-			
+
 				console.error( "Failed to parse JSON ", e, json );
-				
+
 			}
-			
+
 		} else {
 		
 			asset = _deepClone( asset, 100 );
@@ -414,14 +418,32 @@ THREE.PixelBoxScene.prototype.populateWith = function ( sceneDef, options ) {
 		}
 		
 		// already loaded
-		if ( assets.get( asset.name ) ) continue;
+		if ( assets.get( i ) ) continue;
 		
 		// save reference
 		asset.includedWithScene = this;
-		
-		// add asset to cache if needed
-		assets.add( asset.name, asset );
-		
+
+		// if image, convert to texture
+		if ( asset.src ) {
+
+			var img = new Image();
+			img.src = asset.src;
+			assets.add( i, new THREE.Texture( img ) );
+
+		} else if ( asset.xml ) {
+
+			assets.add( i, THREE.PixelBoxUtil.parseXml( asset.xml ) );
+
+		} else if ( asset.plist ) {
+
+			assets.add( i, THREE.PixelBoxUtil.parsePlist( asset.plist ) );
+
+		} else {
+
+			// add asset to cache if needed
+			assets.add( i, asset );
+
+		}
 	}
 	
 	options = options ? options : {};
@@ -871,7 +893,8 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 		case 'Geometry':
 		
 			var mat, geom;
-			
+
+			// collision shape
 			if ( layer.collisionShape || layer.constraint ) { 
 				
 				if ( !(object instanceof THREE.Mesh || object.isContainer || object.isAnchor || object instanceof THREE.PixelBox) ) continue;
@@ -902,11 +925,13 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 					
 				}
 				
-				
+
+			// scene primitive
 			} else { 
 		
 				geom = this.makeGeometryObject( layer );
-				
+
+				// recycled
 				if ( obj3d ) {
 				
 					obj3d.geometry.dispose();
@@ -927,26 +952,173 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 						}
 						
 					}
-					
+
+				// new
 				} else {
 				
 					mat = new THREE.MeshPixelBoxMaterial();
 					obj3d = new THREE.Mesh( geom, mat );
+
+					obj3d.customDepthMaterial = THREE.PixelBoxUtil.meshDepthMaterial.clone();
+					obj3d.customDepthMaterial.uniforms.map = mat.uniforms.map;
+					obj3d.customDepthMaterial.uniforms.tintAlpha = mat.uniforms.tintAlpha;
+					obj3d.customDepthMaterial.uniforms.uvSliceRect = mat.uniforms.uvSliceRect;
+					obj3d.customDepthMaterial.uniforms.uvSliceOffset = mat.uniforms.uvSliceOffset;
+					obj3d.customDepthMaterial.uniforms.uvSliceSizeIsRotated = mat.uniforms.uvSliceSizeIsRotated;
+					obj3d.customDepthMaterial._shadowPass = true;
+
+					obj3d._textureMap = null;
+
+					// setter for textureMap property
+					Object.defineProperty( obj3d, 'textureMap', {
+						get: function(){ return this._textureMap; },
+						set: function( map ) {
+
+							this._textureMap = map;
+
+							var asset = assets.get( map );
+
+							this.material.needsUpdate = this.customDepthMaterial.needsUpdate = true;
+
+							if ( !asset ){
+
+								this.customDepthMaterial.map = this.material.map = null;
+
+							} else if ( asset instanceof THREE.Texture ) {
+
+								this.customDepthMaterial.map = this.material.map = asset;
+								asset.needsUpdate = true;
+
+							} else if( asset.image ){
+
+								if ( !asset.texture ) {
+
+									asset.texture = new THREE.Texture( asset.image );
+
+								}
+
+								this.customDepthMaterial.map = this.material.map = asset.texture;
+								asset.texture.needsUpdate = true;
+
+							}
+
+							this.customDepthMaterial.needsUpdate = true;
+
+							this.sliceName = this._sliceName;
+
+						}
+
+					});
+
+					// setter for sliceName property
+					obj3d._sliceName = null;
+
+					// setter for textureMap property
+					Object.defineProperty( obj3d, 'sliceName', {
+						get: function(){ return this._sliceName; },
+						set: function( sn ) {
+
+							this._sliceName = sn;
+
+							var textureAsset = assets.get( this._textureMap );
+
+							if ( textureAsset ) {
+
+								var sliceMap = textureAsset.sliceMap;
+								if ( !sliceMap ) {
+
+									// find asset with matching texture name
+									for ( var key in assets.files ) {
+
+										var asset = assets.files[ key ];
+										if ( asset.metadata && asset.metadata[ 'textureFileName' ] == this._textureMap ) {
+
+											sliceMap = textureAsset.sliceMap = asset;
+											break;
+
+										} else if ( asset.plist && asset.plist.metadata && asset.plist.metadata[ 'textureFileName' ] == this._textureMap ) {
+
+											sliceMap = textureAsset.sliceMap = asset.plist;
+											break;
+
+										}
+
+									}
+
+									// not found? return
+									if ( !sliceMap ) {
+
+										this.material.slice = null;
+										return;
+
+									}
+
+								}
+
+								// set to slice object from slice map
+								this.material.slice = sliceMap.frames[ sn ];
+
+							}
+
+						}
+
+					});
+
 				}
 				
 				obj3d.geometryType = layer.mesh;
 				
-				obj3d.material.side = (layer.mesh == 'Plane') ? THREE.DoubleSide : THREE.FrontSide;
-				
+				mat.side = (layer.mesh == 'Plane') ? THREE.DoubleSide : ( layer.inverted ? THREE.BackSide : THREE.FrontSide );
+
 				//material
 				mat.tint.set( layer.tint != undefined ? parseInt( layer.tint, 16 ) : 0xffffff );
 				mat.addColor.set( layer.addColor != undefined ? parseInt( layer.addColor, 16 ) : 0x0 );
 				mat.alpha = (layer.alpha != undefined ? layer.alpha : 1.0);
+				mat.alphaThresh = (layer.alphaThresh != undefined ? layer.alphaThresh : 0);
 				mat.brightness = (layer.brightness != undefined ? layer.brightness : 0.0);
 				mat.stipple = (layer.stipple != undefined ? layer.stipple : 0.0);
-			
+
+				// texture
+				obj3d.textureMap = layer.textureMap ? layer.textureMap : null;
+				obj3d.sliceName = layer.sliceName ? layer.sliceName : null;
+
 			}
 			
+			break;
+
+		case 'FxSprite':
+
+				// recycled
+				if ( obj3d ) {
+
+					obj3d.reset();
+
+				// new
+				} else {
+
+					obj3d = new THREE.FxSprite();
+
+				}
+
+				var mat = obj3d.material;
+
+				//props
+				mat.tint.set( layer.tint != undefined ? parseInt( layer.tint, 16 ) : 0xffffff );
+				mat.addColor.set( layer.addColor != undefined ? parseInt( layer.addColor, 16 ) : 0x0 );
+				mat.alpha = (layer.alpha != undefined ? layer.alpha : 1.0);
+				mat.alphaThresh = (layer.alphaThresh != undefined ? layer.alphaThresh : 0);
+				mat.brightness = (layer.brightness != undefined ? layer.brightness : 0.0);
+				mat.stipple = (layer.stipple != undefined ? layer.stipple : 0.0);
+
+				// texture
+				obj3d.textureMap = layer.textureMap ? layer.textureMap : null;
+				obj3d.fxData = layer.fxData ? layer.fxData : null;
+
+				// angle
+				obj3d.scaleX = layer.scaleX ? layer.scaleX : 1.0;
+				obj3d.scaleY = layer.scaleY ? layer.scaleY : 1.0;
+				obj3d.angle = layer.angle ? layer.angle : 0;
+
 			break;
 		
 		// lookup asset by name
@@ -1051,7 +1223,9 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 		
 		if ( layer.castShadow != undefined ) obj3d.castShadow = layer.castShadow;
 		if ( layer.receiveShadow != undefined ) obj3d.receiveShadow = layer.receiveShadow;
-		
+
+		if ( obj3d instanceof THREE.FxSprite ) obj3d.cascadeColorChange();
+
 		if ( helper ) { 
 		
 			this.scene.add( helper );
@@ -1067,7 +1241,41 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 			obj3d.visible = layer.visible;
 			
 		} else obj3d.visible = true;
-		
+
+		// Animations
+		if ( layer.animSpeed != undefined ) obj3d.animSpeed = layer.animSpeed;
+
+		if ( layer.animName != undefined && obj3d.animNamed( layer.animName ) != undefined ) {
+
+			var animOption = layer.animOption ? layer.animOption : 'gotoAndStop';
+			var animFrame = layer.animFrame != undefined ? layer.animFrame : 0;
+
+			if ( animOption == 'loopAnim' ) {
+
+				obj3d.loopAnim( layer.animName, Infinity, false );
+
+			} else if ( animOption == 'loopFrom' ) {
+
+				obj3d.gotoAndStop( layer.animName, animFrame + 1 );
+				obj3d.loopAnim( layer.animName, Infinity, true );
+
+			} else if ( animOption == 'playAnim' ) {
+
+				obj3d.playAnim( layer.animName );
+
+			} else {
+
+				obj3d.gotoAndStop( layer.animName, animFrame );
+
+			}
+
+		} else if ( layer.animFrame != undefined ) {
+
+			obj3d.stopAnim();
+			obj3d.frame = layer.animFrame;
+
+		}
+
 		// PixelBox specific
 		if ( !obj3d.isInstance && obj3d instanceof THREE.PixelBox ) {
 		
@@ -1114,39 +1322,6 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 			} else {
 			
 				obj3d.stipple = 0;
-				
-			}
-			
-			if ( layer.animSpeed != undefined ) obj3d.animSpeed = layer.animSpeed;
-			
-			if ( layer.animName != undefined && obj3d.animNamed( layer.animName ) != undefined ) {
-			
-				var animOption = layer.animOption ? layer.animOption : 'gotoAndStop';
-				var animFrame = layer.animFrame != undefined ? layer.animFrame : 0;
-				
-				if ( animOption == 'loopAnim' ) {
-				
-					obj3d.loopAnim( layer.animName, Infinity, false );
-					
-				} else if ( animOption == 'loopFrom' ) { 
-				
-					obj3d.gotoAndStop( layer.animName, animFrame + 1 ); 
-					obj3d.loopAnim( layer.animName, Infinity, true );
-					
-				} else if ( animOption == 'playAnim' ) { 
-				
-					obj3d.playAnim( layer.animName );
-					
-				} else {
-				
-					obj3d.gotoAndStop( layer.animName, animFrame );
-					
-				}
-				
-			} else if ( layer.animFrame != undefined ) {
-			
-				obj3d.stopAnim();
-				obj3d.frame = layer.animFrame;
 				
 			}
 			
@@ -1346,7 +1521,7 @@ THREE.PixelBoxScene.prototype.makeGeometryObject = function ( layer, isCollShape
 		layer.height = param( 'height', 10 );
 		if ( !(layer.inverted || isCollShape) )
 			geom = new THREE.PlaneBufferGeometry( layer.width, layer.height,layer.widthSegments, layer.heightSegments );
-		else 
+		else
 			geom = new THREE.PlaneGeometry( layer.width, layer.height,layer.widthSegments, layer.heightSegments );
 			
 		if ( isCollShape ) { 

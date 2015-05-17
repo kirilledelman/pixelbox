@@ -277,6 +277,18 @@ label.object-label.droppable.active {
 	position: relative;
 }
 
+.image-swatch{
+	display: inline-block;
+	overflow: hidden;
+	width: 30px;
+	height: 30px;
+	margin-right: 5px;
+	margin-top: -10px;
+	position: relative;
+	left: -10px;
+	top:10px;
+}
+
 .column {
 	float: left;	
 }

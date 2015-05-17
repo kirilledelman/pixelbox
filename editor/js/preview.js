@@ -20,6 +20,15 @@ function PreviewScene(){
 			
 			renderer._windowResized();
 
+			/*
+			var s = new THREE.FxSprite();
+			s.castShadow = s.receiveShadow = true;
+			s.textureMap = 'hog.png';
+			s.fxData = 'hog.json';
+			window.s = s;
+			this.add( s );
+			 */
+
 		}.bind(this), 500);		
 	};
 }
@@ -40,6 +49,6 @@ $(document).ready(function(){
 		console.log("WebGL initialized");
 	}
 	
-	previewScene = new PreviewScene();
-	renderer.setScene(previewScene);
+	window.previewScene = new PreviewScene();
+	renderer.setScene(window.previewScene);
 });

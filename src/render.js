@@ -70,7 +70,7 @@ THREE.PixelBoxRenderer = function () {
 		
 		// animation queue
 		this.animQueue = new AnimQueue( 20 ); // max true fps for PixelBox animations
-		
+
 		// tween queue
 		this.tweenQueue = new AnimQueue( false ); // false means we'll be calling .tick manually
 		

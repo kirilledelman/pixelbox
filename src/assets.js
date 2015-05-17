@@ -17,6 +17,8 @@ THREE.PixelBoxAssets = function () {
 			(Array) info.assets - array of paths to json or LZ-String-compressed PixelBox asset files
 			(Array) info.scenes - array of paths to json or LZ-String-compressed PixelBox scene files
 			(Array) info.json - array of paths to json files to load and parse
+			(Array) info.xml - array of paths to xml files to load and parse
+			(Array) info.plist - array of paths to plist files to load and parse
 			(Array) info.other - array of urls to load, and invoke custom handler on (see docs)
 			(Array) info.custom - array of urls to invoke custom loading with (see docs)
 			
@@ -31,13 +33,15 @@ THREE.PixelBoxAssets = function () {
 		this.scenedata = params.scenes ? params.scenes : [];
 		this.models = params.assets ? params.assets : [];
 		this.json = params.json ? params.json : [];
+		this.xml = params.xml ? params.xml : [];
+		this.plist = params.plist ? params.plist : [];
 		this.custom = params.custom ? params.custom : [];
 		this.other = params.other ? params.other : [];
 		this.onprogress = params.progress;
 		this.onloaded = params.done;
 		
 		this.totalLoaded = 0;
-		this.totalAssets = this.textures.length + this.scenedata.length + this.models.length + this.json.length + this.custom.length + this.other.length;
+		this.totalAssets = this.textures.length + this.scenedata.length + this.models.length + this.json.length + this.plist.length + this.xml.length + this.custom.length + this.other.length;
 		
 		// custom
 		for ( var i = 0; i < this.custom.length; i++ ) {
@@ -120,8 +124,8 @@ THREE.PixelBoxAssets = function () {
 			var reqObj = function ( url ) {
 			
 				return function () {
-				
-					assets.add( url, new THREE.ImageUtils.loadTexture(url, undefined, assets.assetLoaded ) );
+
+					assets.add( url.split( '/' ).pop(), new THREE.ImageUtils.loadTexture(url, undefined, assets.assetLoaded ) );
 					
 				};
 				
@@ -313,7 +317,7 @@ THREE.PixelBoxAssets = function () {
 									
 								}
 								
-								assets.add( url, json );
+								assets.add( url.split( '/' ).pop(), json );
 								
 							}
 							
@@ -337,7 +341,129 @@ THREE.PixelBoxAssets = function () {
 			this.loadQueue.push( reqObj );
 			
 		}
-		
+
+		// xml
+		for ( var i = 0; i < this.xml.length; i++ ) {
+
+			var url = this.xml[ i ];
+			var reqObj = function ( url ) {
+
+				return function () {
+
+					var request = new XMLHttpRequest();
+					request.open( 'GET', url, true );
+					request.onload = function () {
+						if ( request.status >= 200 && request.status < 400 ) {
+
+							// decompress if needed
+							var xml;
+							var data = request.responseText;
+
+							if ( data.substr(0,1) == '<' ) {
+
+								xml = data;
+
+							} else {
+
+								xml = LZString.decompressFromBase64( data );
+
+							}
+
+							// parse
+							if ( !xml ) {
+
+								console.error( "Failed to LZString decompressFromBase64 " + url );
+
+							} else {
+
+								xml = THREE.PixelBoxUtil.parseXml( xml );
+
+								assets.add( url.split( '/' ).pop(), xml );
+
+							}
+
+							assets.assetLoaded();
+
+						} else console.error( "Failed to load " + url );
+
+					};
+
+					request.onerror = function () {
+
+						console.error( "Connection error while loading " + url );
+
+					};
+
+					request.send();
+
+				};
+
+			}( url );
+			this.loadQueue.push( reqObj );
+
+		}
+
+		// plist
+		for ( var i = 0; i < this.plist.length; i++ ) {
+
+			var url = this.plist[ i ];
+			var reqObj = function ( url ) {
+
+				return function () {
+
+					var request = new XMLHttpRequest();
+					request.open( 'GET', url, true );
+					request.onload = function () {
+						if ( request.status >= 200 && request.status < 400 ) {
+
+							// decompress if needed
+							var plist;
+							var data = request.responseText;
+
+							if ( data.substr(0,1) == '<' ) {
+
+								plist = data;
+
+							} else {
+
+								plist = LZString.decompressFromBase64( data );
+
+							}
+
+							// parse
+							if ( !plist ) {
+
+								console.error( "Failed to LZString decompressFromBase64 " + url );
+
+							} else {
+
+								plist = THREE.PixelBoxUtil.parseXml( plist );
+
+								assets.add( url.split( '/' ).pop(), plist );
+
+							}
+
+							assets.assetLoaded();
+
+						} else console.error( "Failed to load " + url );
+
+					};
+
+					request.onerror = function () {
+
+						console.error( "Connection error while loading " + url );
+
+					};
+
+					request.send();
+
+				};
+
+			}( url );
+			this.loadQueue.push( reqObj );
+
+		}
+
 		// start
 		if ( this.totalAssets ) this.loadQueue[ this.totalAssets - 1 ]();
 		else if ( this.onloaded ) this.onloaded();

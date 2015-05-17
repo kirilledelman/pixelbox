@@ -414,13 +414,135 @@ THREE.PixelBoxShader = {
 
 };
 
+THREE.PixelBoxMeshDepthShader = {
+	uniforms: {
+		map: { type: "t", value: null },
+		tintAlpha: 	{ type: "f", value: 1.0 },
+		alphaThresh: 	{ type: "f", value: 0 },
+
+		// slice texture params
+		uvSliceRect: { type: "v4", value: { x: 0, y: 1, z: 1, w: 0 } },
+		uvSliceOffset: { type: "v2", value: { x: 0, y: 1 } },
+		uvSliceSizeIsRotated: { type: "v3", value: { x: 1, y: 1, z: 0 } },
+
+		// fxSprite billboarding
+		parentWorldMatrix: { type: "m4", value: new THREE.Matrix4() },
+		localMatrix: { type: "m4", value: new THREE.Matrix4() },
+		spriteTransform: { type: "m4", value: new THREE.Matrix4() }
+
+	},
+
+	vertexShader: [
+		"varying vec2 vUv;",
+
+		"uniform mat4 parentWorldMatrix;",
+		"uniform mat4 localMatrix;",
+		"uniform mat4 spriteTransform;",
+
+		"void main() {",
+		"   vec4 mvPosition;",
+
+		"   #ifdef BILLBOARD",
+		"       mat4 modelView = viewMatrix * parentWorldMatrix;",
+		"	    modelView[0][0] = 1.0;",
+		"	    modelView[0][1] = 0.0;",
+		"       modelView[0][2] = 0.0;",
+		"	    modelView[1][0] = 0.0;",
+		"	    modelView[1][1] = 1.0;",
+		"   	modelView[1][2] = 0.0;",
+		"       modelView[2][0] = 0.0;",
+		"       modelView[2][1] = 0.0;",
+		"       modelView[2][2] = 1.0;",
+		"       modelView = modelView * spriteTransform * localMatrix;",
+
+		"	    mvPosition = modelView * vec4( position, 1.0 );",
+		"   #else",
+		"	    mvPosition = modelViewMatrix * vec4( position, 1.0 );",
+		"   #endif",
+
+		"	vUv = uv;",
+		"	gl_Position = projectionMatrix * mvPosition;",
+
+		"}"	].join( "\n" ),
+
+	fragmentShader: [
+		"varying vec2 vUv;",
+		"#ifdef USE_MAP",
+		"uniform sampler2D map;",
+		"uniform vec4 uvSliceRect;",
+		"uniform vec2 uvSliceOffset;",
+		"uniform vec3 uvSliceSizeIsRotated;",
+		"#endif",
+		"uniform float tintAlpha;",
+		"uniform float alphaThresh;",
+
+		"#ifdef USE_MAP",
+		"vec4 sampleSlice(){",
+		"   vec2 _uv;",
+		"   if (uvSliceSizeIsRotated.z < 1.0) { ",
+		"       _uv =  vUv;",
+		"       if(_uv.x <= uvSliceRect.x || _uv.y <= uvSliceRect.w || _uv.x >= uvSliceRect.z || _uv.y >= uvSliceRect.y) {",
+		"           discard; return vec4(0.0);",
+		"       }",
+		"       _uv.x = uvSliceOffset.x + (_uv.x - uvSliceRect.x) * uvSliceSizeIsRotated.x;",
+		"       _uv.y = uvSliceOffset.y + (_uv.y - uvSliceRect.y) * uvSliceSizeIsRotated.y;",
+		"   } else { ",
+		"       _uv = vec2(vUv.y, 1.0 - vUv.x);",
+		"       if(vUv.x <= uvSliceRect.x || vUv.y <= uvSliceRect.w || vUv.x >= uvSliceRect.z || vUv.y >= uvSliceRect.y) {",
+		"           discard; return vec4(0.0);",
+		"       }",
+		"       _uv.x = uvSliceOffset.x + (_uv.x - uvSliceRect.w) * uvSliceSizeIsRotated.y;",
+		"       _uv.y = uvSliceOffset.y + (_uv.y - (1.0 - uvSliceRect.x)) * uvSliceSizeIsRotated.x;",
+		"   }",
+		"   return texture2D( map, _uv );",
+		"}",
+		"#endif",
+
+		"float rand(vec2 co) {",
+		"	float a = 12.9898;",
+		"	float b = 78.233;",
+		"   float c = 43758.5453;",
+		"   float dt= dot(co.xy ,vec2(a,b));",
+		"   float sn= mod(dt,3.14);",
+		"   return fract(sin(sn) * c);",
+		"}",
+		"vec4 pack_depth( const in float depth ) {",
+		"	const vec4 bit_shift = vec4( 256.0 * 256.0 * 256.0, 256.0 * 256.0, 256.0, 1.0 );",
+		"	const vec4 bit_mask = vec4( 0.0, 1.0 / 256.0, 1.0 / 256.0, 1.0 / 256.0 );",
+		"	vec4 res = mod( depth * bit_shift * vec4( 255 ), vec4( 256 ) ) / vec4( 255 );",
+		"	res -= res.xxyz * bit_mask;",
+		"	return res;",
+		"}",
+		"void main() {",
+		"   vec4 texColor = vec4(0.0, 0.0, 0.0, 1.0);",
+		"#ifdef USE_MAP",
+		"   texColor = sampleSlice();",
+		"#endif",
+		"   texColor.a = texColor.a <= alphaThresh ? 0.0 : (texColor.a * tintAlpha);",
+		"	if (texColor.a < 1.0) {",
+		"		float a = rand(gl_FragCoord.xy);",
+		"		a = 1.0 - step(texColor.a, a);",
+		"		if (a == 0.0) discard;",
+		"	}",
+		"	gl_FragData[ 0 ] = pack_depth(gl_FragCoord.z);",
+		"}"
+	].join( "\n" )
+
+};
+
 THREE.PixelBoxMeshShader = {
 	uniforms: {
+		// texture
+		map: { type: "t", value: null },
+
 		// tint color
 		tintColor:	{ type: "c", value: new THREE.Color( 0xffffff ) },
 		addColor:	{ type: "c", value: new THREE.Color( 0x0 ) },
 		tintAlpha: 	{ type: "f", value: 1.0 },
 		brightness: { type: "f", value: 0.0 },
+
+		// alpha values below this one are cut off
+		alphaThresh: { type: "f", value: 0.0 },
 		
 		// fog color
 		fogColor:    { type: "c", value: new THREE.Color( 0xFFFFFF ) },
@@ -436,7 +558,19 @@ THREE.PixelBoxMeshShader = {
 		actualDirLights: { type: "i", value: 0 },
 		directionalLightShadowMap: { type: "iv1", value: [] },
 		actualSpotLights: { type: "i", value: 0 },
-		spotLightShadowMap: { type: "iv1", value: [] }
+		spotLightShadowMap: { type: "iv1", value: [] },
+
+		// texture params
+		uvSliceRect: { type: "v4", value: { x: 0, y: 1, z: 1, w: 0 } },
+		uvSliceOffset: { type: "v2", value: { x: 0, y: 1 } },
+		uvSliceSizeIsRotated: { type: "v3", value: { x: 1, y: 1, z: 0 } },
+
+		// fxSprite billboarding
+		billboard: { type: "i", value: 0 },
+		parentWorldMatrix: { type: "m4", value: new THREE.Matrix4() },
+		localMatrix: { type: "m4", value: new THREE.Matrix4() },
+		spriteTransform: { type: "m4", value: new THREE.Matrix4() }
+
 	},
 
 	attributes: {},
@@ -445,6 +579,11 @@ THREE.PixelBoxMeshShader = {
 	"varying vec3 vViewPosition;",
 	"varying vec3 vNormal;",
 	"varying vec4 vWorldPosition;",
+	"varying vec2 vUv;",
+
+	"uniform mat4 parentWorldMatrix;",
+	"uniform mat4 localMatrix;",
+	"uniform mat4 spriteTransform;",
 
 	"void main() {",
 	"#ifdef FLIP_SIDED",
@@ -452,19 +591,46 @@ THREE.PixelBoxMeshShader = {
 	"#else",
 	"	vNormal = normalize( normalMatrix * normal );",
 	"#endif",
-	
-	"	vec4 mvPosition = modelViewMatrix * vec4( position, 1.0 );",
+
+	"   vec4 mvPosition;",
+
+	"   #ifdef BILLBOARD",
+	"       mat4 modelView = viewMatrix * parentWorldMatrix;",
+	"	    modelView[0][0] = 1.0;",
+	"	    modelView[0][1] = 0.0;",
+	"       modelView[0][2] = 0.0;",
+	"	    modelView[1][0] = 0.0;",
+	"	    modelView[1][1] = 1.0;",
+	"   	modelView[1][2] = 0.0;",
+	"       modelView[2][0] = 0.0;",
+	"       modelView[2][1] = 0.0;",
+	"       modelView[2][2] = 1.0;",
+	"       modelView = modelView * spriteTransform * localMatrix;",
+
+	"	    mvPosition = modelView * vec4( position, 1.0 );",
+	"   #else",
+	"	    mvPosition = modelViewMatrix * vec4( position, 1.0 );",
+	"   #endif",
+
 	"	vViewPosition = -mvPosition.xyz;",
 	"	vWorldPosition = modelMatrix * vec4( position, 1.0 );",
-	
+	"   vUv = uv; ",
 	"	gl_Position = projectionMatrix * mvPosition;",
 	"}"
 	].join( "\n" ),
 	
 	fragmentShader: [
+	"varying vec2 vUv;",
+	"#ifdef USE_MAP",
+	"uniform sampler2D map;",
+	"uniform vec4 uvSliceRect;",
+	"uniform vec2 uvSliceOffset;",
+	"uniform vec3 uvSliceSizeIsRotated;",
+	"#endif",
 	"uniform vec3 tintColor;",
 	"uniform vec3 addColor;",
 	"uniform float tintAlpha;",
+	"uniform float alphaThresh;",
 	"uniform float stipple;",
 	"uniform float brightness;",
 
@@ -498,7 +664,13 @@ THREE.PixelBoxMeshShader = {
 	"	vec3 getShadowColor(int shadowIndex, vec4 mPosition) {",
 	"		vec3 shadowColor = vec3(1.0);",
 	"		float fDepth;",
-	
+
+	"#ifdef BILLBOARD",
+	"   #define SHADOW_THRESH 0.005",
+	"#else",
+	"   #define SHADOW_THRESH 0.0",
+	"#endif",
+
 	"		if (shadowIndex == 0) {",
 	"			vec4 sm = shadowMatrix[ 0 ] * mPosition;",
 	"			vec3 shadowCoord = sm.xyz / sm.w;",
@@ -509,7 +681,7 @@ THREE.PixelBoxMeshShader = {
 	"			if ( frustumTest ) {",
 	"				shadowCoord.z += shadowBias[ 0 ];",
 	"				float fDepth = unpackDepth( texture2D( shadowMap[ 0 ], shadowCoord.xy ) );",
-	"				if ( fDepth < shadowCoord.z ) {",
+	"				if ( shadowCoord.z - fDepth > SHADOW_THRESH ) {",
 	"					shadowColor = vec3(0.0);",
 	"				}",
 	"			}",
@@ -526,7 +698,7 @@ THREE.PixelBoxMeshShader = {
 	"			if ( frustumTest ) {",
 	"				shadowCoord.z += shadowBias[ 1 ];",
 	"				float fDepth = unpackDepth( texture2D( shadowMap[ 1 ], shadowCoord.xy ) );",
-	"				if ( fDepth < shadowCoord.z ) {",
+	"				if ( shadowCoord.z - fDepth > SHADOW_THRESH ) {",
 	"					shadowColor = vec3(0.0);",
 	"				}",
 	"			}",
@@ -544,7 +716,7 @@ THREE.PixelBoxMeshShader = {
 	"			if ( frustumTest ) {",
 	"				shadowCoord.z += shadowBias[ 2 ];",
 	"				float fDepth = unpackDepth( texture2D( shadowMap[ 2 ], shadowCoord.xy ) );",
-	"				if ( fDepth < shadowCoord.z ) {",
+	"				if ( shadowCoord.z - fDepth > SHADOW_THRESH ) {",
 	"					shadowColor = vec3(0.0);",
 	"				}",
 	"			}",
@@ -562,7 +734,7 @@ THREE.PixelBoxMeshShader = {
 	"			if ( frustumTest ) {",
 	"				shadowCoord.z += shadowBias[ 3 ];",
 	"				float fDepth = unpackDepth( texture2D( shadowMap[ 3 ], shadowCoord.xy ) );",
-	"				if ( fDepth < shadowCoord.z ) {",
+	"				if ( shadowCoord.z - fDepth > SHADOW_THRESH ) {",
 	"					shadowColor = vec3(0.0);",
 	"				}",
 	"			}",
@@ -580,7 +752,7 @@ THREE.PixelBoxMeshShader = {
 	"			if ( frustumTest ) {",
 	"				shadowCoord.z += shadowBias[ 4 ];",
 	"				float fDepth = unpackDepth( texture2D( shadowMap[ 4 ], shadowCoord.xy ) );",
-	"				if ( fDepth < shadowCoord.z ) {",
+	"				if ( shadowCoord.z - fDepth > SHADOW_THRESH ) {",
 	"					shadowColor = vec3(0.0);",
 	"				}",
 	"			}",
@@ -598,7 +770,7 @@ THREE.PixelBoxMeshShader = {
 	"			if ( frustumTest ) {",
 	"				shadowCoord.z += shadowBias[ 5 ];",
 	"				float fDepth = unpackDepth( texture2D( shadowMap[ 5 ], shadowCoord.xy ) );",
-	"				if ( fDepth < shadowCoord.z ) {",
+	"				if ( shadowCoord.z - fDepth > SHADOW_THRESH ) {",
 	"					shadowColor = vec3(0.0);",
 	"				}",
 	"			}",
@@ -616,7 +788,7 @@ THREE.PixelBoxMeshShader = {
 	"			if ( frustumTest ) {",
 	"				shadowCoord.z += shadowBias[ 6 ];",
 	"				float fDepth = unpackDepth( texture2D( shadowMap[ 6 ], shadowCoord.xy ) );",
-	"				if ( fDepth < shadowCoord.z ) {",
+	"				if ( shadowCoord.z - fDepth > SHADOW_THRESH ) {",
 	"					shadowColor = vec3(0.0);",
 	"				}",
 	"			}",
@@ -634,7 +806,7 @@ THREE.PixelBoxMeshShader = {
 	"			if ( frustumTest ) {",
 	"				shadowCoord.z += shadowBias[ 7 ];",
 	"				float fDepth = unpackDepth( texture2D( shadowMap[ 7 ], shadowCoord.xy ) );",
-	"				if ( fDepth < shadowCoord.z ) {",
+	"				if ( shadowCoord.z - fDepth > SHADOW_THRESH ) {",
 	"					shadowColor = vec3(0.0);",
 	"				}",
 	"			}",
@@ -682,22 +854,53 @@ THREE.PixelBoxMeshShader = {
 	"   float sn = mod(dt,3.14);",
 	"   return fract(sin(sn) * c);",
 	"}",
-	
+
+	"#ifdef USE_MAP",
+	"vec4 sampleSlice(){",
+	"   vec2 _uv;",
+	"   if (uvSliceSizeIsRotated.z < 1.0) { ",
+	"       _uv =  vUv;",
+	"       if(_uv.x <= uvSliceRect.x || _uv.y <= uvSliceRect.w || _uv.x >= uvSliceRect.z || _uv.y >= uvSliceRect.y) {",
+	"           discard; return vec4(0.0);",
+	"       }",
+	"       _uv.x = uvSliceOffset.x + (_uv.x - uvSliceRect.x) * uvSliceSizeIsRotated.x;",
+	"       _uv.y = uvSliceOffset.y + (_uv.y - uvSliceRect.y) * uvSliceSizeIsRotated.y;",
+	"   } else { ",
+	"       _uv = vec2(vUv.y, 1.0 - vUv.x);",
+	"       if(vUv.x <= uvSliceRect.x || vUv.y <= uvSliceRect.w || vUv.x >= uvSliceRect.z || vUv.y >= uvSliceRect.y) {",
+	"           discard; return vec4(0.0);",
+	"       }",
+	"       _uv.x = uvSliceOffset.x + (_uv.x - uvSliceRect.w) * uvSliceSizeIsRotated.y;",
+	"       _uv.y = uvSliceOffset.y + (_uv.y - (1.0 - uvSliceRect.x)) * uvSliceSizeIsRotated.x;",
+	"   }",
+
+	"   return texture2D( map, _uv );",
+	"}",
+	"#endif",
+
 	"void main() {",
 	//	stipple and alpha
 	"	float s = 1.0; ",
+	"   float texAlpha = 1.0;",
+	"   vec3 texColor = vec3( 1.0, 1.0, 1.0 );",
 	"	if (stipple != 0.0) { ",
 	"		vec2 stip = fract( vec2(gl_FragCoord.x + stipple, gl_FragCoord.y) * 0.5);",
 	"		s = step(0.25,abs(stip.x-stip.y));",
 	"	}",
-	"	if (tintAlpha == 0.0 || s == 0.0) discard;",
-	"	else if (tintAlpha < 1.0) {",
+	"#ifdef USE_MAP",
+	"   vec4 tex = sampleSlice();",
+	"   texAlpha = tex.a <= alphaThresh ? 0.0 : tex.a;",
+	"   texColor = tex.xyz;",
+	"#endif",
+	"   texAlpha *= tintAlpha;",
+	"	if (texAlpha == 0.0 || s == 0.0) discard;",
+	"	else if (texAlpha < 1.0) {",
 	"		float a = rand(gl_FragCoord.xy);",
-	"		a = s * (1.0 - step(tintAlpha, a));",
+	"		a = s * (1.0 - step(texAlpha, a));",
 	"		if (a == 0.0) discard;",
 	"	}",
 	
-	"	vec3 diffuse = tintColor;",
+	"	vec3 diffuse = tintColor * texColor;",
 	
 	"	vec3 totalAmbient = diffuse * ambientLightColor;",
 	"	vec3 totalDirect = vec3(0.0);",
@@ -716,7 +919,11 @@ THREE.PixelBoxMeshShader = {
 	"	if ( pointLightDistance[ i ] > 0.0 )",
 	"		lDistance = 1.0 - min( ( length( lVector ) / pointLightDistance[ i ] ), 1.0 );",
 	"	lVector = normalize( lVector );",
+	"   #ifdef BILLBOARD",
+	"   float dotProduct = 1.0;",
+	"   #else",
 	"	float dotProduct = dot( vertexNormal, lVector );",
+	"   #endif",
 	"	#ifdef WRAP_AROUND",
 	"		float pointDiffuseWeightFull = max( dotProduct, 0.0 );",
 	"		float pointDiffuseWeightHalf = max( 0.5 * dotProduct + 0.5, 0.0 );",
@@ -742,7 +949,11 @@ THREE.PixelBoxMeshShader = {
 	"	if (i < actualDirLights) {",		
 	"	vec4 lDirection = viewMatrix * vec4( directionalLightDirection[ i ], 0.0 );",
 	"	vec3 dirVector = normalize( lDirection.xyz);",
-	"	float dotProduct = dot(vertexNormal, dirVector);",
+	"   #ifdef BILLBOARD",
+	"   float dotProduct = 1.0;",
+	"   #else",
+	"	float dotProduct = dot( vertexNormal, dirVector );",
+	"   #endif",
 	"	#ifdef WRAP_AROUND",
 	"		float dirDiffuseWeightFull = max( dotProduct, 0.0 );",
 	"		float dirDiffuseWeightHalf = max( 0.5 * dotProduct + 0.5, 0.0 );",
@@ -777,7 +988,11 @@ THREE.PixelBoxMeshShader = {
 	"	if ( spotEffect > spotLightAngleCos[ i ] ) {",
 	"		spotEffect = max( pow( max( spotEffect, 0.0 ), spotLightExponent[ i ] ), 0.0 );",
 			// diffuse
-	"		float dotProduct = dot( vertexNormal, lVector );",
+	"       #ifdef BILLBOARD",
+	"       float dotProduct = 1.0;",
+	"       #else",
+	"	    float dotProduct = dot( vertexNormal, lVector );",
+	"       #endif",
 	"		#ifdef WRAP_AROUND",
 	"			float spotDiffuseWeightFull = max( dotProduct, 0.0 );",
 	"			float spotDiffuseWeightHalf = max( 0.5 * dotProduct + 0.5, 0.0 );",
@@ -806,7 +1021,11 @@ THREE.PixelBoxMeshShader = {
 	"	if (i < actualHemiLights) {",		
 	"	vec4 lDirection = viewMatrix * vec4( hemisphereLightDirection[ i ], 0.0 );",
 	"	vec3 lVector = normalize( lDirection.xyz );",
+	"   #ifdef BILLBOARD",
+	"   float dotProduct = 1.0;",
+	"   #else",
 	"	float dotProduct = dot( vertexNormal, lVector );",
+	"   #endif",
 	"	float hemiDiffuseWeight = 0.5 * dotProduct + 0.5;",
 	"	vec3 hemiColor = mix( hemisphereLightGroundColor[ i ], hemisphereLightSkyColor[ i ], hemiDiffuseWeight );",
 	"	hemiDiffuse += diffuse * hemiColor;",
@@ -819,26 +1038,27 @@ THREE.PixelBoxMeshShader = {
 
 	"float depth = gl_FragCoord.z / gl_FragCoord.w;",
 	"float fogFactor = smoothstep( fogNear, fogFar, depth );",
-	
-	// fog
+
 	"gl_FragColor = vec4(mix(totalDiffuse + addColor, fogColor, fogFactor), 1.0);",
+
 	"}"
 	].join( "\n" )	
 };
 
 THREE.MeshPixelBoxMaterial = function ( params ) {
 
+	function param ( pname, defaultValue ) { if ( params && params[ pname ] != undefined ) return params[ pname ]; return defaultValue; }
+
 	var material = new THREE.ShaderMaterial( {
 		uniforms:       THREE.UniformsUtils.merge( [ THREE.UniformsLib[ 'shadowmap' ], THREE.UniformsLib[ 'lights' ], THREE.PixelBoxMeshShader.uniforms ] ),
 		attributes:     THREE.PixelBoxMeshShader.attributes,
 		vertexShader:   THREE.PixelBoxMeshShader.vertexShader,
 		fragmentShader: THREE.PixelBoxMeshShader.fragmentShader,
+		defines: param( 'defines', {} ),
 		transparent: false,
 		lights: true,
 		fog: true
 	});
-	
-	function param ( pname, defaultValue ) { if ( params && params[ pname ] != undefined ) return params[ pname ]; return defaultValue; }
 	
 	var uniforms = material.uniforms;
 	uniforms.tintColor.value.set( param( 'tint', 0xffffff ) );
@@ -856,25 +1076,66 @@ THREE.MeshPixelBoxMaterial = function ( params ) {
 	
 	Object.defineProperty( material, 'tint', {
 		get: function () { return this.uniforms.tintColor.value; },
-		set: function ( v ) { this.uniforms.tintColor.value.copy( v ); },
+		set: function ( v ) { this.uniforms.tintColor.value.copy( v ); }
 	} );
 	Object.defineProperty( material, 'addColor', {
 		get: function () { return this.uniforms.addColor.value; },
-		set: function ( v ) { this.uniforms.addColor.value.copy( v ); },
+		set: function ( v ) { this.uniforms.addColor.value.copy( v ); }
 	} );
 	Object.defineProperty( material, 'alpha', {
 		get: function () { return this.uniforms.tintAlpha.value; },
-		set: function ( v ) { this.uniforms.tintAlpha.value = v; },
+		set: function ( v ) { this.uniforms.tintAlpha.value = v; }
+	} );
+	Object.defineProperty( material, 'alphaThresh', {
+		get: function () { return this.uniforms.alphaThresh.value; },
+		set: function ( v ) { this.uniforms.alphaThresh.value = v; }
 	} );
 	Object.defineProperty( material, 'brightness', {
 		get: function () { return this.uniforms.brightness.value; },
-		set: function ( v ) { this.uniforms.brightness.value = v; },
+		set: function ( v ) { this.uniforms.brightness.value = v; }
 	} );
 	Object.defineProperty( material, 'stipple', {
 		get: function () { return this.uniforms.stipple.value; },
-		set: function ( v ) { this.uniforms.stipple.value = v; },
+		set: function ( v ) { this.uniforms.stipple.value = v; }
 	} );
-	
+	Object.defineProperty( material, 'map', {
+		get: function () { return this.uniforms.map.value; },
+		set: function ( v ) { this.uniforms.map.value = v; this.slice = this._slice; this.needsUpdate = true; }
+	} );
+	// slice property
+	Object.defineProperty( material, 'slice', {
+		get: function () { return this._slice; },
+		set: function ( v ) {
+			this._slice = v;
+			var uni = this.uniforms;
+			if ( v ) {
+
+				var texture = this.uniforms.map.value;
+				var tw = texture.image.width;
+				var th = texture.image.height;
+				uni.uvSliceRect.value = {
+					x: v.spriteColorRect.x / v.spriteSourceSize.x,
+					y: 1.0 - v.spriteColorRect.y / v.spriteSourceSize.y,
+					z: (v.spriteColorRect.x + v.spriteColorRect.width) / v.spriteSourceSize.x,
+					w: 1.0 - (v.spriteColorRect.y + v.spriteColorRect.height) / v.spriteSourceSize.y };
+				uni.uvSliceOffset.value = { x: v.textureRect.x / tw, y: 1.0 - v.textureRect.y / th };
+				uni.uvSliceSizeIsRotated.value = {
+					x: v.spriteSourceSize.x / tw,
+					y: v.spriteSourceSize.y / th,
+					z: v.textureRotated ? 1.0 : 0.0 };
+
+			} else { // full texture
+
+				uni.uvSliceRect.value = { x: 0, y: 1, z: 1, w: 0 };
+				uni.uvSliceOffset.value = { x: 0, y: 1 };
+				uni.uvSliceSizeIsRotated.value = { x: 1, y: 1, z: 0 };
+
+			}
+
+			//console.log( {uvSliceRect: uni.uvSliceRect.value, uvSliceOffset: uni.uvSliceOffset.value, uvSliceSizeIsRotated: uni.uvSliceSizeIsRotated.value });
+		}
+	} );
+
 	return material;
 		
 };
@@ -1635,6 +1896,15 @@ THREE.PixelBoxUtil.depthMaterial = new THREE.ShaderMaterial( {
 
 THREE.PixelBoxUtil.depthMaterial._shadowPass = true;
 
+THREE.PixelBoxUtil.meshDepthMaterial = new THREE.ShaderMaterial( {
+	uniforms:       THREE.PixelBoxMeshDepthShader.uniforms,
+	vertexShader:   THREE.PixelBoxMeshDepthShader.vertexShader,
+	fragmentShader: THREE.PixelBoxMeshDepthShader.fragmentShader
+});
+
+THREE.PixelBoxUtil.meshDepthMaterial._shadowPass = true;
+
+
 THREE.PixelBoxUtil.updateViewPortUniform = function ( optCamera ) {
 
 	// get cam scale	
@@ -2358,3 +2628,134 @@ THREE.PixelBoxUtil.encodeFrame = function ( frameData, dataObject ) {
 	
 };
 
+/*
+	XML parsing function
+*/
+
+THREE.PixelBoxUtil.parseXml = function() {
+
+	var parseXml = null;
+
+	if ( typeof window.DOMParser != "undefined" ) {
+
+		parseXml = function ( xmlStr ) {
+
+			return ( new window.DOMParser() ).parseFromString( xmlStr, "text/xml" );
+
+		};
+
+	} else if ( typeof window.ActiveXObject != "undefined" && new window.ActiveXObject( "Microsoft.XMLDOM" ) ) {
+
+		parseXml = function ( xmlStr ) {
+
+			var xmlDoc = new window.ActiveXObject( "Microsoft.XMLDOM" );
+			xmlDoc.async = "false";
+			xmlDoc.loadXML( xmlStr );
+			return xmlDoc;
+
+		};
+
+	}
+
+	return parseXml;
+
+}();
+
+THREE.PixelBoxUtil.parsePlist = function( xmlStr ) {
+
+	var xml = THREE.PixelBoxUtil.parseXml( xmlStr );
+
+	function getNodeVal ( val ) {
+
+		switch( val.nodeName.toLowerCase() ) {
+			case 'dict':
+				return parseDict( val );
+
+			case 'string':
+				var cont = val.textContent;
+
+				if ( cont.substr( 0, 1 ) == '{' ) {
+
+					// {{x, y}, {w, h}}
+					var matches = cont.match( /\{\{(-?\d+),\s?(-?\d+)\},\s?\{(-?\d+),\s?(-?\d+)\}\}/ );
+					if ( matches && matches.length == 5 ) {
+
+						return {
+							x: parseInt( matches[ 1 ] ),
+							y: parseInt( matches[ 2 ] ),
+							width: parseInt( matches[ 3 ] ),
+							height: parseInt( matches[ 4 ] )
+						};
+
+					}
+					//{x, y}
+					matches = cont.match( /\{(-?\d+),\s?(-?\d+)\}/ );
+					if ( matches && matches.length == 3 ) {
+
+						return {
+							x: parseInt( matches[ 1 ] ),
+							y: parseInt( matches[ 2 ] )
+						};
+
+					}
+				}
+
+				return cont;
+
+			case 'true':
+				return true;
+
+			case 'false':
+				return false;
+
+			case 'integer':
+				return parseInt( val.textContent );
+
+			case 'array':
+				var children = $( val ).children();
+				var arr = [];
+				for ( var i = 0; i < children.length; i ++ ) {
+
+					arr.push( getNodeVal( children[ i ] ) );
+
+				}
+				return arr;
+
+		}
+
+	};
+
+	function parseDict ( dict ) {
+
+		var children = $( dict ).children();
+		var obj = {};
+
+		for ( var i = 0; i < children.length; i += 2 ) {
+
+			var key = children[ i ].textContent;
+			var val = getNodeVal( children[ i + 1 ] );
+
+			obj[ key ] = val;
+
+		}
+
+		return obj;
+
+	};
+	var obj = parseDict( $( 'plist > dict', xml.documentElement ) );
+
+	// strip extension from filename in meta
+	/*if ( obj.metadata && obj.metadata.textureFileName ) {
+
+		var dotIndex = obj.metadata.textureFileName.lastIndexOf( '.' );
+		if ( dotIndex > 0 ) {
+
+			obj.metadata.textureFileName = obj.metadata.textureFileName.substr( 0, dotIndex );
+
+		}
+
+	}*/
+
+	return obj;
+
+}

@@ -70,7 +70,7 @@ THREE.PixelBoxRenderer = function () {
 		
 		// animation queue
 		this.animQueue = new AnimQueue( 20 ); // max true fps for PixelBox animations
-		
+
 		// tween queue
 		this.tweenQueue = new AnimQueue( false ); // false means we'll be calling .tick manually
 		
@@ -1074,9 +1074,13 @@ THREE.PixelBoxScene.prototype.recycle = function ( scrap ) {
 			var typeName = null;
 			
 			if ( obj instanceof THREE.PixelBox ) {
-			
+
 				typeName = obj.geometry.data.name;
-				
+
+			} else if ( obj instanceof THREE.FxSprite ) {
+
+				typeName = 'FxSprite';
+
 			} else if ( obj instanceof THREE.DirectionalLight ) {
 			
 				typeName = 'DirectionalLight'; containsLights = true;
@@ -1237,7 +1241,7 @@ THREE.PixelBoxScene.prototype.populateWith = function ( sceneDef, options ) {
 	
 		var asset = sceneDef.assets[ i ];
 		
-		// compressed PixelBox asset
+		// compressed asset
 		if ( typeof( asset ) == 'string' ) {
 		
 			var json = LZString.decompressFromBase64( asset );
@@ -1248,17 +1252,17 @@ THREE.PixelBoxScene.prototype.populateWith = function ( sceneDef, options ) {
 				continue;
 				
 			}
-			
+
 			try {
-			
+
 				asset = JSON.parse( json );
-				
+
 			} catch( e ) {
-			
+
 				console.error( "Failed to parse JSON ", e, json );
-				
+
 			}
-			
+
 		} else {
 		
 			asset = _deepClone( asset, 100 );
@@ -1266,14 +1270,32 @@ THREE.PixelBoxScene.prototype.populateWith = function ( sceneDef, options ) {
 		}
 		
 		// already loaded
-		if ( assets.get( asset.name ) ) continue;
+		if ( assets.get( i ) ) continue;
 		
 		// save reference
 		asset.includedWithScene = this;
-		
-		// add asset to cache if needed
-		assets.add( asset.name, asset );
-		
+
+		// if image, convert to texture
+		if ( asset.src ) {
+
+			var img = new Image();
+			img.src = asset.src;
+			assets.add( i, new THREE.Texture( img ) );
+
+		} else if ( asset.xml ) {
+
+			assets.add( i, THREE.PixelBoxUtil.parseXml( asset.xml ) );
+
+		} else if ( asset.plist ) {
+
+			assets.add( i, THREE.PixelBoxUtil.parsePlist( asset.plist ) );
+
+		} else {
+
+			// add asset to cache if needed
+			assets.add( i, asset );
+
+		}
 	}
 	
 	options = options ? options : {};
@@ -1723,7 +1745,8 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 		case 'Geometry':
 		
 			var mat, geom;
-			
+
+			// collision shape
 			if ( layer.collisionShape || layer.constraint ) { 
 				
 				if ( !(object instanceof THREE.Mesh || object.isContainer || object.isAnchor || object instanceof THREE.PixelBox) ) continue;
@@ -1754,11 +1777,13 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 					
 				}
 				
-				
+
+			// scene primitive
 			} else { 
 		
 				geom = this.makeGeometryObject( layer );
-				
+
+				// recycled
 				if ( obj3d ) {
 				
 					obj3d.geometry.dispose();
@@ -1779,26 +1804,173 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 						}
 						
 					}
-					
+
+				// new
 				} else {
 				
 					mat = new THREE.MeshPixelBoxMaterial();
 					obj3d = new THREE.Mesh( geom, mat );
+
+					obj3d.customDepthMaterial = THREE.PixelBoxUtil.meshDepthMaterial.clone();
+					obj3d.customDepthMaterial.uniforms.map = mat.uniforms.map;
+					obj3d.customDepthMaterial.uniforms.tintAlpha = mat.uniforms.tintAlpha;
+					obj3d.customDepthMaterial.uniforms.uvSliceRect = mat.uniforms.uvSliceRect;
+					obj3d.customDepthMaterial.uniforms.uvSliceOffset = mat.uniforms.uvSliceOffset;
+					obj3d.customDepthMaterial.uniforms.uvSliceSizeIsRotated = mat.uniforms.uvSliceSizeIsRotated;
+					obj3d.customDepthMaterial._shadowPass = true;
+
+					obj3d._textureMap = null;
+
+					// setter for textureMap property
+					Object.defineProperty( obj3d, 'textureMap', {
+						get: function(){ return this._textureMap; },
+						set: function( map ) {
+
+							this._textureMap = map;
+
+							var asset = assets.get( map );
+
+							this.material.needsUpdate = this.customDepthMaterial.needsUpdate = true;
+
+							if ( !asset ){
+
+								this.customDepthMaterial.map = this.material.map = null;
+
+							} else if ( asset instanceof THREE.Texture ) {
+
+								this.customDepthMaterial.map = this.material.map = asset;
+								asset.needsUpdate = true;
+
+							} else if( asset.image ){
+
+								if ( !asset.texture ) {
+
+									asset.texture = new THREE.Texture( asset.image );
+
+								}
+
+								this.customDepthMaterial.map = this.material.map = asset.texture;
+								asset.texture.needsUpdate = true;
+
+							}
+
+							this.customDepthMaterial.needsUpdate = true;
+
+							this.sliceName = this._sliceName;
+
+						}
+
+					});
+
+					// setter for sliceName property
+					obj3d._sliceName = null;
+
+					// setter for textureMap property
+					Object.defineProperty( obj3d, 'sliceName', {
+						get: function(){ return this._sliceName; },
+						set: function( sn ) {
+
+							this._sliceName = sn;
+
+							var textureAsset = assets.get( this._textureMap );
+
+							if ( textureAsset ) {
+
+								var sliceMap = textureAsset.sliceMap;
+								if ( !sliceMap ) {
+
+									// find asset with matching texture name
+									for ( var key in assets.files ) {
+
+										var asset = assets.files[ key ];
+										if ( asset.metadata && asset.metadata[ 'textureFileName' ] == this._textureMap ) {
+
+											sliceMap = textureAsset.sliceMap = asset;
+											break;
+
+										} else if ( asset.plist && asset.plist.metadata && asset.plist.metadata[ 'textureFileName' ] == this._textureMap ) {
+
+											sliceMap = textureAsset.sliceMap = asset.plist;
+											break;
+
+										}
+
+									}
+
+									// not found? return
+									if ( !sliceMap ) {
+
+										this.material.slice = null;
+										return;
+
+									}
+
+								}
+
+								// set to slice object from slice map
+								this.material.slice = sliceMap.frames[ sn ];
+
+							}
+
+						}
+
+					});
+
 				}
 				
 				obj3d.geometryType = layer.mesh;
 				
-				obj3d.material.side = (layer.mesh == 'Plane') ? THREE.DoubleSide : THREE.FrontSide;
-				
+				mat.side = (layer.mesh == 'Plane') ? THREE.DoubleSide : ( layer.inverted ? THREE.BackSide : THREE.FrontSide );
+
 				//material
 				mat.tint.set( layer.tint != undefined ? parseInt( layer.tint, 16 ) : 0xffffff );
 				mat.addColor.set( layer.addColor != undefined ? parseInt( layer.addColor, 16 ) : 0x0 );
 				mat.alpha = (layer.alpha != undefined ? layer.alpha : 1.0);
+				mat.alphaThresh = (layer.alphaThresh != undefined ? layer.alphaThresh : 0);
 				mat.brightness = (layer.brightness != undefined ? layer.brightness : 0.0);
 				mat.stipple = (layer.stipple != undefined ? layer.stipple : 0.0);
-			
+
+				// texture
+				obj3d.textureMap = layer.textureMap ? layer.textureMap : null;
+				obj3d.sliceName = layer.sliceName ? layer.sliceName : null;
+
 			}
 			
+			break;
+
+		case 'FxSprite':
+
+				// recycled
+				if ( obj3d ) {
+
+					obj3d.reset();
+
+				// new
+				} else {
+
+					obj3d = new THREE.FxSprite();
+
+				}
+
+				var mat = obj3d.material;
+
+				//props
+				mat.tint.set( layer.tint != undefined ? parseInt( layer.tint, 16 ) : 0xffffff );
+				mat.addColor.set( layer.addColor != undefined ? parseInt( layer.addColor, 16 ) : 0x0 );
+				mat.alpha = (layer.alpha != undefined ? layer.alpha : 1.0);
+				mat.alphaThresh = (layer.alphaThresh != undefined ? layer.alphaThresh : 0);
+				mat.brightness = (layer.brightness != undefined ? layer.brightness : 0.0);
+				mat.stipple = (layer.stipple != undefined ? layer.stipple : 0.0);
+
+				// texture
+				obj3d.textureMap = layer.textureMap ? layer.textureMap : null;
+				obj3d.fxData = layer.fxData ? layer.fxData : null;
+
+				// angle
+				obj3d.scaleX = layer.scaleX ? layer.scaleX : 1.0;
+				obj3d.scaleY = layer.scaleY ? layer.scaleY : 1.0;
+				obj3d.angle = layer.angle ? layer.angle : 0;
+
 			break;
 		
 		// lookup asset by name
@@ -1903,7 +2075,9 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 		
 		if ( layer.castShadow != undefined ) obj3d.castShadow = layer.castShadow;
 		if ( layer.receiveShadow != undefined ) obj3d.receiveShadow = layer.receiveShadow;
-		
+
+		if ( obj3d instanceof THREE.FxSprite ) obj3d.cascadeColorChange();
+
 		if ( helper ) { 
 		
 			this.scene.add( helper );
@@ -1919,7 +2093,41 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 			obj3d.visible = layer.visible;
 			
 		} else obj3d.visible = true;
-		
+
+		// Animations
+		if ( layer.animSpeed != undefined ) obj3d.animSpeed = layer.animSpeed;
+
+		if ( layer.animName != undefined && obj3d.animNamed( layer.animName ) != undefined ) {
+
+			var animOption = layer.animOption ? layer.animOption : 'gotoAndStop';
+			var animFrame = layer.animFrame != undefined ? layer.animFrame : 0;
+
+			if ( animOption == 'loopAnim' ) {
+
+				obj3d.loopAnim( layer.animName, Infinity, false );
+
+			} else if ( animOption == 'loopFrom' ) {
+
+				obj3d.gotoAndStop( layer.animName, animFrame + 1 );
+				obj3d.loopAnim( layer.animName, Infinity, true );
+
+			} else if ( animOption == 'playAnim' ) {
+
+				obj3d.playAnim( layer.animName );
+
+			} else {
+
+				obj3d.gotoAndStop( layer.animName, animFrame );
+
+			}
+
+		} else if ( layer.animFrame != undefined ) {
+
+			obj3d.stopAnim();
+			obj3d.frame = layer.animFrame;
+
+		}
+
 		// PixelBox specific
 		if ( !obj3d.isInstance && obj3d instanceof THREE.PixelBox ) {
 		
@@ -1966,39 +2174,6 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 			} else {
 			
 				obj3d.stipple = 0;
-				
-			}
-			
-			if ( layer.animSpeed != undefined ) obj3d.animSpeed = layer.animSpeed;
-			
-			if ( layer.animName != undefined && obj3d.animNamed( layer.animName ) != undefined ) {
-			
-				var animOption = layer.animOption ? layer.animOption : 'gotoAndStop';
-				var animFrame = layer.animFrame != undefined ? layer.animFrame : 0;
-				
-				if ( animOption == 'loopAnim' ) {
-				
-					obj3d.loopAnim( layer.animName, Infinity, false );
-					
-				} else if ( animOption == 'loopFrom' ) { 
-				
-					obj3d.gotoAndStop( layer.animName, animFrame + 1 ); 
-					obj3d.loopAnim( layer.animName, Infinity, true );
-					
-				} else if ( animOption == 'playAnim' ) { 
-				
-					obj3d.playAnim( layer.animName );
-					
-				} else {
-				
-					obj3d.gotoAndStop( layer.animName, animFrame );
-					
-				}
-				
-			} else if ( layer.animFrame != undefined ) {
-			
-				obj3d.stopAnim();
-				obj3d.frame = layer.animFrame;
 				
 			}
 			
@@ -2198,7 +2373,7 @@ THREE.PixelBoxScene.prototype.makeGeometryObject = function ( layer, isCollShape
 		layer.height = param( 'height', 10 );
 		if ( !(layer.inverted || isCollShape) )
 			geom = new THREE.PlaneBufferGeometry( layer.width, layer.height,layer.widthSegments, layer.heightSegments );
-		else 
+		else
 			geom = new THREE.PlaneGeometry( layer.width, layer.height,layer.widthSegments, layer.heightSegments );
 			
 		if ( isCollShape ) { 
@@ -6192,13 +6367,135 @@ THREE.PixelBoxShader = {
 
 };
 
+THREE.PixelBoxMeshDepthShader = {
+	uniforms: {
+		map: { type: "t", value: null },
+		tintAlpha: 	{ type: "f", value: 1.0 },
+		alphaThresh: 	{ type: "f", value: 0 },
+
+		// slice texture params
+		uvSliceRect: { type: "v4", value: { x: 0, y: 1, z: 1, w: 0 } },
+		uvSliceOffset: { type: "v2", value: { x: 0, y: 1 } },
+		uvSliceSizeIsRotated: { type: "v3", value: { x: 1, y: 1, z: 0 } },
+
+		// fxSprite billboarding
+		parentWorldMatrix: { type: "m4", value: new THREE.Matrix4() },
+		localMatrix: { type: "m4", value: new THREE.Matrix4() },
+		spriteTransform: { type: "m4", value: new THREE.Matrix4() }
+
+	},
+
+	vertexShader: [
+		"varying vec2 vUv;",
+
+		"uniform mat4 parentWorldMatrix;",
+		"uniform mat4 localMatrix;",
+		"uniform mat4 spriteTransform;",
+
+		"void main() {",
+		"   vec4 mvPosition;",
+
+		"   #ifdef BILLBOARD",
+		"       mat4 modelView = viewMatrix * parentWorldMatrix;",
+		"	    modelView[0][0] = 1.0;",
+		"	    modelView[0][1] = 0.0;",
+		"       modelView[0][2] = 0.0;",
+		"	    modelView[1][0] = 0.0;",
+		"	    modelView[1][1] = 1.0;",
+		"   	modelView[1][2] = 0.0;",
+		"       modelView[2][0] = 0.0;",
+		"       modelView[2][1] = 0.0;",
+		"       modelView[2][2] = 1.0;",
+		"       modelView = modelView * spriteTransform * localMatrix;",
+
+		"	    mvPosition = modelView * vec4( position, 1.0 );",
+		"   #else",
+		"	    mvPosition = modelViewMatrix * vec4( position, 1.0 );",
+		"   #endif",
+
+		"	vUv = uv;",
+		"	gl_Position = projectionMatrix * mvPosition;",
+
+		"}"	].join( "\n" ),
+
+	fragmentShader: [
+		"varying vec2 vUv;",
+		"#ifdef USE_MAP",
+		"uniform sampler2D map;",
+		"uniform vec4 uvSliceRect;",
+		"uniform vec2 uvSliceOffset;",
+		"uniform vec3 uvSliceSizeIsRotated;",
+		"#endif",
+		"uniform float tintAlpha;",
+		"uniform float alphaThresh;",
+
+		"#ifdef USE_MAP",
+		"vec4 sampleSlice(){",
+		"   vec2 _uv;",
+		"   if (uvSliceSizeIsRotated.z < 1.0) { ",
+		"       _uv =  vUv;",
+		"       if(_uv.x <= uvSliceRect.x || _uv.y <= uvSliceRect.w || _uv.x >= uvSliceRect.z || _uv.y >= uvSliceRect.y) {",
+		"           discard; return vec4(0.0);",
+		"       }",
+		"       _uv.x = uvSliceOffset.x + (_uv.x - uvSliceRect.x) * uvSliceSizeIsRotated.x;",
+		"       _uv.y = uvSliceOffset.y + (_uv.y - uvSliceRect.y) * uvSliceSizeIsRotated.y;",
+		"   } else { ",
+		"       _uv = vec2(vUv.y, 1.0 - vUv.x);",
+		"       if(vUv.x <= uvSliceRect.x || vUv.y <= uvSliceRect.w || vUv.x >= uvSliceRect.z || vUv.y >= uvSliceRect.y) {",
+		"           discard; return vec4(0.0);",
+		"       }",
+		"       _uv.x = uvSliceOffset.x + (_uv.x - uvSliceRect.w) * uvSliceSizeIsRotated.y;",
+		"       _uv.y = uvSliceOffset.y + (_uv.y - (1.0 - uvSliceRect.x)) * uvSliceSizeIsRotated.x;",
+		"   }",
+		"   return texture2D( map, _uv );",
+		"}",
+		"#endif",
+
+		"float rand(vec2 co) {",
+		"	float a = 12.9898;",
+		"	float b = 78.233;",
+		"   float c = 43758.5453;",
+		"   float dt= dot(co.xy ,vec2(a,b));",
+		"   float sn= mod(dt,3.14);",
+		"   return fract(sin(sn) * c);",
+		"}",
+		"vec4 pack_depth( const in float depth ) {",
+		"	const vec4 bit_shift = vec4( 256.0 * 256.0 * 256.0, 256.0 * 256.0, 256.0, 1.0 );",
+		"	const vec4 bit_mask = vec4( 0.0, 1.0 / 256.0, 1.0 / 256.0, 1.0 / 256.0 );",
+		"	vec4 res = mod( depth * bit_shift * vec4( 255 ), vec4( 256 ) ) / vec4( 255 );",
+		"	res -= res.xxyz * bit_mask;",
+		"	return res;",
+		"}",
+		"void main() {",
+		"   vec4 texColor = vec4(0.0, 0.0, 0.0, 1.0);",
+		"#ifdef USE_MAP",
+		"   texColor = sampleSlice();",
+		"#endif",
+		"   texColor.a = texColor.a <= alphaThresh ? 0.0 : (texColor.a * tintAlpha);",
+		"	if (texColor.a < 1.0) {",
+		"		float a = rand(gl_FragCoord.xy);",
+		"		a = 1.0 - step(texColor.a, a);",
+		"		if (a == 0.0) discard;",
+		"	}",
+		"	gl_FragData[ 0 ] = pack_depth(gl_FragCoord.z);",
+		"}"
+	].join( "\n" )
+
+};
+
 THREE.PixelBoxMeshShader = {
 	uniforms: {
+		// texture
+		map: { type: "t", value: null },
+
 		// tint color
 		tintColor:	{ type: "c", value: new THREE.Color( 0xffffff ) },
 		addColor:	{ type: "c", value: new THREE.Color( 0x0 ) },
 		tintAlpha: 	{ type: "f", value: 1.0 },
 		brightness: { type: "f", value: 0.0 },
+
+		// alpha values below this one are cut off
+		alphaThresh: { type: "f", value: 0.0 },
 		
 		// fog color
 		fogColor:    { type: "c", value: new THREE.Color( 0xFFFFFF ) },
@@ -6214,7 +6511,19 @@ THREE.PixelBoxMeshShader = {
 		actualDirLights: { type: "i", value: 0 },
 		directionalLightShadowMap: { type: "iv1", value: [] },
 		actualSpotLights: { type: "i", value: 0 },
-		spotLightShadowMap: { type: "iv1", value: [] }
+		spotLightShadowMap: { type: "iv1", value: [] },
+
+		// texture params
+		uvSliceRect: { type: "v4", value: { x: 0, y: 1, z: 1, w: 0 } },
+		uvSliceOffset: { type: "v2", value: { x: 0, y: 1 } },
+		uvSliceSizeIsRotated: { type: "v3", value: { x: 1, y: 1, z: 0 } },
+
+		// fxSprite billboarding
+		billboard: { type: "i", value: 0 },
+		parentWorldMatrix: { type: "m4", value: new THREE.Matrix4() },
+		localMatrix: { type: "m4", value: new THREE.Matrix4() },
+		spriteTransform: { type: "m4", value: new THREE.Matrix4() }
+
 	},
 
 	attributes: {},
@@ -6223,6 +6532,11 @@ THREE.PixelBoxMeshShader = {
 	"varying vec3 vViewPosition;",
 	"varying vec3 vNormal;",
 	"varying vec4 vWorldPosition;",
+	"varying vec2 vUv;",
+
+	"uniform mat4 parentWorldMatrix;",
+	"uniform mat4 localMatrix;",
+	"uniform mat4 spriteTransform;",
 
 	"void main() {",
 	"#ifdef FLIP_SIDED",
@@ -6230,19 +6544,46 @@ THREE.PixelBoxMeshShader = {
 	"#else",
 	"	vNormal = normalize( normalMatrix * normal );",
 	"#endif",
-	
-	"	vec4 mvPosition = modelViewMatrix * vec4( position, 1.0 );",
+
+	"   vec4 mvPosition;",
+
+	"   #ifdef BILLBOARD",
+	"       mat4 modelView = viewMatrix * parentWorldMatrix;",
+	"	    modelView[0][0] = 1.0;",
+	"	    modelView[0][1] = 0.0;",
+	"       modelView[0][2] = 0.0;",
+	"	    modelView[1][0] = 0.0;",
+	"	    modelView[1][1] = 1.0;",
+	"   	modelView[1][2] = 0.0;",
+	"       modelView[2][0] = 0.0;",
+	"       modelView[2][1] = 0.0;",
+	"       modelView[2][2] = 1.0;",
+	"       modelView = modelView * spriteTransform * localMatrix;",
+
+	"	    mvPosition = modelView * vec4( position, 1.0 );",
+	"   #else",
+	"	    mvPosition = modelViewMatrix * vec4( position, 1.0 );",
+	"   #endif",
+
 	"	vViewPosition = -mvPosition.xyz;",
 	"	vWorldPosition = modelMatrix * vec4( position, 1.0 );",
-	
+	"   vUv = uv; ",
 	"	gl_Position = projectionMatrix * mvPosition;",
 	"}"
 	].join( "\n" ),
 	
 	fragmentShader: [
+	"varying vec2 vUv;",
+	"#ifdef USE_MAP",
+	"uniform sampler2D map;",
+	"uniform vec4 uvSliceRect;",
+	"uniform vec2 uvSliceOffset;",
+	"uniform vec3 uvSliceSizeIsRotated;",
+	"#endif",
 	"uniform vec3 tintColor;",
 	"uniform vec3 addColor;",
 	"uniform float tintAlpha;",
+	"uniform float alphaThresh;",
 	"uniform float stipple;",
 	"uniform float brightness;",
 
@@ -6276,7 +6617,13 @@ THREE.PixelBoxMeshShader = {
 	"	vec3 getShadowColor(int shadowIndex, vec4 mPosition) {",
 	"		vec3 shadowColor = vec3(1.0);",
 	"		float fDepth;",
-	
+
+	"#ifdef BILLBOARD",
+	"   #define SHADOW_THRESH 0.005",
+	"#else",
+	"   #define SHADOW_THRESH 0.0",
+	"#endif",
+
 	"		if (shadowIndex == 0) {",
 	"			vec4 sm = shadowMatrix[ 0 ] * mPosition;",
 	"			vec3 shadowCoord = sm.xyz / sm.w;",
@@ -6287,7 +6634,7 @@ THREE.PixelBoxMeshShader = {
 	"			if ( frustumTest ) {",
 	"				shadowCoord.z += shadowBias[ 0 ];",
 	"				float fDepth = unpackDepth( texture2D( shadowMap[ 0 ], shadowCoord.xy ) );",
-	"				if ( fDepth < shadowCoord.z ) {",
+	"				if ( shadowCoord.z - fDepth > SHADOW_THRESH ) {",
 	"					shadowColor = vec3(0.0);",
 	"				}",
 	"			}",
@@ -6304,7 +6651,7 @@ THREE.PixelBoxMeshShader = {
 	"			if ( frustumTest ) {",
 	"				shadowCoord.z += shadowBias[ 1 ];",
 	"				float fDepth = unpackDepth( texture2D( shadowMap[ 1 ], shadowCoord.xy ) );",
-	"				if ( fDepth < shadowCoord.z ) {",
+	"				if ( shadowCoord.z - fDepth > SHADOW_THRESH ) {",
 	"					shadowColor = vec3(0.0);",
 	"				}",
 	"			}",
@@ -6322,7 +6669,7 @@ THREE.PixelBoxMeshShader = {
 	"			if ( frustumTest ) {",
 	"				shadowCoord.z += shadowBias[ 2 ];",
 	"				float fDepth = unpackDepth( texture2D( shadowMap[ 2 ], shadowCoord.xy ) );",
-	"				if ( fDepth < shadowCoord.z ) {",
+	"				if ( shadowCoord.z - fDepth > SHADOW_THRESH ) {",
 	"					shadowColor = vec3(0.0);",
 	"				}",
 	"			}",
@@ -6340,7 +6687,7 @@ THREE.PixelBoxMeshShader = {
 	"			if ( frustumTest ) {",
 	"				shadowCoord.z += shadowBias[ 3 ];",
 	"				float fDepth = unpackDepth( texture2D( shadowMap[ 3 ], shadowCoord.xy ) );",
-	"				if ( fDepth < shadowCoord.z ) {",
+	"				if ( shadowCoord.z - fDepth > SHADOW_THRESH ) {",
 	"					shadowColor = vec3(0.0);",
 	"				}",
 	"			}",
@@ -6358,7 +6705,7 @@ THREE.PixelBoxMeshShader = {
 	"			if ( frustumTest ) {",
 	"				shadowCoord.z += shadowBias[ 4 ];",
 	"				float fDepth = unpackDepth( texture2D( shadowMap[ 4 ], shadowCoord.xy ) );",
-	"				if ( fDepth < shadowCoord.z ) {",
+	"				if ( shadowCoord.z - fDepth > SHADOW_THRESH ) {",
 	"					shadowColor = vec3(0.0);",
 	"				}",
 	"			}",
@@ -6376,7 +6723,7 @@ THREE.PixelBoxMeshShader = {
 	"			if ( frustumTest ) {",
 	"				shadowCoord.z += shadowBias[ 5 ];",
 	"				float fDepth = unpackDepth( texture2D( shadowMap[ 5 ], shadowCoord.xy ) );",
-	"				if ( fDepth < shadowCoord.z ) {",
+	"				if ( shadowCoord.z - fDepth > SHADOW_THRESH ) {",
 	"					shadowColor = vec3(0.0);",
 	"				}",
 	"			}",
@@ -6394,7 +6741,7 @@ THREE.PixelBoxMeshShader = {
 	"			if ( frustumTest ) {",
 	"				shadowCoord.z += shadowBias[ 6 ];",
 	"				float fDepth = unpackDepth( texture2D( shadowMap[ 6 ], shadowCoord.xy ) );",
-	"				if ( fDepth < shadowCoord.z ) {",
+	"				if ( shadowCoord.z - fDepth > SHADOW_THRESH ) {",
 	"					shadowColor = vec3(0.0);",
 	"				}",
 	"			}",
@@ -6412,7 +6759,7 @@ THREE.PixelBoxMeshShader = {
 	"			if ( frustumTest ) {",
 	"				shadowCoord.z += shadowBias[ 7 ];",
 	"				float fDepth = unpackDepth( texture2D( shadowMap[ 7 ], shadowCoord.xy ) );",
-	"				if ( fDepth < shadowCoord.z ) {",
+	"				if ( shadowCoord.z - fDepth > SHADOW_THRESH ) {",
 	"					shadowColor = vec3(0.0);",
 	"				}",
 	"			}",
@@ -6460,22 +6807,53 @@ THREE.PixelBoxMeshShader = {
 	"   float sn = mod(dt,3.14);",
 	"   return fract(sin(sn) * c);",
 	"}",
-	
+
+	"#ifdef USE_MAP",
+	"vec4 sampleSlice(){",
+	"   vec2 _uv;",
+	"   if (uvSliceSizeIsRotated.z < 1.0) { ",
+	"       _uv =  vUv;",
+	"       if(_uv.x <= uvSliceRect.x || _uv.y <= uvSliceRect.w || _uv.x >= uvSliceRect.z || _uv.y >= uvSliceRect.y) {",
+	"           discard; return vec4(0.0);",
+	"       }",
+	"       _uv.x = uvSliceOffset.x + (_uv.x - uvSliceRect.x) * uvSliceSizeIsRotated.x;",
+	"       _uv.y = uvSliceOffset.y + (_uv.y - uvSliceRect.y) * uvSliceSizeIsRotated.y;",
+	"   } else { ",
+	"       _uv = vec2(vUv.y, 1.0 - vUv.x);",
+	"       if(vUv.x <= uvSliceRect.x || vUv.y <= uvSliceRect.w || vUv.x >= uvSliceRect.z || vUv.y >= uvSliceRect.y) {",
+	"           discard; return vec4(0.0);",
+	"       }",
+	"       _uv.x = uvSliceOffset.x + (_uv.x - uvSliceRect.w) * uvSliceSizeIsRotated.y;",
+	"       _uv.y = uvSliceOffset.y + (_uv.y - (1.0 - uvSliceRect.x)) * uvSliceSizeIsRotated.x;",
+	"   }",
+
+	"   return texture2D( map, _uv );",
+	"}",
+	"#endif",
+
 	"void main() {",
 	//	stipple and alpha
 	"	float s = 1.0; ",
+	"   float texAlpha = 1.0;",
+	"   vec3 texColor = vec3( 1.0, 1.0, 1.0 );",
 	"	if (stipple != 0.0) { ",
 	"		vec2 stip = fract( vec2(gl_FragCoord.x + stipple, gl_FragCoord.y) * 0.5);",
 	"		s = step(0.25,abs(stip.x-stip.y));",
 	"	}",
-	"	if (tintAlpha == 0.0 || s == 0.0) discard;",
-	"	else if (tintAlpha < 1.0) {",
+	"#ifdef USE_MAP",
+	"   vec4 tex = sampleSlice();",
+	"   texAlpha = tex.a <= alphaThresh ? 0.0 : tex.a;",
+	"   texColor = tex.xyz;",
+	"#endif",
+	"   texAlpha *= tintAlpha;",
+	"	if (texAlpha == 0.0 || s == 0.0) discard;",
+	"	else if (texAlpha < 1.0) {",
 	"		float a = rand(gl_FragCoord.xy);",
-	"		a = s * (1.0 - step(tintAlpha, a));",
+	"		a = s * (1.0 - step(texAlpha, a));",
 	"		if (a == 0.0) discard;",
 	"	}",
 	
-	"	vec3 diffuse = tintColor;",
+	"	vec3 diffuse = tintColor * texColor;",
 	
 	"	vec3 totalAmbient = diffuse * ambientLightColor;",
 	"	vec3 totalDirect = vec3(0.0);",
@@ -6494,7 +6872,11 @@ THREE.PixelBoxMeshShader = {
 	"	if ( pointLightDistance[ i ] > 0.0 )",
 	"		lDistance = 1.0 - min( ( length( lVector ) / pointLightDistance[ i ] ), 1.0 );",
 	"	lVector = normalize( lVector );",
+	"   #ifdef BILLBOARD",
+	"   float dotProduct = 1.0;",
+	"   #else",
 	"	float dotProduct = dot( vertexNormal, lVector );",
+	"   #endif",
 	"	#ifdef WRAP_AROUND",
 	"		float pointDiffuseWeightFull = max( dotProduct, 0.0 );",
 	"		float pointDiffuseWeightHalf = max( 0.5 * dotProduct + 0.5, 0.0 );",
@@ -6520,7 +6902,11 @@ THREE.PixelBoxMeshShader = {
 	"	if (i < actualDirLights) {",		
 	"	vec4 lDirection = viewMatrix * vec4( directionalLightDirection[ i ], 0.0 );",
 	"	vec3 dirVector = normalize( lDirection.xyz);",
-	"	float dotProduct = dot(vertexNormal, dirVector);",
+	"   #ifdef BILLBOARD",
+	"   float dotProduct = 1.0;",
+	"   #else",
+	"	float dotProduct = dot( vertexNormal, dirVector );",
+	"   #endif",
 	"	#ifdef WRAP_AROUND",
 	"		float dirDiffuseWeightFull = max( dotProduct, 0.0 );",
 	"		float dirDiffuseWeightHalf = max( 0.5 * dotProduct + 0.5, 0.0 );",
@@ -6555,7 +6941,11 @@ THREE.PixelBoxMeshShader = {
 	"	if ( spotEffect > spotLightAngleCos[ i ] ) {",
 	"		spotEffect = max( pow( max( spotEffect, 0.0 ), spotLightExponent[ i ] ), 0.0 );",
 			// diffuse
-	"		float dotProduct = dot( vertexNormal, lVector );",
+	"       #ifdef BILLBOARD",
+	"       float dotProduct = 1.0;",
+	"       #else",
+	"	    float dotProduct = dot( vertexNormal, lVector );",
+	"       #endif",
 	"		#ifdef WRAP_AROUND",
 	"			float spotDiffuseWeightFull = max( dotProduct, 0.0 );",
 	"			float spotDiffuseWeightHalf = max( 0.5 * dotProduct + 0.5, 0.0 );",
@@ -6584,7 +6974,11 @@ THREE.PixelBoxMeshShader = {
 	"	if (i < actualHemiLights) {",		
 	"	vec4 lDirection = viewMatrix * vec4( hemisphereLightDirection[ i ], 0.0 );",
 	"	vec3 lVector = normalize( lDirection.xyz );",
+	"   #ifdef BILLBOARD",
+	"   float dotProduct = 1.0;",
+	"   #else",
 	"	float dotProduct = dot( vertexNormal, lVector );",
+	"   #endif",
 	"	float hemiDiffuseWeight = 0.5 * dotProduct + 0.5;",
 	"	vec3 hemiColor = mix( hemisphereLightGroundColor[ i ], hemisphereLightSkyColor[ i ], hemiDiffuseWeight );",
 	"	hemiDiffuse += diffuse * hemiColor;",
@@ -6597,26 +6991,27 @@ THREE.PixelBoxMeshShader = {
 
 	"float depth = gl_FragCoord.z / gl_FragCoord.w;",
 	"float fogFactor = smoothstep( fogNear, fogFar, depth );",
-	
-	// fog
+
 	"gl_FragColor = vec4(mix(totalDiffuse + addColor, fogColor, fogFactor), 1.0);",
+
 	"}"
 	].join( "\n" )	
 };
 
 THREE.MeshPixelBoxMaterial = function ( params ) {
 
+	function param ( pname, defaultValue ) { if ( params && params[ pname ] != undefined ) return params[ pname ]; return defaultValue; }
+
 	var material = new THREE.ShaderMaterial( {
 		uniforms:       THREE.UniformsUtils.merge( [ THREE.UniformsLib[ 'shadowmap' ], THREE.UniformsLib[ 'lights' ], THREE.PixelBoxMeshShader.uniforms ] ),
 		attributes:     THREE.PixelBoxMeshShader.attributes,
 		vertexShader:   THREE.PixelBoxMeshShader.vertexShader,
 		fragmentShader: THREE.PixelBoxMeshShader.fragmentShader,
+		defines: param( 'defines', {} ),
 		transparent: false,
 		lights: true,
 		fog: true
 	});
-	
-	function param ( pname, defaultValue ) { if ( params && params[ pname ] != undefined ) return params[ pname ]; return defaultValue; }
 	
 	var uniforms = material.uniforms;
 	uniforms.tintColor.value.set( param( 'tint', 0xffffff ) );
@@ -6634,25 +7029,66 @@ THREE.MeshPixelBoxMaterial = function ( params ) {
 	
 	Object.defineProperty( material, 'tint', {
 		get: function () { return this.uniforms.tintColor.value; },
-		set: function ( v ) { this.uniforms.tintColor.value.copy( v ); },
+		set: function ( v ) { this.uniforms.tintColor.value.copy( v ); }
 	} );
 	Object.defineProperty( material, 'addColor', {
 		get: function () { return this.uniforms.addColor.value; },
-		set: function ( v ) { this.uniforms.addColor.value.copy( v ); },
+		set: function ( v ) { this.uniforms.addColor.value.copy( v ); }
 	} );
 	Object.defineProperty( material, 'alpha', {
 		get: function () { return this.uniforms.tintAlpha.value; },
-		set: function ( v ) { this.uniforms.tintAlpha.value = v; },
+		set: function ( v ) { this.uniforms.tintAlpha.value = v; }
+	} );
+	Object.defineProperty( material, 'alphaThresh', {
+		get: function () { return this.uniforms.alphaThresh.value; },
+		set: function ( v ) { this.uniforms.alphaThresh.value = v; }
 	} );
 	Object.defineProperty( material, 'brightness', {
 		get: function () { return this.uniforms.brightness.value; },
-		set: function ( v ) { this.uniforms.brightness.value = v; },
+		set: function ( v ) { this.uniforms.brightness.value = v; }
 	} );
 	Object.defineProperty( material, 'stipple', {
 		get: function () { return this.uniforms.stipple.value; },
-		set: function ( v ) { this.uniforms.stipple.value = v; },
+		set: function ( v ) { this.uniforms.stipple.value = v; }
 	} );
-	
+	Object.defineProperty( material, 'map', {
+		get: function () { return this.uniforms.map.value; },
+		set: function ( v ) { this.uniforms.map.value = v; this.slice = this._slice; this.needsUpdate = true; }
+	} );
+	// slice property
+	Object.defineProperty( material, 'slice', {
+		get: function () { return this._slice; },
+		set: function ( v ) {
+			this._slice = v;
+			var uni = this.uniforms;
+			if ( v ) {
+
+				var texture = this.uniforms.map.value;
+				var tw = texture.image.width;
+				var th = texture.image.height;
+				uni.uvSliceRect.value = {
+					x: v.spriteColorRect.x / v.spriteSourceSize.x,
+					y: 1.0 - v.spriteColorRect.y / v.spriteSourceSize.y,
+					z: (v.spriteColorRect.x + v.spriteColorRect.width) / v.spriteSourceSize.x,
+					w: 1.0 - (v.spriteColorRect.y + v.spriteColorRect.height) / v.spriteSourceSize.y };
+				uni.uvSliceOffset.value = { x: v.textureRect.x / tw, y: 1.0 - v.textureRect.y / th };
+				uni.uvSliceSizeIsRotated.value = {
+					x: v.spriteSourceSize.x / tw,
+					y: v.spriteSourceSize.y / th,
+					z: v.textureRotated ? 1.0 : 0.0 };
+
+			} else { // full texture
+
+				uni.uvSliceRect.value = { x: 0, y: 1, z: 1, w: 0 };
+				uni.uvSliceOffset.value = { x: 0, y: 1 };
+				uni.uvSliceSizeIsRotated.value = { x: 1, y: 1, z: 0 };
+
+			}
+
+			//console.log( {uvSliceRect: uni.uvSliceRect.value, uvSliceOffset: uni.uvSliceOffset.value, uvSliceSizeIsRotated: uni.uvSliceSizeIsRotated.value });
+		}
+	} );
+
 	return material;
 		
 };
@@ -7413,6 +7849,15 @@ THREE.PixelBoxUtil.depthMaterial = new THREE.ShaderMaterial( {
 
 THREE.PixelBoxUtil.depthMaterial._shadowPass = true;
 
+THREE.PixelBoxUtil.meshDepthMaterial = new THREE.ShaderMaterial( {
+	uniforms:       THREE.PixelBoxMeshDepthShader.uniforms,
+	vertexShader:   THREE.PixelBoxMeshDepthShader.vertexShader,
+	fragmentShader: THREE.PixelBoxMeshDepthShader.fragmentShader
+});
+
+THREE.PixelBoxUtil.meshDepthMaterial._shadowPass = true;
+
+
 THREE.PixelBoxUtil.updateViewPortUniform = function ( optCamera ) {
 
 	// get cam scale	
@@ -8136,7 +8581,943 @@ THREE.PixelBoxUtil.encodeFrame = function ( frameData, dataObject ) {
 	
 };
 
+/*
+	XML parsing function
+*/
 
+THREE.PixelBoxUtil.parseXml = function() {
+
+	var parseXml = null;
+
+	if ( typeof window.DOMParser != "undefined" ) {
+
+		parseXml = function ( xmlStr ) {
+
+			return ( new window.DOMParser() ).parseFromString( xmlStr, "text/xml" );
+
+		};
+
+	} else if ( typeof window.ActiveXObject != "undefined" && new window.ActiveXObject( "Microsoft.XMLDOM" ) ) {
+
+		parseXml = function ( xmlStr ) {
+
+			var xmlDoc = new window.ActiveXObject( "Microsoft.XMLDOM" );
+			xmlDoc.async = "false";
+			xmlDoc.loadXML( xmlStr );
+			return xmlDoc;
+
+		};
+
+	}
+
+	return parseXml;
+
+}();
+
+THREE.PixelBoxUtil.parsePlist = function( xmlStr ) {
+
+	var xml = THREE.PixelBoxUtil.parseXml( xmlStr );
+
+	function getNodeVal ( val ) {
+
+		switch( val.nodeName.toLowerCase() ) {
+			case 'dict':
+				return parseDict( val );
+
+			case 'string':
+				var cont = val.textContent;
+
+				if ( cont.substr( 0, 1 ) == '{' ) {
+
+					// {{x, y}, {w, h}}
+					var matches = cont.match( /\{\{(-?\d+),\s?(-?\d+)\},\s?\{(-?\d+),\s?(-?\d+)\}\}/ );
+					if ( matches && matches.length == 5 ) {
+
+						return {
+							x: parseInt( matches[ 1 ] ),
+							y: parseInt( matches[ 2 ] ),
+							width: parseInt( matches[ 3 ] ),
+							height: parseInt( matches[ 4 ] )
+						};
+
+					}
+					//{x, y}
+					matches = cont.match( /\{(-?\d+),\s?(-?\d+)\}/ );
+					if ( matches && matches.length == 3 ) {
+
+						return {
+							x: parseInt( matches[ 1 ] ),
+							y: parseInt( matches[ 2 ] )
+						};
+
+					}
+				}
+
+				return cont;
+
+			case 'true':
+				return true;
+
+			case 'false':
+				return false;
+
+			case 'integer':
+				return parseInt( val.textContent );
+
+			case 'array':
+				var children = $( val ).children();
+				var arr = [];
+				for ( var i = 0; i < children.length; i ++ ) {
+
+					arr.push( getNodeVal( children[ i ] ) );
+
+				}
+				return arr;
+
+		}
+
+	};
+
+	function parseDict ( dict ) {
+
+		var children = $( dict ).children();
+		var obj = {};
+
+		for ( var i = 0; i < children.length; i += 2 ) {
+
+			var key = children[ i ].textContent;
+			var val = getNodeVal( children[ i + 1 ] );
+
+			obj[ key ] = val;
+
+		}
+
+		return obj;
+
+	};
+	var obj = parseDict( $( 'plist > dict', xml.documentElement ) );
+
+	// strip extension from filename in meta
+	/*if ( obj.metadata && obj.metadata.textureFileName ) {
+
+		var dotIndex = obj.metadata.textureFileName.lastIndexOf( '.' );
+		if ( dotIndex > 0 ) {
+
+			obj.metadata.textureFileName = obj.metadata.textureFileName.substr( 0, dotIndex );
+
+		}
+
+	}*/
+
+	return obj;
+
+}
+
+/*
+
+ */
+
+THREE.FxSprite = function() {
+
+    THREE.Object3D.apply( this );
+
+    // define base material for shared uniforms
+    this.material = new THREE.MeshPixelBoxMaterial( { defines: { BILLBOARD : 1 } } );
+
+    // define getter, setter for texture
+    // .textureMap property is a string - key into assets for texture to use
+    this._textureMap = null;
+    Object.defineProperty( this, 'textureMap', {
+        get: function(){ return this._textureMap; },
+        set: function( map ) {
+
+            this._textureMap = map;
+
+            // set material's texture map
+            var asset = assets.get( map );
+
+            if ( !asset ){
+
+                this.material.map = null;
+
+            } else if ( asset instanceof THREE.Texture ) {
+
+                this.material.map = asset;
+                asset.needsUpdate = true;
+
+            } else if( asset.image ){
+
+                if ( !asset.texture ) {
+
+                    asset.texture = new THREE.Texture( asset.image );
+
+                }
+
+                this.material.map = asset.texture;
+                asset.texture.needsUpdate = true;
+
+                asset = asset.texture;
+
+            }
+
+            // remove any children sprites
+            this.reset();
+
+            // find and assign slice map, if exists
+            if ( asset ) {
+
+                var sliceMap = asset.sliceMap;
+                if ( !sliceMap ) {
+
+                    // find asset with matching texture name
+                    for ( var key in assets.files ) {
+
+                        var sliceMapAsset = assets.files[ key ];
+                        if ( sliceMapAsset.metadata && sliceMapAsset.metadata[ 'textureFileName' ] == this._textureMap ) {
+
+                            sliceMap = asset.sliceMap = sliceMapAsset;
+                            break;
+
+                        } else if ( sliceMapAsset.plist && sliceMapAsset.plist.metadata && sliceMapAsset.plist.metadata[ 'textureFileName' ] == this._textureMap ) {
+
+                            sliceMap = asset.sliceMap = sliceMapAsset.plist;
+                            break;
+
+                        }
+
+                    }
+
+                }
+
+                // no slice map exists, add a single sprite with texture
+                if ( !sliceMap ) {
+
+                    var s = this.createSprite( null );
+                    this.add( s );
+
+                }
+
+            }
+
+        }
+
+    });
+
+    // resets children sprites
+    this.reset = function () {
+
+        while ( this.children.length ) {
+
+            var c = this.children[ 0 ];
+            this.remove( c );
+
+            c.material.dispose();
+            c.customDepthMaterial.dispose();
+
+        }
+
+        this.layers = {};
+
+    }.bind( this );
+
+    // getter and setter for animation data
+    // animation data must be in fxAnimationExporter json format
+    this._fxData = null;
+    Object.defineProperty( this, 'fxData', {
+
+        get: function () { return this._fxData ? this._fxData.name : null; },
+        set: function ( data ) {
+
+            var asset = this._fxData = assets.get( data );
+
+            this.reset();
+
+            if( !asset ) return;
+
+            // prep the asset
+            if ( !asset.ready ) {
+
+                // go through all the frames
+                for ( var li = 0; li < asset.layerAnims.length; li++ ) {
+
+                    for ( var fi = 0; fi < asset.layerAnims[ li ].length; fi++ ) {
+
+                        var frame = asset.layerAnims[ li ][ fi ];
+                        frame.rx = frame.rx !== undefined ? frame.rx : 0;
+                        frame.ry = frame.ry !== undefined ? frame.ry : 0;
+                        frame.tx = frame.tx !== undefined ? frame.tx : 0;
+                        frame.ty = frame.ty !== undefined ? frame.ty : 0;
+                        frame.c = (frame.c !== undefined ? frame.c : '100,100,100,100,0,0,0,0').split( ',' );
+                        for( var ci = 0; ci < 8; ci++ ) frame.c[ ci ] = parseFloat( frame.c[ ci ] );
+
+                    }
+
+                }
+
+                // convert frame labels into sparse array
+                var frameLabels = new Array();
+                for ( var i = 0; i < asset.frameLabels.length; i++ ) {
+
+                    frameLabels[ asset.frameLabels[ i ].f ] = asset.frameLabels[ i ].l;
+
+                }
+
+                // extract animation ranges
+                asset.animations = { };
+                var anim = null;
+                for ( var f = 0, fn = asset.layerAnims[ 0 ].length; f < fn; f++ ){
+
+                    // new anim
+                    if ( frameLabels[ f ] ) {
+
+                        if ( anim ) asset.animations[ anim.name ] = anim;
+
+                        anim = { name: frameLabels[ f ], start: f, length: 1, fps: asset.fps };
+
+                    // grow length
+                    } else if ( anim ) {
+
+                        anim.length++;
+
+                    }
+
+                }
+                if ( anim ) asset.animations[ anim.name ] = anim;
+
+                // store frame comments into sparse array
+                asset.comments = new Array();
+                for ( var i = 0; i < asset.frameComments.length; i++ ) {
+
+                    asset.comments[ asset.frameComments[ i ].f ] = asset.frameComments[ i ].c;
+
+                }
+
+                // make sure asset.symbols is an object, not array
+                if ( asset.symbols.length ) {
+
+                    var symbols = { };
+                    for( var i = 0; i < asset.symbols.length; i++ ){
+
+                        symbols[ asset.symbols[ i ].name ] = asset.symbols[ i ];
+
+                    }
+                    asset.symbols = symbols;
+
+                }
+
+                asset.ready = true;
+
+            }
+
+            this.animations = asset.animations;
+            this.frameComments = asset.comments;
+
+            // create layers
+            for ( var i = 0; i < asset.layerSymbols.length; i++ ) {
+
+                var symbol = asset.symbols[ asset.layerSymbols[ i ].symbol ];
+                var sliceName = symbol.name;
+                if ( symbol.frames.length > 1 ) sliceName += '0001';
+
+                var layer = this.createSprite( sliceName + '.png' );
+
+                layer.name = asset.layerSymbols[ i ].layer;
+                layer.index = i;
+                layer.symbol = symbol;
+                layer.frame = -1;
+                layer.matrixAutoUpdate = false;
+
+                this.layers[ layer.name ] = layer;
+                this.add( layer );
+
+                this.setLayerFrame( layer, 0, 0, 0 );
+
+            }
+
+        }
+
+    } );
+
+    // add animation functions
+    this.currentAnimation = null;
+    this.animSpeed = 1.0;
+
+    this._animationInterval = 0;
+    this._animLoops = -1;
+    this._currentAnimationPosition = 0;
+
+    Object.defineProperty( this, 'currentAnimationPosition', {
+        get: function () { return this._currentAnimationPosition; },
+        set: function ( val ) { // set frame according to anim position
+
+            var transTime = val * this.currentAnimation.length;
+            var frame = Math.floor( transTime );
+            transTime = transTime - Math.floor( transTime );
+
+            var nextFrame;
+
+            // detect wraparound
+            if ( frame >= this.currentAnimation.length - 1) {
+
+                // looping? next frame is first frame
+                if ( this._animLoops > 0 ) nextFrame = 0;
+
+                // not looping? next frame is last frame
+                else nextFrame = this.currentAnimation.length - 1;
+
+            // no wraparound yet
+            } else nextFrame = frame + 1;
+
+            // backwards direction
+            if ( this.animSpeed < 0 ) {
+
+                frame = this.currentAnimation.length - 1 - frame;
+                nextFrame = this.currentAnimation.length - 1 - nextFrame;
+
+            }
+
+            // store new anim. position
+            this._currentAnimationPosition = val;
+
+            // offset by .start
+            frame += this.currentAnimation.start;
+            nextFrame += this.currentAnimation.start;
+
+            // update all layers
+            for ( var i = 0, nc = this.children.length; i < nc; i++ ) {
+
+                this.setLayerFrame( this.children[ i ], transTime, frame, nextFrame );
+
+            }
+
+            // set current frame
+            if ( this.frame != frame ) {
+
+                this.frame = frame;
+
+                // frame event
+                var ev = { type:'frame', frame: frame };
+                this.dispatchEvent( ev );
+
+                if ( this.frameComments[ frame ] ) {
+
+                    ev = { type:'frame-meta', frame: frame, meta: this.frameComments[ frame ] };
+                    this.dispatchEvent( ev );
+
+                }
+
+            }
+
+        }
+
+    } );
+
+    // sprite 2d scale and angle
+    this._scaleX = 1.0;
+    this._scaleY = 1.0;
+    this._scale2d = new THREE.Vector3(1.0, 1.0, 1.0);
+    this._angle = 0;
+    this.spriteTransform = new THREE.Matrix4();
+
+    this.updateMatrix = function(){
+
+        this.matrix.makeTranslation( this.position.x, this.position.y, this.position.z );
+        this._scale2d.x = this._scaleX;
+        this._scale2d.y = this._scaleY;
+        this.spriteTransform.makeRotationZ( this._angle ).scale( this._scale2d );
+        this.matrixWorldNeedsUpdate = true;
+
+    }.bind( this );
+
+    // FxSprite specific props
+    Object.defineProperty( this, 'scaleX', {
+        get: function() { return this._scaleX; },
+        set: function( val ) {
+            this._scaleX = val;
+            this.updateMatrix();
+        }
+    });
+    Object.defineProperty( this, 'scaleY', {
+        get: function() { return this._scaleY; },
+        set: function( val ) {
+            this._scaleY = val;
+            this.updateMatrix();
+        }
+    });
+    Object.defineProperty( this, 'angle', {
+        get: function() { return this._angle; },
+        set: function( val ) {
+            this._angle = val;
+            this.updateMatrix();
+        }
+    });
+
+    // convenience accessors
+    Object.defineProperty( this, 'stipple', {
+        get: function() {
+            return this.material.uniforms.stipple.value;
+        },
+        set: function( val ) {
+            this.material.uniforms.stipple.value = val;
+        }
+    });
+
+    Object.defineProperty( this, 'brightness', {
+        get: function() {
+            return this.material.uniforms.brightness.value;
+        },
+        set: function( val ) {
+            this.material.uniforms.brightness.value = val;
+        }
+    });
+
+    Object.defineProperty( this, 'alphaThresh', {
+        get: function() {
+            return this.material.uniforms.alphaThresh.value;
+        },
+        set: function( val ) {
+            this.material.uniforms.alphaThresh.value = val;
+        }
+    });
+
+    // the following properties cascade to child layers
+    this.cascadeColorChange = THREE.FxSprite.prototype.cascadeColorChange.bind( this );
+
+    Object.defineProperty( this, 'alpha', {
+        get: function() {
+            return this.material.uniforms.tintAlpha.value;
+        },
+        set: function( val ) {
+            this.material.uniforms.tintAlpha.value = val;
+            this.cascadeColorChange();
+        }
+    });
+
+    Object.defineProperty( this, 'tint', {
+        get: function() {
+            requestAnimationFrame( this.cascadeColorChange );
+            return this.material.uniforms.tintColor.value;
+        },
+        set: function( val ) {
+            this.material.uniforms.tintColor.value = val;
+            this.cascadeColorChange();
+        }
+    });
+
+    Object.defineProperty( this, 'addColor', {
+        get: function() {
+            requestAnimationFrame( this.cascadeColorChange );
+            return this.material.uniforms.addColor.value;
+        },
+        set: function( val ) {
+            this.material.uniforms.addColor.value = val;
+            this.cascadeColorChange();
+        }
+    });
+
+    // pre-bind
+    this.advanceAnimationFrame = THREE.FxSprite.prototype.advanceAnimationFrame.bind( this );
+    this.setLayerFrame = THREE.FxSprite.prototype.setLayerFrame.bind( this );
+
+    // stop anims when removed
+    this.addEventListener( 'removed', this.stopAnim );
+
+};
+
+THREE.FxSprite.prototype = Object.create( THREE.Object3D.prototype );
+THREE.FxSprite.prototype.constructor = THREE.FxSprite;
+
+THREE.FxSprite.prototype.createSprite = function( sliceName ){
+
+    var sliceMap = this.material.map.sliceMap;
+    var sliceInfo = sliceMap ? sliceMap.frames[ sliceName ] : null;
+    var sw, sh;
+
+    // set slice's size
+    if ( sliceInfo ) {
+
+        sw = sliceInfo.spriteSourceSize.x;
+        sh = sliceInfo.spriteSourceSize.y;
+
+        // slice-less texture, gets full texture size
+    } else {
+
+        sw = this.material.map.image.width;
+        sh = this.material.map.image.height;
+
+    }
+
+    // create plane and materials
+    var geom = new THREE.PlaneGeometry( sw, sh );
+    var mat = new THREE.MeshPixelBoxMaterial( { defines:{ BILLBOARD: 1 } } );
+    mat.side = THREE.DoubleSide;
+    mat.uniforms.alphaThresh = this.material.uniforms.alphaThresh;
+    mat.uniforms.brightness = this.material.uniforms.brightness;
+    mat.uniforms.stipple = this.material.uniforms.stipple;
+    mat.map = this.material.map;
+
+    var s = new THREE.Mesh( geom, mat );
+
+    s.customDepthMaterial = THREE.PixelBoxUtil.meshDepthMaterial.clone();
+    s.customDepthMaterial.defines = mat.defines;
+    s.customDepthMaterial.needsUpdate = true;
+    s.customDepthMaterial.map = s.customDepthMaterial.uniforms.map = mat.uniforms.map;
+    s.customDepthMaterial.uniforms.tintAlpha = mat.uniforms.tintAlpha;
+    s.customDepthMaterial.uniforms.alphaThresh = mat.uniforms.alphaThresh;
+    s.customDepthMaterial.uniforms.uvSliceRect = mat.uniforms.uvSliceRect;
+    s.customDepthMaterial.uniforms.uvSliceOffset = mat.uniforms.uvSliceOffset;
+    s.customDepthMaterial.uniforms.uvSliceSizeIsRotated = mat.uniforms.uvSliceSizeIsRotated;
+    s.customDepthMaterial._shadowPass = true;
+
+    s.castShadow = this.castShadow;
+    s.receiveShadow = this.receiveShadow;
+
+    s.customDepthMaterial.uniforms.localMatrix.value = mat.uniforms.localMatrix.value = s.matrix;
+    s.customDepthMaterial.uniforms.parentWorldMatrix.value = mat.uniforms.parentWorldMatrix.value = this.matrixWorld;
+    s.customDepthMaterial.uniforms.spriteTransform.value = mat.uniforms.spriteTransform.value = this.spriteTransform;
+
+    if ( sliceInfo ) s.material.slice = sliceInfo;
+
+    s.symbolOverride = null;
+
+    // cascading values
+    s.targetA = 1.0;
+    s.targetAddR = s.targetAddG = s.targetAddB = 0;
+    s.targetTintR = s.targetTintG = s.targetTintB = 0;
+
+    // return
+    return s;
+
+};
+
+// re-evaluate layers colors based on parent
+THREE.FxSprite.prototype.cascadeColorChange = function () {
+
+    for ( var i = this.children.length - 1; i >= 0; i-- ) {
+
+        var layer = this.children[ i ];
+
+        layer.material.uniforms.tintAlpha.value = this.material.uniforms.tintAlpha.value * layer.targetA;
+
+        var color = layer.material.uniforms.tintColor.value;
+        color.copy( this.material.uniforms.tintColor.value );
+
+        color.r *= layer.targetTintR;
+        color.g *= layer.targetTintG;
+        color.b *= layer.targetTintB;
+
+        color = layer.material.uniforms.addColor.value;
+        color.copy( this.material.uniforms.addColor.value );
+        color.r += layer.targetAddR;
+        color.g += layer.targetAddG;
+        color.b += layer.targetAddB;
+
+        layer.castShadow = this.castShadow;
+        layer.receiveShadow = this.receiveShadow;
+
+    }
+
+};
+
+THREE.FxSprite.prototype.advanceAnimationFrame = function () {
+
+    this._animationInterval = 0;
+
+    var nextFrameIn = 1.0 / (this.currentAnimation.fps * 10) ;
+    var keepGoing = true;
+
+    var step = Math.abs( this.animSpeed ) * ( this.currentAnimation.length > 1 ? (1.0 / (this.currentAnimation.length - 1)) : 1 );
+    this.currentAnimationPosition += step;
+    this._animationInterval = 0;
+
+    // end of anim
+    if ( this._currentAnimationPosition >= 1 ) {
+
+        // was looping
+        if ( this._animLoops > 0 ) {
+
+            var ev = { type:'anim-loop', anim:this.currentAnimation, loop: this._animLoops };
+            this.dispatchEvent( ev );
+            this._animLoops--;
+            this._currentAnimationPosition = 0;
+
+            // end of animation
+        } else {
+
+            keepGoing = false;
+            var ev = { type:'anim-finish', anim:this.currentAnimation };
+            this.dispatchEvent( ev );
+
+        }
+
+    }
+
+    // set up next time
+    if (keepGoing) {
+
+        this._animationInterval = nextFrameIn;
+        renderer.animQueue.enqueue( this.advanceAnimationFrame, nextFrameIn );
+
+    }
+
+};
+
+THREE.FxSprite.prototype.setLayerFrame = function( layer, transTime, frame, nextFrame ) {
+
+    var numFrames = this._fxData.layerAnims[ 0 ].length;
+    var frameObject = this._fxData.layerAnims[ layer.index ][ Math.min( frame, numFrames - 1 ) ];
+    var nextFrameObject = this._fxData.layerAnims[ layer.index ][ Math.min( nextFrame, numFrames - 1 ) ];
+
+    var layerSymbol = layer.symbol;
+
+    // allow overriding symbols
+    if ( layer.symbolOverride && this._fxData.symbols[ layer.symbolOverride ] ) {
+
+        layerSymbol = this._fxData.symbols[ layer.symbolOverride ];
+
+    }
+
+    // set layer slice, if changed
+    if ( layer.currentSymbolFrameNumber != frameObject.f || layer.currentSymbolName != layerSymbol.name ) {
+
+        var sliceName = layerSymbol.name;
+        if ( layerSymbol.frames.length > 1 ) sliceName += ('000' + ( (frameObject.f % layerSymbol.frames.length) + 1) ).substr( -4 );
+
+        var sliceInfo = layer.material.map.sliceMap.frames[ sliceName + '.png' ];
+        layer.material.slice = sliceInfo;
+
+        // adjust layer symbol offset
+        var layerOffset = layerSymbol.frames[ frameObject.f ];
+        layer.geometry.vertices[ 0 ].set( layerOffset[ 0 ], -layerOffset[ 1 ], 0 );
+        layer.geometry.vertices[ 1 ].set( layerOffset[ 0 ] + layerOffset[ 2 ], -layerOffset[ 1 ], 0 );
+        layer.geometry.vertices[ 2 ].set( layerOffset[ 0 ], -(layerOffset[ 1 ] + layerOffset[ 3 ]), 0 );
+        layer.geometry.vertices[ 3 ].set( layerOffset[ 0 ] + layerOffset[ 2 ], -(layerOffset[ 1 ] + layerOffset[ 3 ]), 0 );
+        layer.geometry.needsUpdate = true;
+
+        // store current f
+        layer.currentSymbolFrameNumber = frameObject.f;
+        layer.currentSymbolName = layerSymbol.name;
+
+    }
+
+    // set layer frame transforms
+    if ( !frameObject.m || frameObject.m != nextFrameObject.m ) transTime = 0; // frames are parts of different tweens or static
+
+    // calculate transform values
+    var x = frameObject.x + (nextFrameObject.x - frameObject.x) * transTime;
+    var y = -(frameObject.y + (nextFrameObject.y - frameObject.y) * transTime);
+    var tx = frameObject.tx + (nextFrameObject.tx - frameObject.tx) * transTime;
+    var ty = -(frameObject.ty + (nextFrameObject.ty - frameObject.ty) * transTime);
+    var xs = frameObject.sx + (nextFrameObject.sx - frameObject.sx) * transTime;
+    var ys = frameObject.sy + (nextFrameObject.sy - frameObject.sy) * transTime;
+
+    // detect 180 -> -180 flip for x
+    var arx = frameObject.rx, ary = frameObject.ry;
+    if(arx > 90 && nextFrameObject.rx < -90){
+        arx = nextFrameObject.rx - (180 + nextFrameObject.rx + 180 - frameObject.rx);
+    } else if(arx < -90 && nextFrameObject.rx > 90){
+        arx = nextFrameObject.rx + (180 + frameObject.rx + 180 - nextFrameObject.rx);
+    }
+    // detect 180 -> -180 flip for y
+    if(ary > 90 && nextFrameObject.ry < -90){
+        ary = nextFrameObject.ry - (180 + nextFrameObject.ry + 180 - frameObject.ry);
+    } else if(ary < -90 && nextFrameObject.ry > 90){
+        ary = nextFrameObject.ry + (180 + frameObject.ry + 180 - bframe.ry);
+    }
+
+    var rx = (arx + (nextFrameObject.rx - arx) * transTime ) * 0.017452778; // degToRad
+    var ry = (ary + (nextFrameObject.ry - ary) * transTime ) * 0.017452778;
+
+    // build transform
+    var cx = 1, sx = 0, cy = 1, sy = 0;
+    if( rx || ry ) {
+
+        rx = -rx;
+        ry = -ry;
+        cx = Math.cos( rx );
+        sx = Math.sin( rx );
+        cy = Math.cos( ry );
+        sy = Math.sin( ry );
+
+    }
+
+    if( tx || ty ) {
+
+        x += cy * (-tx) * xs - sx * -ty * ys;
+        y += sy * (-tx) * xs + cx * -ty * ys;
+
+    }
+
+    // Build Transform Matrix
+    layer.matrix.identity();
+
+    // | a c 0 tx |
+    // | b d 0 ty |
+    // | 0 0 1  0 |
+    // | 0 0 0  1 |
+
+    layer.matrix.elements[ 0 ] = cy * xs; // a
+    layer.matrix.elements[ 1 ] = sy * xs; // b
+    layer.matrix.elements[ 4 ] = -sx * ys; // c
+    layer.matrix.elements[ 5 ] = cx * ys; // d
+    layer.matrix.elements[ 12 ] = x; // tx
+    layer.matrix.elements[ 13 ] = y; // ty
+    layer.matrix.elements[ 14 ] = -layer.index * 0.1; // z
+
+    layer.matrixAutoUpdate = false;
+
+    // color transform
+    var tintAlpha = layer.targetA = 0.01 * (frameObject.c[ 3 ] + (nextFrameObject.c[ 3 ] - frameObject.c[ 3 ]) * transTime);
+    layer.material.uniforms.tintAlpha.value = this.material.uniforms.tintAlpha.value * tintAlpha;
+
+    var color = layer.material.uniforms.tintColor.value;
+    color.copy( this.material.uniforms.tintColor.value );
+
+    color.r *= ( layer.targetTintR = 0.01 * frameObject.c[ 0 ] + (nextFrameObject.c[ 0 ] - frameObject.c[ 0 ]) * transTime );
+    color.g *= ( layer.targetTintG = 0.01 * frameObject.c[ 1 ] + (nextFrameObject.c[ 1 ] - frameObject.c[ 1 ]) * transTime );
+    color.b *= ( layer.targetTintB = 0.01 * frameObject.c[ 2 ] + (nextFrameObject.c[ 2 ] - frameObject.c[ 2 ]) * transTime );
+
+    color = layer.material.uniforms.addColor.value;
+    color.copy( this.material.uniforms.addColor.value );
+    color.r += ( layer.targetAddR = 0.01 * frameObject.c[ 4 ] + (nextFrameObject.c[ 4 ] - frameObject.c[ 4 ]) * transTime );
+    color.g += ( layer.targetAddG = 0.01 * frameObject.c[ 5 ] + (nextFrameObject.c[ 5 ] - frameObject.c[ 5 ]) * transTime );
+    color.b += ( layer.targetAddB = 0.01 * frameObject.c[ 6 ] + (nextFrameObject.c[ 6 ] - frameObject.c[ 6 ]) * transTime );
+
+    layer.castShadow = this.castShadow;
+    layer.receiveShadow = this.receiveShadow;
+
+};
+
+THREE.FxSprite.prototype.playAnim = function ( animName, fromCurrentFrame ) {
+
+    this.loopAnim( animName, 0, fromCurrentFrame );
+
+};
+
+THREE.FxSprite.prototype.loopAnim = function ( animName, numLoops, fromCurrentFrame ) {
+
+    var anim = this.animations[ animName ];
+
+    if ( !anim ) {
+
+        console.log( "Animation " + animName + " not found in ", this.data );
+        return;
+
+    }
+
+    if ( this._animationInterval ) {
+
+        // same anim, from current frame
+        if ( this.currentAnimation == anim && this._animLoops > 0 ) {
+
+            this._animLoops = numLoops;
+            return;
+
+        }
+
+        this.stopAnim();
+
+    }
+
+    // current anim
+    this.currentAnimation = anim;
+    this._animLoops = (numLoops === undefined ? Infinity : numLoops);
+
+    // set up first frame
+    if ( fromCurrentFrame && this.frame >= anim.start && this.frame < anim.start + anim.length ) {
+
+        if ( this.animSpeed >= 0 ) {
+
+            this.currentAnimationPosition = (this.frame - anim.start) / anim.length;
+
+        } else {
+
+            this.currentAnimationPosition = 1.0 - (this.frame - anim.start) / anim.length;
+        }
+
+    } else {
+
+        this.currentAnimationPosition = 0;
+
+    }
+
+    var ev = { type:'anim-start', anim:this.currentAnimation };
+    this.dispatchEvent( ev );
+
+    // set up timeout
+    var nextFrameIn = 1.0 / (anim.fps * 10);
+    this._animLoops--;
+    this._animationInterval = nextFrameIn;
+    renderer.animQueue.enqueue( this.advanceAnimationFrame, nextFrameIn );
+
+};
+
+THREE.FxSprite.prototype.gotoAndStop = function ( animName, positionWithinAnimation ) {
+
+    var anim = this.animations[ animName ];
+    var diff = (this.currentAnimation != anim);
+    positionWithinAnimation = (positionWithinAnimation === undefined ? 0 : positionWithinAnimation);
+
+    if ( !anim ) {
+
+        console.log( "Animation " + animName + " not found in ", this.data );
+        return;
+
+    }
+
+    if ( this._animationInterval ) {
+
+        this.stopAnim();
+
+    }
+
+    // stop
+    if ( diff ) {
+
+        var ev = { type:'anim-stop', anim:this.currentAnimation };
+        this.dispatchEvent( ev );
+
+    }
+
+    // current anim
+    this.currentAnimation = anim;
+    this.currentAnimationPosition = (positionWithinAnimation < 1.0 ? positionWithinAnimation : ((positionWithinAnimation / anim.length) % 1.0));
+    this._animLoops = -1;
+
+    // anim meta
+    /*if ( diff && anim.meta.length ) {
+
+        var ev = { type:'anim-meta', anim:anim, meta:anim.meta };
+        this.dispatchEvent( ev );
+
+    }*/
+
+};
+
+THREE.FxSprite.prototype.animNamed = function ( animName ) {
+
+    return this.animations[ animName ];
+
+};
+
+THREE.FxSprite.prototype.stopAnim = function () {
+
+    if ( this._animationInterval ) {
+
+        renderer.animQueue.cancel( this.advanceAnimationFrame );
+        this._animationInterval = 0;
+
+    }
+
+    if ( this.currentAnimation ) {
+
+        var ev = { type:'anim-stop', anim:this.currentAnimation };
+        this.dispatchEvent( ev );
+        this.currentAnimation = null;
+
+    }
+
+};
 /*
  * @author Kirill Edelman
  * @source https://github.com/kirilledelman/pixelbox
@@ -8156,6 +9537,8 @@ THREE.PixelBoxAssets = function () {
 			(Array) info.assets - array of paths to json or LZ-String-compressed PixelBox asset files
 			(Array) info.scenes - array of paths to json or LZ-String-compressed PixelBox scene files
 			(Array) info.json - array of paths to json files to load and parse
+			(Array) info.xml - array of paths to xml files to load and parse
+			(Array) info.plist - array of paths to plist files to load and parse
 			(Array) info.other - array of urls to load, and invoke custom handler on (see docs)
 			(Array) info.custom - array of urls to invoke custom loading with (see docs)
 			
@@ -8170,13 +9553,15 @@ THREE.PixelBoxAssets = function () {
 		this.scenedata = params.scenes ? params.scenes : [];
 		this.models = params.assets ? params.assets : [];
 		this.json = params.json ? params.json : [];
+		this.xml = params.xml ? params.xml : [];
+		this.plist = params.plist ? params.plist : [];
 		this.custom = params.custom ? params.custom : [];
 		this.other = params.other ? params.other : [];
 		this.onprogress = params.progress;
 		this.onloaded = params.done;
 		
 		this.totalLoaded = 0;
-		this.totalAssets = this.textures.length + this.scenedata.length + this.models.length + this.json.length + this.custom.length + this.other.length;
+		this.totalAssets = this.textures.length + this.scenedata.length + this.models.length + this.json.length + this.plist.length + this.xml.length + this.custom.length + this.other.length;
 		
 		// custom
 		for ( var i = 0; i < this.custom.length; i++ ) {
@@ -8259,8 +9644,8 @@ THREE.PixelBoxAssets = function () {
 			var reqObj = function ( url ) {
 			
 				return function () {
-				
-					assets.add( url, new THREE.ImageUtils.loadTexture(url, undefined, assets.assetLoaded ) );
+
+					assets.add( url.split( '/' ).pop(), new THREE.ImageUtils.loadTexture(url, undefined, assets.assetLoaded ) );
 					
 				};
 				
@@ -8452,7 +9837,7 @@ THREE.PixelBoxAssets = function () {
 									
 								}
 								
-								assets.add( url, json );
+								assets.add( url.split( '/' ).pop(), json );
 								
 							}
 							
@@ -8476,7 +9861,129 @@ THREE.PixelBoxAssets = function () {
 			this.loadQueue.push( reqObj );
 			
 		}
-		
+
+		// xml
+		for ( var i = 0; i < this.xml.length; i++ ) {
+
+			var url = this.xml[ i ];
+			var reqObj = function ( url ) {
+
+				return function () {
+
+					var request = new XMLHttpRequest();
+					request.open( 'GET', url, true );
+					request.onload = function () {
+						if ( request.status >= 200 && request.status < 400 ) {
+
+							// decompress if needed
+							var xml;
+							var data = request.responseText;
+
+							if ( data.substr(0,1) == '<' ) {
+
+								xml = data;
+
+							} else {
+
+								xml = LZString.decompressFromBase64( data );
+
+							}
+
+							// parse
+							if ( !xml ) {
+
+								console.error( "Failed to LZString decompressFromBase64 " + url );
+
+							} else {
+
+								xml = THREE.PixelBoxUtil.parseXml( xml );
+
+								assets.add( url.split( '/' ).pop(), xml );
+
+							}
+
+							assets.assetLoaded();
+
+						} else console.error( "Failed to load " + url );
+
+					};
+
+					request.onerror = function () {
+
+						console.error( "Connection error while loading " + url );
+
+					};
+
+					request.send();
+
+				};
+
+			}( url );
+			this.loadQueue.push( reqObj );
+
+		}
+
+		// plist
+		for ( var i = 0; i < this.plist.length; i++ ) {
+
+			var url = this.plist[ i ];
+			var reqObj = function ( url ) {
+
+				return function () {
+
+					var request = new XMLHttpRequest();
+					request.open( 'GET', url, true );
+					request.onload = function () {
+						if ( request.status >= 200 && request.status < 400 ) {
+
+							// decompress if needed
+							var plist;
+							var data = request.responseText;
+
+							if ( data.substr(0,1) == '<' ) {
+
+								plist = data;
+
+							} else {
+
+								plist = LZString.decompressFromBase64( data );
+
+							}
+
+							// parse
+							if ( !plist ) {
+
+								console.error( "Failed to LZString decompressFromBase64 " + url );
+
+							} else {
+
+								plist = THREE.PixelBoxUtil.parseXml( plist );
+
+								assets.add( url.split( '/' ).pop(), plist );
+
+							}
+
+							assets.assetLoaded();
+
+						} else console.error( "Failed to load " + url );
+
+					};
+
+					request.onerror = function () {
+
+						console.error( "Connection error while loading " + url );
+
+					};
+
+					request.send();
+
+				};
+
+			}( url );
+			this.loadQueue.push( reqObj );
+
+		}
+
 		// start
 		if ( this.totalAssets ) this.loadQueue[ this.totalAssets - 1 ]();
 		else if ( this.onloaded ) this.onloaded();
