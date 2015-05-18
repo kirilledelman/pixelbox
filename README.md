@@ -56,6 +56,9 @@ Project source also contains above examples, as well as the Scene Editor as Goog
 * Moves objects along a path in space using tweens.
 * Integrated into Scene Editor.
 
+## FxSprite class
+* Play Adobe Flash MovieClips animations.
+* Supplied exporter (JSFL) for Adobe Flash CS6 or higher. 
 
 ## Contact
 
