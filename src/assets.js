@@ -466,7 +466,7 @@ THREE.PixelBoxAssets = function () {
 
 		// start
 		if ( this.totalAssets ) this.loadQueue[ this.totalAssets - 1 ]();
-		else if ( this.onloaded ) this.onloaded();
+		else if ( this.onloaded ) setTimeout( this.onloaded, 100 );
 	};
 	
 	this.assetLoaded = function () { 
@@ -475,7 +475,7 @@ THREE.PixelBoxAssets = function () {
 		assets.loadQueue.pop();
 		if ( assets.totalLoaded === assets.totalAssets ){
 		
-			if ( assets.onloaded ) assets.onloaded();
+			if ( assets.onloaded ) setTimeout( assets.onloaded, 100 );
 			
 		} else {
 		

@@ -8,7 +8,7 @@
 THREE.PixelBoxDepthShader = {
 	uniforms: {
 		tintAlpha: 	{ type: "f", value: 1.0 },
-		pointSize: 	{ type: 'f', value: 1.0 },
+		pointSize: 	{ type: 'f', value: 1.0 }
 	},
 	
 	vertexShader: [
@@ -103,7 +103,7 @@ THREE.PixelBoxShader = {
 		color:		{	type: "v4", value: null },
 		normal: 	{	type: "v3", value: null },
 		occlude:	{	type: "f", value: null },
-		position:	{	type: "v3", value: null },
+		position:	{	type: "v3", value: null }
 	},
 
 	vertexShader: [
@@ -422,7 +422,7 @@ THREE.PixelBoxMeshDepthShader = {
 
 		// slice texture params
 		uvSliceRect: { type: "v4", value: { x: 0, y: 1, z: 1, w: 0 } },
-		uvSliceOffset: { type: "v2", value: { x: 0, y: 1 } },
+		uvSliceOffset: { type: "v4", value: { x: 0, y: 1, z: 1, w: 1 } },
 		uvSliceSizeIsRotated: { type: "v3", value: { x: 1, y: 1, z: 0 } },
 
 		// fxSprite billboarding
@@ -470,7 +470,7 @@ THREE.PixelBoxMeshDepthShader = {
 		"#ifdef USE_MAP",
 		"uniform sampler2D map;",
 		"uniform vec4 uvSliceRect;",
-		"uniform vec2 uvSliceOffset;",
+		"uniform vec4 uvSliceOffset;",
 		"uniform vec3 uvSliceSizeIsRotated;",
 		"#endif",
 		"uniform float tintAlpha;",
@@ -479,21 +479,34 @@ THREE.PixelBoxMeshDepthShader = {
 		"#ifdef USE_MAP",
 		"vec4 sampleSlice(){",
 		"   vec2 _uv;",
+		"   #ifdef BILLBOARD",
+		"   if (uvSliceSizeIsRotated.z < 1.0) { ",
+		"       _uv =  vUv;",
+		"       _uv.x = uvSliceOffset.x + ( _uv.x ) * uvSliceOffset.z;",
+		"       _uv.y = uvSliceOffset.y - ( 1.0 - _uv.y ) * uvSliceOffset.w;",
+		"   } else { ",
+		"       _uv = vec2(vUv.y, vUv.x);",
+		"       _uv.x = uvSliceOffset.x + ( _uv.x ) * uvSliceOffset.z;",
+		"       _uv.y = uvSliceOffset.y - ( _uv.y ) * uvSliceOffset.w;",
+		"   }",
+		"   #else",
 		"   if (uvSliceSizeIsRotated.z < 1.0) { ",
 		"       _uv =  vUv;",
 		"       if(_uv.x <= uvSliceRect.x || _uv.y <= uvSliceRect.w || _uv.x >= uvSliceRect.z || _uv.y >= uvSliceRect.y) {",
-		"           discard; return vec4(0.0);",
+		"           discard;",
 		"       }",
 		"       _uv.x = uvSliceOffset.x + (_uv.x - uvSliceRect.x) * uvSliceSizeIsRotated.x;",
 		"       _uv.y = uvSliceOffset.y + (_uv.y - uvSliceRect.y) * uvSliceSizeIsRotated.y;",
+
 		"   } else { ",
 		"       _uv = vec2(vUv.y, 1.0 - vUv.x);",
 		"       if(vUv.x <= uvSliceRect.x || vUv.y <= uvSliceRect.w || vUv.x >= uvSliceRect.z || vUv.y >= uvSliceRect.y) {",
-		"           discard; return vec4(0.0);",
+		"           discard;",
 		"       }",
 		"       _uv.x = uvSliceOffset.x + (_uv.x - uvSliceRect.w) * uvSliceSizeIsRotated.y;",
 		"       _uv.y = uvSliceOffset.y + (_uv.y - (1.0 - uvSliceRect.x)) * uvSliceSizeIsRotated.x;",
 		"   }",
+		"   #endif",
 		"   return texture2D( map, _uv );",
 		"}",
 		"#endif",
@@ -562,7 +575,7 @@ THREE.PixelBoxMeshShader = {
 
 		// texture params
 		uvSliceRect: { type: "v4", value: { x: 0, y: 1, z: 1, w: 0 } },
-		uvSliceOffset: { type: "v2", value: { x: 0, y: 1 } },
+		uvSliceOffset: { type: "v4", value: { x: 0, y: 1, z: 1, w: 1 } },
 		uvSliceSizeIsRotated: { type: "v3", value: { x: 1, y: 1, z: 0 } },
 
 		// fxSprite billboarding
@@ -624,7 +637,7 @@ THREE.PixelBoxMeshShader = {
 	"#ifdef USE_MAP",
 	"uniform sampler2D map;",
 	"uniform vec4 uvSliceRect;",
-	"uniform vec2 uvSliceOffset;",
+	"uniform vec4 uvSliceOffset;",
 	"uniform vec3 uvSliceSizeIsRotated;",
 	"#endif",
 	"uniform vec3 tintColor;",
@@ -858,22 +871,34 @@ THREE.PixelBoxMeshShader = {
 	"#ifdef USE_MAP",
 	"vec4 sampleSlice(){",
 	"   vec2 _uv;",
+	"   #ifdef BILLBOARD",
+	"   if (uvSliceSizeIsRotated.z < 1.0) { ",
+	"       _uv =  vUv;",
+	"       _uv.x = uvSliceOffset.x + ( _uv.x ) * uvSliceOffset.z;",
+	"       _uv.y = uvSliceOffset.y - ( 1.0 - _uv.y ) * uvSliceOffset.w;",
+	"   } else { ",
+	"       _uv = vec2(vUv.y, vUv.x);",
+	"       _uv.x = uvSliceOffset.x + ( _uv.x ) * uvSliceOffset.z;",
+	"       _uv.y = uvSliceOffset.y - ( _uv.y ) * uvSliceOffset.w;",
+	"   }",
+	"   #else",
 	"   if (uvSliceSizeIsRotated.z < 1.0) { ",
 	"       _uv =  vUv;",
 	"       if(_uv.x <= uvSliceRect.x || _uv.y <= uvSliceRect.w || _uv.x >= uvSliceRect.z || _uv.y >= uvSliceRect.y) {",
-	"           discard; return vec4(0.0);",
+	"           discard;",
 	"       }",
 	"       _uv.x = uvSliceOffset.x + (_uv.x - uvSliceRect.x) * uvSliceSizeIsRotated.x;",
 	"       _uv.y = uvSliceOffset.y + (_uv.y - uvSliceRect.y) * uvSliceSizeIsRotated.y;",
+
 	"   } else { ",
 	"       _uv = vec2(vUv.y, 1.0 - vUv.x);",
 	"       if(vUv.x <= uvSliceRect.x || vUv.y <= uvSliceRect.w || vUv.x >= uvSliceRect.z || vUv.y >= uvSliceRect.y) {",
-	"           discard; return vec4(0.0);",
+	"           discard;",
 	"       }",
 	"       _uv.x = uvSliceOffset.x + (_uv.x - uvSliceRect.w) * uvSliceSizeIsRotated.y;",
 	"       _uv.y = uvSliceOffset.y + (_uv.y - (1.0 - uvSliceRect.x)) * uvSliceSizeIsRotated.x;",
 	"   }",
-
+	"   #endif",
 	"   return texture2D( map, _uv );",
 	"}",
 	"#endif",
@@ -1108,7 +1133,7 @@ THREE.MeshPixelBoxMaterial = function ( params ) {
 		set: function ( v ) {
 			this._slice = v;
 			var uni = this.uniforms;
-			if ( v ) {
+			if ( v && uni.map.value ) {
 
 				var texture = this.uniforms.map.value;
 				var tw = texture.image.width;
@@ -1118,7 +1143,11 @@ THREE.MeshPixelBoxMaterial = function ( params ) {
 					y: 1.0 - v.spriteColorRect.y / v.spriteSourceSize.y,
 					z: (v.spriteColorRect.x + v.spriteColorRect.width) / v.spriteSourceSize.x,
 					w: 1.0 - (v.spriteColorRect.y + v.spriteColorRect.height) / v.spriteSourceSize.y };
-				uni.uvSliceOffset.value = { x: v.textureRect.x / tw, y: 1.0 - v.textureRect.y / th };
+				uni.uvSliceOffset.value = {
+					x: v.textureRect.x / tw,
+					y: 1.0 - v.textureRect.y / th,
+					z: v.textureRect.width / tw,
+					w: v.textureRect.height / th };
 				uni.uvSliceSizeIsRotated.value = {
 					x: v.spriteSourceSize.x / tw,
 					y: v.spriteSourceSize.y / th,
@@ -1127,7 +1156,7 @@ THREE.MeshPixelBoxMaterial = function ( params ) {
 			} else { // full texture
 
 				uni.uvSliceRect.value = { x: 0, y: 1, z: 1, w: 0 };
-				uni.uvSliceOffset.value = { x: 0, y: 1 };
+				uni.uvSliceOffset.value = { x: 0, y: 1, z: 1, w: 1 };
 				uni.uvSliceSizeIsRotated.value = { x: 1, y: 1, z: 0 };
 
 			}
@@ -2712,11 +2741,16 @@ THREE.PixelBoxUtil.parsePlist = function( xmlStr ) {
 				return parseInt( val.textContent );
 
 			case 'array':
-				var children = $( val ).children();
+				var children = val.childNodes;
 				var arr = [];
 				for ( var i = 0; i < children.length; i ++ ) {
 
-					arr.push( getNodeVal( children[ i ] ) );
+					// skip text nodes
+					if ( children[ i ].nodeType != 3 ) {
+
+						arr.push( getNodeVal( children[ i ] ) );
+
+					}
 
 				}
 				return arr;
@@ -2727,34 +2761,39 @@ THREE.PixelBoxUtil.parsePlist = function( xmlStr ) {
 
 	function parseDict ( dict ) {
 
-		var children = $( dict ).children();
+		var children = dict.childNodes;
 		var obj = {};
 
-		for ( var i = 0; i < children.length; i += 2 ) {
+		for ( var i = 0; i < children.length; i ++ ) {
 
-			var key = children[ i ].textContent;
-			var val = getNodeVal( children[ i + 1 ] );
+			if ( children[ i ].nodeType != 3 ) {
 
-			obj[ key ] = val;
+				// got key
+				var key = children[ i ].textContent;
+
+				// find value
+				i++;
+				while ( i < children.length - 1 && children[ i ].nodeType == 3 ) i++;
+				var val = getNodeVal( children[ i ] );
+
+				obj[ key ] = val;
+
+			}
 
 		}
 
 		return obj;
 
 	};
-	var obj = parseDict( $( 'plist > dict', xml.documentElement ) );
 
-	// strip extension from filename in meta
-	/*if ( obj.metadata && obj.metadata.textureFileName ) {
-
-		var dotIndex = obj.metadata.textureFileName.lastIndexOf( '.' );
-		if ( dotIndex > 0 ) {
-
-			obj.metadata.textureFileName = obj.metadata.textureFileName.substr( 0, dotIndex );
-
+	var dictNode;
+	for( var i in xml.documentElement.childNodes ) {
+		if ( xml.documentElement.childNodes[ i ].nodeName == 'dict' ) {
+			dictNode = xml.documentElement.childNodes[ i ];
+			break;
 		}
-
-	}*/
+	}
+	var obj = parseDict( dictNode );
 
 	return obj;
 

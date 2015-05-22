@@ -20,15 +20,6 @@ function PreviewScene(){
 			
 			renderer._windowResized();
 
-			/*
-			var s = new THREE.FxSprite();
-			s.castShadow = s.receiveShadow = true;
-			s.textureMap = 'hog.png';
-			s.fxData = 'hog.json';
-			window.s = s;
-			this.add( s );
-			 */
-
 		}.bind(this), 500);		
 	};
 }

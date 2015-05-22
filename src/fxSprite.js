@@ -8,6 +8,7 @@ THREE.FxSprite = function() {
 
     // define base material for shared uniforms
     this.material = new THREE.MeshPixelBoxMaterial( { defines: { BILLBOARD : 1 } } );
+    this.material.side = THREE.DoubleSide;
 
     // define getter, setter for texture
     // .textureMap property is a string - key into assets for texture to use
@@ -125,14 +126,24 @@ THREE.FxSprite = function() {
                 // go through all the frames
                 for ( var li = 0; li < asset.layerAnims.length; li++ ) {
 
+                    var lastSymbolName = '';
                     for ( var fi = 0; fi < asset.layerAnims[ li ].length; fi++ ) {
 
                         var frame = asset.layerAnims[ li ][ fi ];
+
+                        if ( frame.s !== undefined && frame.s !== '' ) lastSymbolName = frame.s;
+                        else if ( frame.s === '' ) frame.s = lastSymbolName;
+
                         frame.rx = frame.rx !== undefined ? frame.rx : 0;
                         frame.ry = frame.ry !== undefined ? frame.ry : 0;
                         frame.tx = frame.tx !== undefined ? frame.tx : 0;
                         frame.ty = frame.ty !== undefined ? frame.ty : 0;
-                        frame.c = (frame.c !== undefined ? frame.c : '100,100,100,100,0,0,0,0').split( ',' );
+                        frame.h = frame.h ? true : false;
+                        if ( frame.h ) {
+                            frame.c = '100,100,100,0,0,0,0,0';
+                        } else {
+                            frame.c = (frame.c !== undefined ? frame.c : '100,100,100,100,0,0,0,0').split( ',' );
+                        }
                         for( var ci = 0; ci < 8; ci++ ) frame.c[ ci ] = parseFloat( frame.c[ ci ] );
 
                     }
@@ -197,24 +208,29 @@ THREE.FxSprite = function() {
             this.animations = asset.animations;
             this.frameComments = asset.comments;
 
-            // create layers
-            for ( var i = 0; i < asset.layerSymbols.length; i++ ) {
+            // grab the first symbol name
+            var anySymbolName;
+            for ( var i in asset.symbols ) {
+                anySymbolName = i; break;
+            }
 
-                var symbol = asset.symbols[ asset.layerSymbols[ i ].symbol ];
+            // create layers
+            for ( var i = 0; i < asset.layerNames.length; i++ ) {
+
+                var symbol = asset.symbols[ anySymbolName ];
                 var sliceName = symbol.name;
                 if ( symbol.frames.length > 1 ) sliceName += '0001';
 
                 var layer = this.createSprite( sliceName + '.png' );
 
-                layer.name = asset.layerSymbols[ i ].layer;
+                layer.name = asset.layerNames[ i ];
                 layer.index = i;
-                layer.symbol = symbol;
                 layer.frame = -1;
-                layer.matrixAutoUpdate = false;
 
                 this.layers[ layer.name ] = layer;
                 this.add( layer );
 
+                // set to first frame
                 this.setLayerFrame( layer, 0, 0, 0 );
 
             }
@@ -235,23 +251,38 @@ THREE.FxSprite = function() {
         get: function () { return this._currentAnimationPosition; },
         set: function ( val ) { // set frame according to anim position
 
-            var transTime = val * this.currentAnimation.length;
-            var frame = Math.floor( transTime );
-            transTime = transTime - Math.floor( transTime );
+            var transTime, frame, nextFrame;
 
-            var nextFrame;
+            // have loops
+            if ( this._animLoops > 0 ) {
 
-            // detect wraparound
-            if ( frame >= this.currentAnimation.length - 1) {
+                transTime = val * this.currentAnimation.length;
+                frame = Math.floor( transTime );
+                transTime = transTime - Math.floor( transTime );
 
-                // looping? next frame is first frame
-                if ( this._animLoops > 0 ) nextFrame = 0;
+                // detect wraparound
+                if ( frame >= this.currentAnimation.length - 1) {
 
-                // not looping? next frame is last frame
-                else nextFrame = this.currentAnimation.length - 1;
+                    // looping? next frame is first frame
+                    nextFrame = 0;
 
-            // no wraparound yet
-            } else nextFrame = frame + 1;
+                // no wraparound, next frame
+                } else nextFrame = frame + 1;
+
+                frame = ( frame % this.currentAnimation.length );
+                nextFrame = ( nextFrame % this.currentAnimation.length );
+
+            // one shot
+            } else {
+
+                var transTime = val * ( this.currentAnimation.length );
+                var frame = Math.floor( transTime );
+                transTime = transTime - Math.floor( transTime );
+
+                frame = Math.max( 0, Math.min( frame, this.currentAnimation.length - 1 ) );
+                nextFrame = Math.min( frame + 1, this.currentAnimation.length - 1 );
+
+            }
 
             // backwards direction
             if ( this.animSpeed < 0 ) {
@@ -319,6 +350,7 @@ THREE.FxSprite = function() {
         get: function() { return this._scaleX; },
         set: function( val ) {
             this._scaleX = val;
+            this.cascadeColorChange();
             this.updateMatrix();
         }
     });
@@ -326,6 +358,7 @@ THREE.FxSprite = function() {
         get: function() { return this._scaleY; },
         set: function( val ) {
             this._scaleY = val;
+            this.cascadeColorChange();
             this.updateMatrix();
         }
     });
@@ -412,7 +445,7 @@ THREE.FxSprite = function() {
 THREE.FxSprite.prototype = Object.create( THREE.Object3D.prototype );
 THREE.FxSprite.prototype.constructor = THREE.FxSprite;
 
-THREE.FxSprite.prototype.createSprite = function( sliceName ){
+THREE.FxSprite.prototype.createSprite = function( sliceName ) {
 
     var sliceMap = this.material.map.sliceMap;
     var sliceInfo = sliceMap ? sliceMap.frames[ sliceName ] : null;
@@ -434,8 +467,8 @@ THREE.FxSprite.prototype.createSprite = function( sliceName ){
 
     // create plane and materials
     var geom = new THREE.PlaneGeometry( sw, sh );
-    var mat = new THREE.MeshPixelBoxMaterial( { defines:{ BILLBOARD: 1 } } );
-    mat.side = THREE.DoubleSide;
+    var mat = new THREE.MeshPixelBoxMaterial( { defines: { BILLBOARD: 1 } } );
+    mat.side = this.material.side;
     mat.uniforms.alphaThresh = this.material.uniforms.alphaThresh;
     mat.uniforms.brightness = this.material.uniforms.brightness;
     mat.uniforms.stipple = this.material.uniforms.stipple;
@@ -465,10 +498,43 @@ THREE.FxSprite.prototype.createSprite = function( sliceName ){
 
     s.symbolOverride = null;
 
+    s.flipped = false;
+
     // cascading values
     s.targetA = 1.0;
     s.targetAddR = s.targetAddG = s.targetAddB = 0;
     s.targetTintR = s.targetTintG = s.targetTintB = 0;
+
+    // editor assist
+    s.omit = true;
+
+    // allow adding children to layers
+    s.matrixAutoUpdate = true;
+    s.updateMatrix = function () { };
+    s.updateMatrixWorld = function () {
+
+        return function () {
+
+            var viewMat = new THREE.Matrix4();
+
+            if ( this.children.length ) {
+
+                viewMat.extractRotation( renderer.currentScene.camera.matrixWorld );
+
+                this.matrixWorld.identity().multiply( this.parent.matrixWorld ).multiply( viewMat );
+                this.matrixWorld.multiply( this.parent.spriteTransform ).multiply( this.matrix );
+
+                for ( var i = 0, l = this.children.length; i < l; i++ ) {
+
+                    this.children[ i ].updateMatrixWorld( true );
+
+                }
+
+            }
+
+        };
+
+    }();
 
     // return
     return s;
@@ -477,6 +543,8 @@ THREE.FxSprite.prototype.createSprite = function( sliceName ){
 
 // re-evaluate layers colors based on parent
 THREE.FxSprite.prototype.cascadeColorChange = function () {
+
+    var flipped = (this._scaleX < 0) ^ (this._scaleY < 0);
 
     for ( var i = this.children.length - 1; i >= 0; i-- ) {
 
@@ -499,6 +567,8 @@ THREE.FxSprite.prototype.cascadeColorChange = function () {
 
         layer.castShadow = this.castShadow;
         layer.receiveShadow = this.receiveShadow;
+
+        layer.material.flipSided = !flipped;
 
     }
 
@@ -550,40 +620,55 @@ THREE.FxSprite.prototype.advanceAnimationFrame = function () {
 THREE.FxSprite.prototype.setLayerFrame = function( layer, transTime, frame, nextFrame ) {
 
     var numFrames = this._fxData.layerAnims[ 0 ].length;
-    var frameObject = this._fxData.layerAnims[ layer.index ][ Math.min( frame, numFrames - 1 ) ];
-    var nextFrameObject = this._fxData.layerAnims[ layer.index ][ Math.min( nextFrame, numFrames - 1 ) ];
+    var frameObject = this._fxData.layerAnims[ layer.index ][ Math.max( 0, Math.min( frame, numFrames - 1 ) ) ];
+    var nextFrameObject = this._fxData.layerAnims[ layer.index ][  Math.max( 0, Math.min( nextFrame, numFrames - 1 ) ) ];
 
-    var layerSymbol = layer.symbol;
+    var layerSymbol = null;
 
     // allow overriding symbols
     if ( layer.symbolOverride && this._fxData.symbols[ layer.symbolOverride ] ) {
 
         layerSymbol = this._fxData.symbols[ layer.symbolOverride ];
 
+    } else if( frameObject.s ) {
+
+        layerSymbol = this._fxData.symbols[ frameObject.s ];
+
     }
 
     // set layer slice, if changed
-    if ( layer.currentSymbolFrameNumber != frameObject.f || layer.currentSymbolName != layerSymbol.name ) {
+    if ( layer.currentSymbolFrameNumber != frameObject.f || ( layerSymbol && layer.currentSymbolName != layerSymbol.name ) ) {
 
-        var sliceName = layerSymbol.name;
-        if ( layerSymbol.frames.length > 1 ) sliceName += ('000' + ( (frameObject.f % layerSymbol.frames.length) + 1) ).substr( -4 );
+        if ( layerSymbol ) {
+            var sliceName = layerSymbol.name;
+            if ( layerSymbol.frames.length > 1 ) sliceName += ('000' + ( (frameObject.f % layerSymbol.frames.length) + 1) ).substr( -4 );
 
-        var sliceInfo = layer.material.map.sliceMap.frames[ sliceName + '.png' ];
-        layer.material.slice = sliceInfo;
+            var sliceInfo = layer.material.map.sliceMap.frames[ sliceName + '.png' ];
+            layer.material.slice = sliceInfo;
 
-        // adjust layer symbol offset
-        var layerOffset = layerSymbol.frames[ frameObject.f ];
-        layer.geometry.vertices[ 0 ].set( layerOffset[ 0 ], -layerOffset[ 1 ], 0 );
-        layer.geometry.vertices[ 1 ].set( layerOffset[ 0 ] + layerOffset[ 2 ], -layerOffset[ 1 ], 0 );
-        layer.geometry.vertices[ 2 ].set( layerOffset[ 0 ], -(layerOffset[ 1 ] + layerOffset[ 3 ]), 0 );
-        layer.geometry.vertices[ 3 ].set( layerOffset[ 0 ] + layerOffset[ 2 ], -(layerOffset[ 1 ] + layerOffset[ 3 ]), 0 );
-        layer.geometry.needsUpdate = true;
+            // adjust layer symbol offset
+            var layerOffset = layerSymbol.frames[ frameObject.f ];
+            layer.geometry.vertices[ 0 ].set( layerOffset[ 0 ], -layerOffset[ 1 ], 0 );
+            layer.geometry.vertices[ 1 ].set( layerOffset[ 0 ] + layerOffset[ 2 ], -layerOffset[ 1 ], 0 );
+            layer.geometry.vertices[ 2 ].set( layerOffset[ 0 ], -(layerOffset[ 1 ] + layerOffset[ 3 ]), 0 );
+            layer.geometry.vertices[ 3 ].set( layerOffset[ 0 ] + layerOffset[ 2 ], -(layerOffset[ 1 ] + layerOffset[ 3 ]), 0 );
+            layer.geometry.verticesNeedUpdate = true;
+            layer.currentSymbolName = layerSymbol.name;
+
+        } else {
+
+            layer.currentSymbolName = null;
+
+        }
 
         // store current f
         layer.currentSymbolFrameNumber = frameObject.f;
-        layer.currentSymbolName = layerSymbol.name;
 
     }
+
+    // handle hidden frames
+    var hiddenStatus = nextFrameObject.h || frameObject.h || !layerSymbol;
+    layer.visible = !hiddenStatus;
 
     // set layer frame transforms
     if ( !frameObject.m || frameObject.m != nextFrameObject.m ) transTime = 0; // frames are parts of different tweens or static
@@ -607,7 +692,7 @@ THREE.FxSprite.prototype.setLayerFrame = function( layer, transTime, frame, next
     if(ary > 90 && nextFrameObject.ry < -90){
         ary = nextFrameObject.ry - (180 + nextFrameObject.ry + 180 - frameObject.ry);
     } else if(ary < -90 && nextFrameObject.ry > 90){
-        ary = nextFrameObject.ry + (180 + frameObject.ry + 180 - bframe.ry);
+        ary = nextFrameObject.ry + (180 + frameObject.ry + 180 - nextFrameObject.ry);
     }
 
     var rx = (arx + (nextFrameObject.rx - arx) * transTime ) * 0.017452778; // degToRad
@@ -648,8 +733,6 @@ THREE.FxSprite.prototype.setLayerFrame = function( layer, transTime, frame, next
     layer.matrix.elements[ 12 ] = x; // tx
     layer.matrix.elements[ 13 ] = y; // ty
     layer.matrix.elements[ 14 ] = -layer.index * 0.1; // z
-
-    layer.matrixAutoUpdate = false;
 
     // color transform
     var tintAlpha = layer.targetA = 0.01 * (frameObject.c[ 3 ] + (nextFrameObject.c[ 3 ] - frameObject.c[ 3 ]) * transTime);
@@ -768,14 +851,6 @@ THREE.FxSprite.prototype.gotoAndStop = function ( animName, positionWithinAnimat
     this.currentAnimation = anim;
     this.currentAnimationPosition = (positionWithinAnimation < 1.0 ? positionWithinAnimation : ((positionWithinAnimation / anim.length) % 1.0));
     this._animLoops = -1;
-
-    // anim meta
-    /*if ( diff && anim.meta.length ) {
-
-        var ev = { type:'anim-meta', anim:anim, meta:anim.meta };
-        this.dispatchEvent( ev );
-
-    }*/
 
 };
 

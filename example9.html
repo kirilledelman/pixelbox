@@ -1,0 +1,121 @@
+<html>
+	<head>
+		<title>PixelBox Example 9</title>
+		<link rel="stylesheet" href="css/normalize.css"/>
+		<link rel="stylesheet" href="css/index.css"/>
+		<meta content="yes" name="apple-mobile-web-app-capable" />		
+		<meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1"/>
+		
+		<!-- THREE base includes -->
+		<script src="js/three.min.js"></script>
+		
+		<!-- PixelBox include -->
+		<script src="js/pixelbox.js"></script>
+		
+		<!-- OrbitControls from THREE's examples  -->
+		<script src="js/OrbitControls.js"></script>
+		
+	</head>
+	
+	<body>
+		<a class="show-source" onclick="window.open('view-source:'+window.location.href.toString(),'_blank');">Source</a>
+		<span class="info">
+			<a href="https://github.com/kirilledelman/pixelbox" target="_blank">PixelBox</a>
+			by Kirill Edelman for <a href="http://threejs.org" target="_blank">three.js</a>
+		</span>		
+	
+		<script>
+		
+		/*
+		
+			This example shows FxSprites
+		
+		*/
+		
+		document.addEventListener( 'DOMContentLoaded', function() {
+		
+			// init PixelBoxRenderer instance
+			
+			if( !renderer.init() ){
+			
+				var err = "Your browser doesn't support WebGL";
+				alert( err );
+				console.error( err );
+				return;
+				
+			} else {
+			
+				console.log( "WebGL initialized" );
+				
+			}
+			
+			// load scene definition using THREE.PixelBoxAssets
+			
+			assets.loadAssets( {
+			
+				scenes: [ 'assets/example9.scene' ],
+				
+				// when done, display scene
+				
+				done:function() {
+				
+					// instantiate our ExampleScene
+					
+					exampleScene = new ExampleScene();
+					
+					// set it as current for renderer
+					
+					renderer.setScene( exampleScene );
+
+				} // end done:function
+				
+			} ); // end assets.loadAssets
+			
+		} ); // end document on load
+		
+		
+		/*
+			
+			ExampleScene extends THREE.PixelBoxScene
+			
+		*/
+		
+		function ExampleScene() {
+
+			// call superclass constructor
+
+			THREE.PixelBoxScene.call( this );
+
+			// get scene definition from assets cache
+
+			var sceneDef = assets.get( 'example9' );
+
+			// populate this scene with the definition and onReady callback
+
+			this.populateWith( sceneDef, function() {
+
+				// place a 3d apple into sprite hog's hand
+
+				this.hogWithApple.layers.arm2.add( this.apple );
+
+				// adjust apple's position, so it appears near the hand, not shoulder
+
+				this.apple.position.set( 0, -30, -5 );
+
+				// add controls for easy preview
+				// various controls classes can be found in three.js examples/js/controls folder
+
+				this.controls = new THREE.OrbitControls( this.camera );
+
+			}.bind( this ) );
+
+		}
+		
+		// ExampleScene subclasses THREE.PixelBoxScene
+		
+		ExampleScene.prototype = Object.create( THREE.PixelBoxScene.prototype );
+		ExampleScene.prototype.constructor = ExampleScene;	
+		
+		</script>
+	</body>
+</html>

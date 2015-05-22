@@ -42,7 +42,57 @@ THREE.PixelBoxRenderer = function () {
 	    webgl.sortObjects = false;
 	    webgl.shadowMapSoft = false;
 		webgl.shadowMapType = THREE.BasicShadowMap;
-		
+
+		// flipSided override for WebGLRenderer
+		var _oldDoubleSided = false, _oldFlipSided = -1;
+		webgl.setMaterialFaces =  function ( material ) {
+
+			var doubleSided = material.side === THREE.DoubleSide;
+			var flipSided = material.side === THREE.BackSide;
+
+			// let material override its flipSided prop
+			if ( typeof material.flipSided !== 'undefined' ) {
+
+				flipSided = material.flipSided;
+
+			}
+
+			var _gl = this.context;
+
+			//if ( _oldDoubleSided !== doubleSided ) {
+
+				if ( doubleSided ) {
+
+					_gl.disable( _gl.CULL_FACE );
+
+				} else {
+
+					_gl.enable( _gl.CULL_FACE );
+
+				}
+
+				_oldDoubleSided = doubleSided;
+
+			//}
+
+			//if ( _oldFlipSided !== flipSided ) {
+
+				if ( flipSided ) {
+
+					_gl.frontFace( _gl.CW );
+
+				} else {
+
+					_gl.frontFace( _gl.CCW );
+
+				}
+
+				_oldFlipSided = flipSided;
+
+			//}
+
+		}.bind( webgl );
+
 		// default transition params
 		this.transitionParams = {
 			textureThreshold: 0.5,

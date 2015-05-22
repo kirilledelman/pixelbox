@@ -3448,7 +3448,7 @@ EditSceneScene.prototype = {
 		if ( row.length ) {
 			row = row.get( 0 );
 			$( row ).addClass( 'selected' );
-			if ( $( row ).prop('assetType') != 'pixelbox' ) {
+			if ( $( row ).prop('assetType') != '_pixelbox' ) {
 				$( '#asset-add' ).button( 'disable' );
 			} else {
 				$( '#asset-add' ).button( 'enable' );
