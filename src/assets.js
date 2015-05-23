@@ -516,11 +516,32 @@ THREE.PixelBoxAssets = function () {
 	
 	this.objectLoader = new THREE.JSONLoader();
 	
-	THREE.Cache.call(this);
-	
-}
+	this.files = {};
 
-THREE.PixelBoxAssets.prototype = Object.create( THREE.Cache.prototype );
-THREE.PixelBoxAssets.prototype.constructor = THREE.PixelBoxAssets;
+	this.add = function ( key, file ) {
+
+		this.files[ key ] = file;
+
+	};
+
+	this.get = function ( key ) {
+
+		return this.files[ key ];
+
+	};
+
+	this.remove = function ( key ) {
+
+		delete this.files[ key ];
+
+	};
+
+	this.clear = function () {
+
+		this.files = {}
+
+	};
+
+}
 
 var assets = new THREE.PixelBoxAssets();
