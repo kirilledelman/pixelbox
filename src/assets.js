@@ -88,7 +88,7 @@ THREE.PixelBoxAssets = function () {
 					var request = new XMLHttpRequest();
 					request.open( 'GET', url, true );
 					request.onload = function () {
-						if ( request.status >= 200 && request.status < 400 ) {
+						if ( ( request.status === 0 && request.responseText ) || ( request.status >= 200 && request.status < 400 ) ) {
 						
 							var data = request.responseText;
 							
@@ -98,7 +98,7 @@ THREE.PixelBoxAssets = function () {
 								
 							assets.assetLoaded();
 							
-						} else console.error( "Failed to load " + url );
+						} else console.error( "Failed to load " + url + ", status: " + request.status + " - " + request.statusText );
 						
 					};
 									
@@ -146,7 +146,7 @@ THREE.PixelBoxAssets = function () {
 					request.open( 'GET', url, true );
 					request.onload = function () {
 					
-						if ( request.status >= 200 && request.status < 400 ) {
+						if ( ( request.status === 0 && request.responseText ) || ( request.status >= 200 && request.status < 400 ) ) {
 						
 							var data = request.responseText;
 							var json;
@@ -184,7 +184,7 @@ THREE.PixelBoxAssets = function () {
 							
 							assets.assetLoaded();
 							
-						} else console.error( "Failed to load " + url );
+						} else console.error( "Failed to load " + url + ", status: " + request.status + " - " + request.statusText );
 						
 					};
 									
@@ -214,7 +214,7 @@ THREE.PixelBoxAssets = function () {
 					request.open( 'GET', url, true );
 					request.onload = function () {
 					
-						if ( request.status >= 200 && request.status < 400 ) {
+						if ( ( request.status === 0 && request.responseText ) || ( request.status >= 200 && request.status < 400 ) ) {
 						
 							var time = new Date(), json;
 							var data = request.responseText;
@@ -256,7 +256,7 @@ THREE.PixelBoxAssets = function () {
 							}
 							assets.assetLoaded();
 							
-						} else console.error( "Failed to load " + url );
+						} else console.error( "Failed to load " + url + ", status: " + request.status + " - " + request.statusText );
 					};	
 									
 					request.onerror = function () {
@@ -284,7 +284,7 @@ THREE.PixelBoxAssets = function () {
 					var request = new XMLHttpRequest();
 					request.open( 'GET', url, true );
 					request.onload = function () {
-						if ( request.status >= 200 && request.status < 400 ) {
+						if ( ( request.status === 0 && request.responseText ) || ( request.status >= 200 && request.status < 400 ) ) {
 						
 							// decompress if needed
 							var json;
@@ -323,7 +323,7 @@ THREE.PixelBoxAssets = function () {
 							
 							assets.assetLoaded();
 							
-						} else console.error( "Failed to load " + url );
+						} else console.error( "Failed to load " + url + ", status: " + request.status + " - " + request.statusText );
 						
 					};
 									
@@ -353,7 +353,7 @@ THREE.PixelBoxAssets = function () {
 					var request = new XMLHttpRequest();
 					request.open( 'GET', url, true );
 					request.onload = function () {
-						if ( request.status >= 200 && request.status < 400 ) {
+						if ( ( request.status === 0 && request.responseText ) || ( request.status >= 200 && request.status < 400 ) ) {
 
 							// decompress if needed
 							var xml;
@@ -384,7 +384,7 @@ THREE.PixelBoxAssets = function () {
 
 							assets.assetLoaded();
 
-						} else console.error( "Failed to load " + url );
+						} else console.error( "Failed to load " + url + ", status: " + request.status + " - " + request.statusText );
 
 					};
 
@@ -414,7 +414,7 @@ THREE.PixelBoxAssets = function () {
 					var request = new XMLHttpRequest();
 					request.open( 'GET', url, true );
 					request.onload = function () {
-						if ( request.status >= 200 && request.status < 400 ) {
+						if ( ( request.status === 0 && request.responseText ) || ( request.status >= 200 && request.status < 400 ) ) {
 
 							// decompress if needed
 							var plist;
@@ -445,7 +445,7 @@ THREE.PixelBoxAssets = function () {
 
 							assets.assetLoaded();
 
-						} else console.error( "Failed to load " + url );
+						} else console.error( "Failed to load " + url + ", status: " + request.status + " - " + request.statusText );
 
 					};
 

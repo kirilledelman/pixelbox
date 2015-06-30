@@ -2404,8 +2404,21 @@ THREE.PixelBoxScene.prototype.onCameraChanged = function ( newCamera ) {
 /* resize callback */
 THREE.PixelBoxScene.prototype.onResized = function ( resizeFBO ) {
 
-	this.camera.aspect = renderer.webgl.domElement.width / renderer.webgl.domElement.height;
-	this.camera.updateProjectionMatrix();
+	if ( this.camera instanceof THREE.OrthographicCamera ) {
+
+		this.camera.left = renderer.webgl.domElement.width * -0.5;
+		this.camera.right = renderer.webgl.domElement.width * 0.5;
+		this.camera.top = renderer.webgl.domElement.height * 0.5;
+		this.camera.bottom = window.innerHeight * -0.5;
+
+		camera.updateProjectionMatrix();
+
+	} else {
+
+		this.camera.aspect = renderer.webgl.domElement.width / renderer.webgl.domElement.height;
+		this.camera.updateProjectionMatrix();
+
+	}
 	
 	if ( resizeFBO ) {
 	

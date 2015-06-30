@@ -114,7 +114,7 @@ THREE.PixelBoxRenderer = function () {
 		}
 		
 		// window resized listener
-		window.addEventListener( 'resize', this._resizeCallback, false );
+		window.addEventListener( 'resize', this._resizeCallback, true );
 		canvas.style.width = window.innerWidth + 'px';
 		canvas.style.height = window.innerHeight + 'px';
 		
@@ -278,33 +278,33 @@ THREE.PixelBoxRenderer = function () {
 
 	/* window resized callback */
 	this._resizeCallback = function( e ) {
-	
+
 		// fill screen
 		renderer.webgl.domElement.style.width = window.innerWidth;
 		renderer.webgl.domElement.style.height = window.innerHeight;
-	
+
 		// schedule a resize to prevent too many consequitive calls
 		if ( !renderer.resizeTimeout ) {
-		
+
 			renderer.resizeTimeout = setTimeout( renderer._windowResized, 100 );
-			
+
 		}
-				
+
 	};
 
 	this._windowResized = function () {
-	
+
 		renderer.resizeTimeout = 0;
-	
+
 		// notify the renderer of the size change
 		renderer.webgl.setSize( Math.floor( window.innerWidth * renderer.scale ), Math.floor( window.innerHeight * renderer.scale ) );
-		
+
 		// update PixelBox viewport uniform
 		THREE.PixelBoxUtil.updateViewPortUniform();
-		
+
 		// call onResize callback
 		if(renderer.scene) renderer.scene.onResized();
-		
+
 	};
 
 	/* pause rendering when app is inactive */
