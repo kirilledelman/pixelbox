@@ -3311,9 +3311,9 @@ THREE.PixelBoxScene.prototype.onResized = function ( resizeFBO ) {
 		this.camera.left = renderer.webgl.domElement.width * -0.5;
 		this.camera.right = renderer.webgl.domElement.width * 0.5;
 		this.camera.top = renderer.webgl.domElement.height * 0.5;
-		this.camera.bottom = window.innerHeight * -0.5;
+		this.camera.bottom = renderer.webgl.domElement.height * -0.5;
 
-		camera.updateProjectionMatrix();
+		this.camera.updateProjectionMatrix();
 
 	} else {
 
