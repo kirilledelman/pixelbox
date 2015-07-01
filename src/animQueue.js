@@ -46,7 +46,7 @@ function AnimQueue ( fps ) {
 			
 			if ( obj.timeOut <= 0 ) { 
 				
-				obj.func();
+				obj.func( obj.totalTime - obj.timeOut );
 				
 				queue.splice( i, 1 );
 				
@@ -66,7 +66,7 @@ function AnimQueue ( fps ) {
 	// adds a func to queue
 	this.enqueue = function ( funcToCall, secondsFromNow ) {
 	
-		var obj = { func: funcToCall, timeOut: secondsFromNow };
+		var obj = { func: funcToCall, timeOut: secondsFromNow, totalTime: secondsFromNow };
 		
 		queue.push( obj );
 		

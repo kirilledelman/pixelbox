@@ -259,8 +259,10 @@ THREE.PixelBoxRenderer = function () {
 
 	/* render */
 	this._render = function () {
-	
-		if ( !renderer.paused ) requestAnimationFrame( renderer._render );
+
+		if ( renderer.paused ) return;
+
+		requestAnimationFrame( renderer._render );
 		
 		var deltaTime = renderer.clock.getDelta();
 		
@@ -311,6 +313,15 @@ THREE.PixelBoxRenderer = function () {
 	this.pause = function ( p ) {
 	
 		this.paused = p;
+		if ( p ) {
+
+			this.clock.stop();
+
+		} else {
+
+			this.clock.start();
+
+		}
 		this.clock.getDelta();
 		this._render();
 		

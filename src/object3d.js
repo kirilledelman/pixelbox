@@ -310,21 +310,21 @@ THREE.Object3D.prototype.applyTween = function ( tweenObj ) {
 	
 }
 
-THREE.Object3D.prototype.advanceTweenFrame = function () {
+THREE.Object3D.prototype.advanceTweenFrame = function ( deltaTime ) {
 
-	var nextFrameIn = 1 / 60;
+	var nextFrameIn = Math.max( deltaTime, 1 / 60 );
 	var keepGoing = true;
-	
+
 	if ( !renderer.paused ) {
 		this._tweenInterval = 0;
 		for ( var i = this._tweens.length - 1; i >= 0; i-- ) {
 		
 			var tweenObj = this._tweens[ i ];
 			
-			tweenObj.time = Math.min( tweenObj.time + nextFrameIn, tweenObj.duration );
-			
+			tweenObj.time = Math.min( tweenObj.time + deltaTime, tweenObj.duration );
+
 			this.applyTween( tweenObj );
-			
+
 			if ( tweenObj.time >= tweenObj.duration ) {
 				
 				// loop

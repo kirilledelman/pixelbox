@@ -159,7 +159,8 @@ THREE.PixelBoxScene.prototype.instantiate = function ( templateName, options ) {
 	}
 	
 	console.log( "Template " + templateName + " not found in scene definiton" );
-	
+	return null;
+
 };
 	
 /* ================================================================================ Object recycling */
@@ -220,7 +221,7 @@ THREE.PixelBoxScene.prototype.recycle = function ( scrap ) {
 		
 			obj = objs[ i ];
 			var typeName = null;
-			
+
 			if ( obj instanceof THREE.PixelBox ) {
 
 				typeName = obj.geometry.data.name;
@@ -312,7 +313,13 @@ THREE.PixelBoxScene.prototype.upcycle = function ( objType ) {
 		this.objectPool[ objType ].pop();
 		
 	}
-	
+
+	if ( obj ){
+
+		obj.isInstance = false;
+
+	}
+
 	return obj;
 	
 };
@@ -663,7 +670,7 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 			if ( !obj3d && layer.asset != 'Instance' ) obj3d = this.upcycle( layer.asset );
 			
 		}
-		
+
 		// Layer types
 		switch( layer.asset ) {
 		
@@ -731,9 +738,9 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 		case 'Camera':
 		
 			if ( !obj3d ) obj3d = new THREE.PerspectiveCamera( 60, 1, 1, 1000 );
-			if ( layer.fov != undefined ) obj3d.fov = layer.fov;
-			if ( layer.near != undefined ) obj3d.near = layer.near;
-			if ( layer.far != undefined ) obj3d.far = layer.far;
+			if ( layer.fov != undefined ) obj3d.fov = ( layer.fov !== undefined ) ? layer.fov : 60;
+			if ( layer.near != undefined ) obj3d.near = ( layer.near !== undefined ) ? layer.near : 1;
+			if ( layer.far != undefined ) obj3d.far = ( layer.far !== undefined ) ? layer.far : 1000;
 			obj3d.isDefault = layer.isDefault ? true : false;
 			
 			if ( !options.keepSceneCamera && obj3d.isDefault ) {
@@ -769,10 +776,15 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 			if ( layer.zoom != undefined ) {
 			
 				obj3d.zoom = layer.zoom;
-				obj3d.updateProjectionMatrix();
-				
+
+			} else {
+
+				obj3d.zoom = 1;
+
 			}
-			
+
+			obj3d.updateProjectionMatrix();
+
 			if ( layer.isDefault && (this instanceof THREE.PixelBoxScene) && !this.camera.def ) { 
 			
 				this.camera.parent.remove( this.camera );
@@ -825,8 +837,8 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 				obj3d.shadowCamera = null;
 				
 			}
-			if ( layer.color != undefined ) obj3d.color.set( parseInt( layer.color, 16 ) );
-			if ( layer.intensity != undefined ) obj3d.intensity = layer.intensity;
+			obj3d.color.set( ( layer.color != undefined ) ? parseInt( layer.color, 16 ) : 0xFFFFFF );
+			obj3d.intensity = ( layer.intensity != undefined ) ? layer.intensity : 1.0;
 			if ( layer.shadowMapWidth != undefined ) obj3d.shadowMapWidth = obj3d.shadowMapHeight = layer.shadowMapWidth;
 			if ( layer.shadowMapHeight != undefined ) obj3d.shadowMapHeight = layer.shadowMapHeight;
 			if ( layer.target != undefined && _.isArray( layer.target ) && layer.target.length == 3 ) {// array of world pos
@@ -834,6 +846,10 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 				obj3d.target = new THREE.Object3D();
 				obj3d.target.position.fromArray( layer.target );
 				
+			} else if ( layer.target === undefined ) {
+
+				obj3d.target = new THREE.Object3D();
+
 			}
 			if ( options.helpers ) {
 			
@@ -867,16 +883,12 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 				obj3d.shadowCamera = null;
 				
 			}
-			if ( layer.color != undefined ) obj3d.color.set( parseInt( layer.color, 16 ) );
-			if ( layer.intensity != undefined ) obj3d.intensity = layer.intensity;
-			if ( layer.distance != undefined ) obj3d.distance = layer.distance;
-			if ( layer.exponent != undefined ) obj3d.exponent = layer.exponent;
-			if ( layer.angle != undefined ) {
-			
-				obj3d.angle = layer.angle * degToRad;
-				obj3d.shadowCameraFov = layer.angle * 2;
-				
-			}
+			obj3d.color.set( ( layer.color != undefined ) ? parseInt( layer.color, 16 ) : 0xFFFFFF );
+			obj3d.intensity = ( layer.intensity != undefined ) ? layer.intensity : 1.0;
+			obj3d.distance = ( layer.distance != undefined ) ? layer.distance : 100;
+			obj3d.exponent = ( layer.exponent != undefined ) ? layer.exponent : 0;
+			obj3d.angle = ( layer.angle != undefined ? layer.angle : 30 ) * degToRad;
+			obj3d.shadowCameraFov = layer.angle * 2;
 			if ( layer.shadowMapWidth != undefined ) obj3d.shadowMapWidth = obj3d.shadowMapHeight = layer.shadowMapWidth;
 			if ( layer.shadowMapHeight != undefined ) obj3d.shadowMapHeight = layer.shadowMapHeight;
 			if ( layer.target != undefined && _.isArray( layer.target ) && layer.target.length == 3 ) {// array of world pos
@@ -884,6 +896,10 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 				obj3d.target = new THREE.Object3D();
 				obj3d.target.position.fromArray( layer.target );
 				
+			} else {
+
+				obj3d.target = new THREE.Object3D();
+
 			}
 			
 			if ( options.helpers ) { 
@@ -897,9 +913,9 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 		case 'PointLight':
 		
 			if ( !obj3d ) obj3d = new THREE.PointLight( 0xffffff, 1.0 );
-			if ( layer.color != undefined ) obj3d.color.set(parseInt( layer.color, 16 ) );
-			if ( layer.intensity != undefined ) obj3d.intensity = layer.intensity;
-			if ( layer.distance != undefined ) obj3d.distance = layer.distance;
+			obj3d.color.set( ( layer.color != undefined ) ? parseInt( layer.color, 16 ) : 0xFFFFFF );
+			obj3d.intensity = ( layer.intensity != undefined ) ? layer.intensity : 1.0;
+			obj3d.distance = ( layer.distance != undefined ) ? layer.distance : 100;
 			if ( options.helpers ) {
 			
 				helper = new THREE.PointLightHelper( obj3d, 5 );
@@ -916,9 +932,14 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 				obj3d.color.set( parseInt( layer.colors[ 0 ], 16 ) );
 				obj3d.groundColor.set( parseInt( layer.colors[ 1 ], 16 ) );
 				
+			} else {
+
+				obj3d.color.set( 0xFFFFFF );
+				obj3d.groundColor.set( 0x003366 );
+
 			}
 				
-			if ( layer.intensity != undefined ) obj3d.intensity = layer.intensity;
+			obj3d.intensity = ( layer.intensity != undefined ) ? layer.intensity : 0.5;
 			
 			break;
 			
@@ -1267,8 +1288,8 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 			
 		}
 		
-		if ( layer.castShadow != undefined ) obj3d.castShadow = layer.castShadow;
-		if ( layer.receiveShadow != undefined ) obj3d.receiveShadow = layer.receiveShadow;
+		obj3d.castShadow = ( layer.castShadow != undefined ) ? layer.castShadow : true;
+		obj3d.receiveShadow = ( layer.receiveShadow != undefined ) ? layer.receiveShadow : true;
 
 		if ( obj3d instanceof THREE.FxSprite ) obj3d.cascadeColorChange();
 
@@ -1325,10 +1346,14 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 		// PixelBox specific
 		if ( !obj3d.isInstance && obj3d instanceof THREE.PixelBox ) {
 		
-			if ( layer.pointSize != undefined ) { 
+			if ( layer.pointSize != undefined ) {
 			
 				obj3d.pointSize = layer.pointSize;
 				
+			} else {
+
+				obj3d.pointSize = 1.0;
+
 			}
 			
 			if ( layer.alpha != undefined ) { 
@@ -1341,8 +1366,8 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 				
 			}
 					
-			if ( layer.cullBack != undefined ) obj3d.cullBack = layer.cullBack;
-			if ( layer.occlusion != undefined ) obj3d.occlusion = layer.occlusion;
+			obj3d.cullBack = ( layer.cullBack != undefined ) ? layer.cullBack : true;
+			obj3d.occlusion = ( layer.occlusion != undefined ) ? layer.occlusion : 0;
 			if ( layer.tint != undefined ) { 
 			
 				obj3d.tint.set( parseInt( layer.tint, 16 ) );

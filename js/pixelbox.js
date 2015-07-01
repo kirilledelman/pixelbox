@@ -259,8 +259,10 @@ THREE.PixelBoxRenderer = function () {
 
 	/* render */
 	this._render = function () {
-	
-		if ( !renderer.paused ) requestAnimationFrame( renderer._render );
+
+		if ( renderer.paused ) return;
+
+		requestAnimationFrame( renderer._render );
 		
 		var deltaTime = renderer.clock.getDelta();
 		
@@ -311,6 +313,15 @@ THREE.PixelBoxRenderer = function () {
 	this.pause = function ( p ) {
 	
 		this.paused = p;
+		if ( p ) {
+
+			this.clock.stop();
+
+		} else {
+
+			this.clock.start();
+
+		}
 		this.clock.getDelta();
 		this._render();
 		
@@ -831,7 +842,7 @@ function AnimQueue ( fps ) {
 			
 			if ( obj.timeOut <= 0 ) { 
 				
-				obj.func();
+				obj.func( obj.totalTime - obj.timeOut );
 				
 				queue.splice( i, 1 );
 				
@@ -851,7 +862,7 @@ function AnimQueue ( fps ) {
 	// adds a func to queue
 	this.enqueue = function ( funcToCall, secondsFromNow ) {
 	
-		var obj = { func: funcToCall, timeOut: secondsFromNow };
+		var obj = { func: funcToCall, timeOut: secondsFromNow, totalTime: secondsFromNow };
 		
 		queue.push( obj );
 		
@@ -1061,7 +1072,8 @@ THREE.PixelBoxScene.prototype.instantiate = function ( templateName, options ) {
 	}
 	
 	console.log( "Template " + templateName + " not found in scene definiton" );
-	
+	return null;
+
 };
 	
 /* ================================================================================ Object recycling */
@@ -1122,7 +1134,7 @@ THREE.PixelBoxScene.prototype.recycle = function ( scrap ) {
 		
 			obj = objs[ i ];
 			var typeName = null;
-			
+
 			if ( obj instanceof THREE.PixelBox ) {
 
 				typeName = obj.geometry.data.name;
@@ -1214,7 +1226,13 @@ THREE.PixelBoxScene.prototype.upcycle = function ( objType ) {
 		this.objectPool[ objType ].pop();
 		
 	}
-	
+
+	if ( obj ){
+
+		obj.isInstance = false;
+
+	}
+
 	return obj;
 	
 };
@@ -1565,7 +1583,7 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 			if ( !obj3d && layer.asset != 'Instance' ) obj3d = this.upcycle( layer.asset );
 			
 		}
-		
+
 		// Layer types
 		switch( layer.asset ) {
 		
@@ -1633,9 +1651,9 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 		case 'Camera':
 		
 			if ( !obj3d ) obj3d = new THREE.PerspectiveCamera( 60, 1, 1, 1000 );
-			if ( layer.fov != undefined ) obj3d.fov = layer.fov;
-			if ( layer.near != undefined ) obj3d.near = layer.near;
-			if ( layer.far != undefined ) obj3d.far = layer.far;
+			if ( layer.fov != undefined ) obj3d.fov = ( layer.fov !== undefined ) ? layer.fov : 60;
+			if ( layer.near != undefined ) obj3d.near = ( layer.near !== undefined ) ? layer.near : 1;
+			if ( layer.far != undefined ) obj3d.far = ( layer.far !== undefined ) ? layer.far : 1000;
 			obj3d.isDefault = layer.isDefault ? true : false;
 			
 			if ( !options.keepSceneCamera && obj3d.isDefault ) {
@@ -1671,10 +1689,15 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 			if ( layer.zoom != undefined ) {
 			
 				obj3d.zoom = layer.zoom;
-				obj3d.updateProjectionMatrix();
-				
+
+			} else {
+
+				obj3d.zoom = 1;
+
 			}
-			
+
+			obj3d.updateProjectionMatrix();
+
 			if ( layer.isDefault && (this instanceof THREE.PixelBoxScene) && !this.camera.def ) { 
 			
 				this.camera.parent.remove( this.camera );
@@ -1727,8 +1750,8 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 				obj3d.shadowCamera = null;
 				
 			}
-			if ( layer.color != undefined ) obj3d.color.set( parseInt( layer.color, 16 ) );
-			if ( layer.intensity != undefined ) obj3d.intensity = layer.intensity;
+			obj3d.color.set( ( layer.color != undefined ) ? parseInt( layer.color, 16 ) : 0xFFFFFF );
+			obj3d.intensity = ( layer.intensity != undefined ) ? layer.intensity : 1.0;
 			if ( layer.shadowMapWidth != undefined ) obj3d.shadowMapWidth = obj3d.shadowMapHeight = layer.shadowMapWidth;
 			if ( layer.shadowMapHeight != undefined ) obj3d.shadowMapHeight = layer.shadowMapHeight;
 			if ( layer.target != undefined && _.isArray( layer.target ) && layer.target.length == 3 ) {// array of world pos
@@ -1736,6 +1759,10 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 				obj3d.target = new THREE.Object3D();
 				obj3d.target.position.fromArray( layer.target );
 				
+			} else if ( layer.target === undefined ) {
+
+				obj3d.target = new THREE.Object3D();
+
 			}
 			if ( options.helpers ) {
 			
@@ -1769,16 +1796,12 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 				obj3d.shadowCamera = null;
 				
 			}
-			if ( layer.color != undefined ) obj3d.color.set( parseInt( layer.color, 16 ) );
-			if ( layer.intensity != undefined ) obj3d.intensity = layer.intensity;
-			if ( layer.distance != undefined ) obj3d.distance = layer.distance;
-			if ( layer.exponent != undefined ) obj3d.exponent = layer.exponent;
-			if ( layer.angle != undefined ) {
-			
-				obj3d.angle = layer.angle * degToRad;
-				obj3d.shadowCameraFov = layer.angle * 2;
-				
-			}
+			obj3d.color.set( ( layer.color != undefined ) ? parseInt( layer.color, 16 ) : 0xFFFFFF );
+			obj3d.intensity = ( layer.intensity != undefined ) ? layer.intensity : 1.0;
+			obj3d.distance = ( layer.distance != undefined ) ? layer.distance : 100;
+			obj3d.exponent = ( layer.exponent != undefined ) ? layer.exponent : 0;
+			obj3d.angle = ( layer.angle != undefined ? layer.angle : 30 ) * degToRad;
+			obj3d.shadowCameraFov = layer.angle * 2;
 			if ( layer.shadowMapWidth != undefined ) obj3d.shadowMapWidth = obj3d.shadowMapHeight = layer.shadowMapWidth;
 			if ( layer.shadowMapHeight != undefined ) obj3d.shadowMapHeight = layer.shadowMapHeight;
 			if ( layer.target != undefined && _.isArray( layer.target ) && layer.target.length == 3 ) {// array of world pos
@@ -1786,6 +1809,10 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 				obj3d.target = new THREE.Object3D();
 				obj3d.target.position.fromArray( layer.target );
 				
+			} else {
+
+				obj3d.target = new THREE.Object3D();
+
 			}
 			
 			if ( options.helpers ) { 
@@ -1799,9 +1826,9 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 		case 'PointLight':
 		
 			if ( !obj3d ) obj3d = new THREE.PointLight( 0xffffff, 1.0 );
-			if ( layer.color != undefined ) obj3d.color.set(parseInt( layer.color, 16 ) );
-			if ( layer.intensity != undefined ) obj3d.intensity = layer.intensity;
-			if ( layer.distance != undefined ) obj3d.distance = layer.distance;
+			obj3d.color.set( ( layer.color != undefined ) ? parseInt( layer.color, 16 ) : 0xFFFFFF );
+			obj3d.intensity = ( layer.intensity != undefined ) ? layer.intensity : 1.0;
+			obj3d.distance = ( layer.distance != undefined ) ? layer.distance : 100;
 			if ( options.helpers ) {
 			
 				helper = new THREE.PointLightHelper( obj3d, 5 );
@@ -1818,9 +1845,14 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 				obj3d.color.set( parseInt( layer.colors[ 0 ], 16 ) );
 				obj3d.groundColor.set( parseInt( layer.colors[ 1 ], 16 ) );
 				
+			} else {
+
+				obj3d.color.set( 0xFFFFFF );
+				obj3d.groundColor.set( 0x003366 );
+
 			}
 				
-			if ( layer.intensity != undefined ) obj3d.intensity = layer.intensity;
+			obj3d.intensity = ( layer.intensity != undefined ) ? layer.intensity : 0.5;
 			
 			break;
 			
@@ -2169,8 +2201,8 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 			
 		}
 		
-		if ( layer.castShadow != undefined ) obj3d.castShadow = layer.castShadow;
-		if ( layer.receiveShadow != undefined ) obj3d.receiveShadow = layer.receiveShadow;
+		obj3d.castShadow = ( layer.castShadow != undefined ) ? layer.castShadow : true;
+		obj3d.receiveShadow = ( layer.receiveShadow != undefined ) ? layer.receiveShadow : true;
 
 		if ( obj3d instanceof THREE.FxSprite ) obj3d.cascadeColorChange();
 
@@ -2227,10 +2259,14 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 		// PixelBox specific
 		if ( !obj3d.isInstance && obj3d instanceof THREE.PixelBox ) {
 		
-			if ( layer.pointSize != undefined ) { 
+			if ( layer.pointSize != undefined ) {
 			
 				obj3d.pointSize = layer.pointSize;
 				
+			} else {
+
+				obj3d.pointSize = 1.0;
+
 			}
 			
 			if ( layer.alpha != undefined ) { 
@@ -2243,8 +2279,8 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 				
 			}
 					
-			if ( layer.cullBack != undefined ) obj3d.cullBack = layer.cullBack;
-			if ( layer.occlusion != undefined ) obj3d.occlusion = layer.occlusion;
+			obj3d.cullBack = ( layer.cullBack != undefined ) ? layer.cullBack : true;
+			obj3d.occlusion = ( layer.occlusion != undefined ) ? layer.occlusion : 0;
 			if ( layer.tint != undefined ) { 
 			
 				obj3d.tint.set( parseInt( layer.tint, 16 ) );
@@ -5740,21 +5776,21 @@ THREE.Object3D.prototype.applyTween = function ( tweenObj ) {
 	
 }
 
-THREE.Object3D.prototype.advanceTweenFrame = function () {
+THREE.Object3D.prototype.advanceTweenFrame = function ( deltaTime ) {
 
-	var nextFrameIn = 1 / 60;
+	var nextFrameIn = Math.max( deltaTime, 1 / 60 );
 	var keepGoing = true;
-	
+
 	if ( !renderer.paused ) {
 		this._tweenInterval = 0;
 		for ( var i = this._tweens.length - 1; i >= 0; i-- ) {
 		
 			var tweenObj = this._tweens[ i ];
 			
-			tweenObj.time = Math.min( tweenObj.time + nextFrameIn, tweenObj.duration );
-			
+			tweenObj.time = Math.min( tweenObj.time + deltaTime, tweenObj.duration );
+
 			this.applyTween( tweenObj );
-			
+
 			if ( tweenObj.time >= tweenObj.duration ) {
 				
 				// loop
@@ -7560,8 +7596,6 @@ THREE.PixelBox = function ( data ) {
 		set: function ( v ) { this.material.uniforms.cullBack.value = v ? 1 : 0; }
 	} );
 	
-	this.fasterRaycast = true; // raycast just tests for an intersection (returns first match)
-	
 	// create particles
 	if ( data.particles !== undefined ) {
 	
@@ -7587,7 +7621,17 @@ THREE.PixelBox = function ( data ) {
 		this.geometry._frame = -1; // invalidate
 		this.frame = 0; // refresh
 		this.geometry.computeBoundingSphere();
-		
+
+		// trace individual particles
+		this.raytraceBoundingBoxOnly = false;
+
+	} else if ( data && data.width ) {
+
+		this.geometry.computeBoundingBox();
+
+		// trace bounding box ( faster )
+		this.raytraceBoundingBoxOnly = true;
+
 	}
 	
 	return this;
@@ -7959,6 +8003,114 @@ THREE.PixelBox.prototype.appendPixelBox = function ( other ) {
 	this.geometry.data.frameData.push( { p: pos, n: nrm, c: clr, o: occ } );
 	
 }
+
+/*
+
+	Raytracing
+
+
+*/
+
+THREE.PixelBox.prototype.raycast = ( function () {
+
+	var inverseMatrix = new THREE.Matrix4();
+	var ray = new THREE.Ray();
+	var vec = new THREE.Vector3();
+	var vec2 = new THREE.Vector3();
+	var position = new THREE.Vector3();
+
+	return function ( raycaster, intersects ) {
+
+		var object = this;
+		var geometry = object.geometry;
+
+		inverseMatrix.getInverse( this.matrixWorld );
+		ray.copy( raycaster.ray ).applyMatrix4( inverseMatrix );
+
+		if ( geometry.boundingBox !== null ) {
+
+			var intersectPoint = ray.intersectBox( geometry.boundingBox, vec );
+			if ( intersectPoint ) {
+
+				if ( this.raytraceBoundingBoxOnly ) {
+
+					vec2 = ray.closestPointToPoint( intersectPoint, vec2 );
+					vec2.applyMatrix4( object.matrixWorld );
+
+					intersects.push( {
+
+						distance: raycaster.ray.origin.distanceTo( vec2 ),
+						point: intersectPoint.clone(),
+						object: object
+
+					} );
+					return;
+
+				}
+
+			} else {
+
+				return;
+
+			}
+
+		}
+
+		var localThreshold = 1.2 / Math.max( 0.0001, Math.min( this.scale.x, this.scale.y, this.scale.z ) );
+		var testPoint = function ( point, index ) {
+
+			var rayPointDistance = ray.distanceToPoint( point );
+
+			if ( rayPointDistance < localThreshold ) {
+
+				var intersectPoint = ray.closestPointToPoint( point );
+				intersectPoint.applyMatrix4( object.matrixWorld );
+
+				var distance = raycaster.ray.origin.distanceTo( intersectPoint );
+
+				intersects.push( {
+
+					distance: distance,
+					distanceToRay: rayPointDistance,
+					point: intersectPoint.clone(),
+					index: index,
+					object: object
+
+				} );
+
+				return true;
+
+			}
+
+			return false;
+
+		};
+
+		var positions = geometry.attributes.position.array;
+		var pointStart = 0;
+		var pointCount = positions.length / 3;
+
+		if ( geometry.offsets && geometry.offsets.length ) {
+
+			pointStart = geometry.offsets[ 0 ].index;
+			pointCount = geometry.offsets[ 0 ].count;
+		}
+
+		for ( var i = pointStart, l = pointStart + pointCount; i < l; i ++ ) {
+
+			position.set(
+				positions[ 3 * i ],
+				positions[ 3 * i + 1 ],
+				positions[ 3 * i + 2 ]
+			);
+
+			testPoint( position, i );
+
+		}
+
+	};
+
+}() );
 
 
 /* 

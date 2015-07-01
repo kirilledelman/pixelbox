@@ -1498,8 +1498,6 @@ THREE.PixelBox = function ( data ) {
 		set: function ( v ) { this.material.uniforms.cullBack.value = v ? 1 : 0; }
 	} );
 	
-	this.fasterRaycast = true; // raycast just tests for an intersection (returns first match)
-	
 	// create particles
 	if ( data.particles !== undefined ) {
 	
@@ -1525,7 +1523,17 @@ THREE.PixelBox = function ( data ) {
 		this.geometry._frame = -1; // invalidate
 		this.frame = 0; // refresh
 		this.geometry.computeBoundingSphere();
-		
+
+		// trace individual particles
+		this.raytraceBoundingBoxOnly = false;
+
+	} else if ( data && data.width ) {
+
+		this.geometry.computeBoundingBox();
+
+		// trace bounding box ( faster )
+		this.raytraceBoundingBoxOnly = true;
+
 	}
 	
 	return this;
@@ -1897,6 +1905,114 @@ THREE.PixelBox.prototype.appendPixelBox = function ( other ) {
 	this.geometry.data.frameData.push( { p: pos, n: nrm, c: clr, o: occ } );
 	
 }
+
+/*
+
+	Raytracing
+
+
+*/
+
+THREE.PixelBox.prototype.raycast = ( function () {
+
+	var inverseMatrix = new THREE.Matrix4();
+	var ray = new THREE.Ray();
+	var vec = new THREE.Vector3();
+	var vec2 = new THREE.Vector3();
+	var position = new THREE.Vector3();
+
+	return function ( raycaster, intersects ) {
+
+		var object = this;
+		var geometry = object.geometry;
+
+		inverseMatrix.getInverse( this.matrixWorld );
+		ray.copy( raycaster.ray ).applyMatrix4( inverseMatrix );
+
+		if ( geometry.boundingBox !== null ) {
+
+			var intersectPoint = ray.intersectBox( geometry.boundingBox, vec );
+			if ( intersectPoint ) {
+
+				if ( this.raytraceBoundingBoxOnly ) {
+
+					vec2 = ray.closestPointToPoint( intersectPoint, vec2 );
+					vec2.applyMatrix4( object.matrixWorld );
+
+					intersects.push( {
+
+						distance: raycaster.ray.origin.distanceTo( vec2 ),
+						point: intersectPoint.clone(),
+						object: object
+
+					} );
+					return;
+
+				}
+
+			} else {
+
+				return;
+
+			}
+
+		}
+
+		var localThreshold = 1.2 / Math.max( 0.0001, Math.min( this.scale.x, this.scale.y, this.scale.z ) );
+		var testPoint = function ( point, index ) {
+
+			var rayPointDistance = ray.distanceToPoint( point );
+
+			if ( rayPointDistance < localThreshold ) {
+
+				var intersectPoint = ray.closestPointToPoint( point );
+				intersectPoint.applyMatrix4( object.matrixWorld );
+
+				var distance = raycaster.ray.origin.distanceTo( intersectPoint );
+
+				intersects.push( {
+
+					distance: distance,
+					distanceToRay: rayPointDistance,
+					point: intersectPoint.clone(),
+					index: index,
+					object: object
+
+				} );
+
+				return true;
+
+			}
+
+			return false;
+
+		};
+
+		var positions = geometry.attributes.position.array;
+		var pointStart = 0;
+		var pointCount = positions.length / 3;
+
+		if ( geometry.offsets && geometry.offsets.length ) {
+
+			pointStart = geometry.offsets[ 0 ].index;
+			pointCount = geometry.offsets[ 0 ].count;
+		}
+
+		for ( var i = pointStart, l = pointStart + pointCount; i < l; i ++ ) {
+
+			position.set(
+				positions[ 3 * i ],
+				positions[ 3 * i + 1 ],
+				positions[ 3 * i + 2 ]
+			);
+
+			testPoint( position, i );
+
+		}
+
+	};
+
+}() );
 
 
 /* 
