@@ -1942,7 +1942,7 @@ THREE.PixelBox.prototype.raycast = ( function () {
 					intersects.push( {
 
 						distance: raycaster.ray.origin.distanceTo( vec2 ),
-						point: intersectPoint.clone(),
+						point: vec2.clone(),
 						object: object
 
 					} );
@@ -2049,7 +2049,7 @@ THREE.PixelBoxUtil.meshDepthMaterial = new THREE.ShaderMaterial( {
 
 THREE.PixelBoxUtil.meshDepthMaterial._shadowPass = true;
 
-
+THREE.PixelBoxUtil.globalViewPortScaleMultiplier = 1.0;
 THREE.PixelBoxUtil.updateViewPortUniform = function ( optCamera ) {
 
 	// get cam scale	
@@ -2063,12 +2063,13 @@ THREE.PixelBoxUtil.updateViewPortUniform = function ( optCamera ) {
 		// perspective camera
 		if ( cam instanceof THREE.PerspectiveCamera ) {
 		
-			return (renderer.webgl.domElement.height / (2 * Math.tan( 0.5 * cam.fov * Math.PI / 180.0 ))) / camWorldScale.x;
+			return THREE.PixelBoxUtil.globalViewPortScaleMultiplier * ( (renderer.webgl.domElement.height / (2 * Math.tan( 0.5 * cam.fov * Math.PI / 180.0 ))) / camWorldScale.x ) / renderer.scale;
 			
 		// ortho
 		} else {
-		
-			return (cam.zoom * renderer.webgl.domElement.height / (cam.top * 2)) / camWorldScale.x;
+
+			return THREE.PixelBoxUtil.globalViewPortScaleMultiplier * ( cam.zoom * Math.max( renderer.webgl.domElement.height / (cam.top * 2),
+			                        renderer.webgl.domElement.width / (cam.right * 2) ) / camWorldScale.x ) / renderer.scale;
 			
 		}
 		

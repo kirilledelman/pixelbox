@@ -14,7 +14,9 @@
 
 	
 # Minor bugs
-	
+
+	Resizing messes up painting address look up.
+
 	Pasting sometimes offsets Y + 1
 	
 	Resizing doc should reset selection
@@ -2156,7 +2158,7 @@ EditScene.prototype = {
 	toggleThumbnailCamera:function(){
 		if(this.thumbnailCameraUserAngle){
 			this.thumbnailCameraUserAngle = null;
-			localStorage.removeItem('thumbnailCameraUserAngle');
+			localStorage_setItem('thumbnailCameraUserAngle', null);
 		} else {
 			this.thumbnailCameraUserAngle = this.camera.position.clone();
 			localStorage_setItem('thumbnailCameraUserAngle',this.thumbnailCameraUserAngle.x+','+this.thumbnailCameraUserAngle.y+','+this.thumbnailCameraUserAngle.z);
@@ -3577,7 +3579,7 @@ EditScene.prototype = {
 	      	$(this).dialog("close"); 
 	      },
 	      "Reset": function() { 
-	      	localStorage.clear();
+	      	localStorage_clear();
 	      	window.location.reload();
 	      	$(this).dialog("close"); 
 	      } },
@@ -5220,10 +5222,24 @@ function localStorage_init(onReady) {
 function localStorage_setItem(key, val){
 	if(window['chrome'] && chrome.storage){
 		var kv = {};
-		window.storageShadow[key] = kv[key] = val.toString();
-		chrome.storage.local.set(kv);
+		if ( val !== null ) {
+			window.storageShadow[ key ] = kv[ key ] = val.toString();
+			chrome.storage.local.set( kv );
+		} else {
+			chrome.storage.local.remove( key );
+			delete window.storageShadow[ key ];
+		}
 	} else {
-		localStorage.setItem(key, val);
+		if ( val === null ){
+
+			localStorage.removeItem( key );
+
+		} else {
+
+			localStorage.setItem( key, val );
+
+		}
+
 	}
 }
 

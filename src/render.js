@@ -299,7 +299,9 @@ THREE.PixelBoxRenderer = function () {
 		renderer.resizeTimeout = 0;
 
 		// notify the renderer of the size change
-		renderer.webgl.setSize( Math.floor( window.innerWidth * renderer.scale ), Math.floor( window.innerHeight * renderer.scale ) );
+		renderer.webgl.setSize( Math.floor( window.innerWidth * renderer.scale ), Math.floor( window.innerHeight * renderer.scale ), false );
+		renderer.webgl.domElement.style.width = window.innerWidth + 'px';
+		renderer.webgl.domElement.style.height = window.innerHeight + 'px';
 
 		// update PixelBox viewport uniform
 		THREE.PixelBoxUtil.updateViewPortUniform();

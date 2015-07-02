@@ -312,7 +312,7 @@ THREE.Object3D.prototype.applyTween = function ( tweenObj ) {
 
 THREE.Object3D.prototype.advanceTweenFrame = function ( deltaTime ) {
 
-	var nextFrameIn = Math.max( deltaTime, 1 / 60 );
+	var nextFrameIn = 1 / 60;
 	var keepGoing = true;
 
 	if ( !renderer.paused ) {

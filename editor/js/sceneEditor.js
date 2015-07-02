@@ -1816,6 +1816,10 @@ EditSceneScene.prototype = {
 						prop.type = "Object3D";
 						var nearestTemplate = obj.nearestTemplate();
 						prop.value = dereferenceObject( val.substr( 1 ), nearestTemplate ? nearestTemplate : this.container );
+						if ( !prop.value ) {
+							prop.type = "JSON";
+							prop.value = val;
+						}
 					} else {
 						prop.type = "JSON";
 						if ( typeof(val) == 'object' ) {

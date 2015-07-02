@@ -1763,7 +1763,11 @@ THREE.PixelBoxScene.prototype.linkObjects = function ( objs, top, skipProps ) {
 				
 					if ( nearestTemplate === undefined ) nearestTemplate = obj.nearestTemplate();
 					found = dereferenceObject( propVal.substr( 1 ), nearestTemplate ? nearestTemplate : top);
-					if ( found ) obj[ propName ] = found;
+					if ( found ) {
+						obj[ propName ] = found;
+					} else {
+						obj[ propName ] = propVal;
+					}
 					
 				} else {
 				
