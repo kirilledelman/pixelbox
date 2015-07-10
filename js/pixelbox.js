@@ -376,8 +376,9 @@ THREE.PixelBoxSceneTransition = function ( sa, sb ) {
 	this.scene = new THREE.Scene();
 	
 	this.cameraOrtho = new THREE.OrthographicCamera( renderer.webgl.domElement.width / -2, renderer.webgl.domElement.width / 2,
-													 renderer.webgl.domElement.height / 2, renderer.webgl.domElement.height / -2, -1, 1 );
-	
+													 renderer.webgl.domElement.height / 2, renderer.webgl.domElement.height / -2, -1000, 1000 );
+	this.scene.add( this.cameraOrtho );
+
 	this.quadmaterial = new THREE.ShaderMaterial( {
 
 		uniforms: {
@@ -459,11 +460,6 @@ THREE.PixelBoxSceneTransition = function ( sa, sb ) {
 
 	} );		
 
-	quadgeometry = new THREE.PlaneBufferGeometry( 1, 1 );
-	
-	this.quad = new THREE.Mesh( quadgeometry, this.quadmaterial );
-	this.scene.add( this.quad );
-
 	this.init = function ( fromScene, toScene ) {
 	
 		this.onTransitionComplete = null;
@@ -478,8 +474,16 @@ THREE.PixelBoxSceneTransition = function ( sa, sb ) {
 		
 		var ww = renderer.webgl.domElement.width;
 		var hh = renderer.webgl.domElement.height;
-		
-		this.quad.scale.set( ww, hh );
+
+		if ( !this.quad ) {
+
+			var quadgeometry = new THREE.PlaneBufferGeometry( 1, 1 );
+			this.quad = new THREE.Mesh( quadgeometry, this.quadmaterial );
+			this.scene.add( this.quad );
+
+		}
+
+		this.quad.scale.set( ww, hh, 1.0 );
 		
 		this.quadmaterial.uniforms.tScale.value.set(
 			Math.min( ww / hh, 1 ),
@@ -491,7 +495,7 @@ THREE.PixelBoxSceneTransition = function ( sa, sb ) {
 		this.cameraOrtho.top = hh / 2;
 		this.cameraOrtho.bottom = hh / -2;
 		this.cameraOrtho.updateProjectionMatrix();
-				
+
 	}
 	
 	this.init( sa, sb );
@@ -548,9 +552,9 @@ THREE.PixelBoxSceneTransition = function ( sa, sb ) {
 			this.sceneB.render( delta, true );
 			
 			THREE.PixelBoxUtil.updateViewPortUniform();
-			
+
 			renderer.webgl.render( this.scene, this.cameraOrtho, null, true );
-			
+
 		}
 
 	}
@@ -560,7 +564,7 @@ THREE.PixelBoxSceneTransition = function ( sa, sb ) {
 		var ww = renderer.webgl.domElement.width;
 		var hh = renderer.webgl.domElement.height;
 		
-		this.quad.scale.set( ww, hh );
+		this.quad.scale.set( ww, hh, 1.0 );
 		
 		this.quadmaterial.uniforms.tScale.value.set(
 			Math.min( ww / hh, 1 ),
@@ -1831,6 +1835,7 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 			obj3d.color.set( ( layer.color != undefined ) ? parseInt( layer.color, 16 ) : 0xFFFFFF );
 			obj3d.intensity = ( layer.intensity != undefined ) ? layer.intensity : 1.0;
 			obj3d.distance = ( layer.distance != undefined ) ? layer.distance : 100;
+			obj3d.castShadow = false;
 			if ( options.helpers ) {
 			
 				helper = new THREE.PointLightHelper( obj3d, 5 );
@@ -2202,9 +2207,9 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 			obj3d.scale.set( 1, 1, 1 );
 			
 		}
-		
-		obj3d.castShadow = ( layer.castShadow != undefined ) ? layer.castShadow : true;
-		obj3d.receiveShadow = ( layer.receiveShadow != undefined ) ? layer.receiveShadow : true;
+
+		if ( layer.castShadow != undefined ) obj3d.castShadow = layer.castShadow;
+		if ( layer.receiveShadow != undefined ) obj3d.receiveShadow = layer.receiveShadow;
 
 		if ( obj3d instanceof THREE.FxSprite ) obj3d.cascadeColorChange();
 
@@ -2582,6 +2587,12 @@ THREE.PixelBoxScene.prototype.makeGeometryObject = function ( layer, isCollShape
 	Also adds bodies and creates constraints
 	
 	Also links physics materials
+
+	skipProps:
+		true - don't populate properties
+		false - populate properties
+		function ( obj, propName, propValue ) - callback
+
 	
 */
 THREE.PixelBoxScene.prototype.linkObjects = function ( objs, top, skipProps ) {
@@ -2637,7 +2648,16 @@ THREE.PixelBoxScene.prototype.linkObjects = function ( objs, top, skipProps ) {
 		}
 		
 	}( top ); // bake "top" into func
-	
+
+	// set up for callback
+	var callBack = null;
+	if ( typeof( skipProps ) == 'function' ) {
+
+		callBack = skipProps;
+		skipProps = false;
+
+	}
+
 	// link light targets and custom props
 	for ( var i = 0, l = objs.length; i < l; i++ ) {
 	
@@ -2679,14 +2699,41 @@ THREE.PixelBoxScene.prototype.linkObjects = function ( objs, top, skipProps ) {
 					if ( nearestTemplate === undefined ) nearestTemplate = obj.nearestTemplate();
 					found = dereferenceObject( propVal.substr( 1 ), nearestTemplate ? nearestTemplate : top);
 					if ( found ) {
-						obj[ propName ] = found;
+
+						if ( callBack ) {
+
+							callBack( obj, propName, found );
+
+						} else {
+
+							obj[ propName ] = found;
+
+						}
+
 					} else {
-						obj[ propName ] = propVal;
+
+						if ( callBack ) {
+
+							callBack( obj, propName, propVal );
+
+						} else {
+
+							obj[ propName ] = propVal;
+
+						}
 					}
 					
 				} else {
 				
-					obj[ propName ] = propVal;
+					if ( callBack ) {
+
+						callBack( obj, propName, propVal );
+
+					} else {
+
+						obj[ propName ] = propVal;
+
+					}
 					
 				}
 				
@@ -7574,12 +7621,12 @@ THREE.PixelBox = function ( data ) {
 	
 	Object.defineProperty( this, 'tint', {
 		get: function () { return this.material.uniforms.tintColor.value; },
-		set: function ( v ) { this.material.uniforms.tintColor.value.copy( v ); }
+		set: function ( v ) { this.material.uniforms.tintColor.value.set( v ); }
 	} );
 
 	Object.defineProperty( this, 'addColor', {
 		get: function () { return this.material.uniforms.addColor.value; },
-		set: function ( v ) { this.material.uniforms.addColor.value.copy( v ); }
+		set: function ( v ) { this.material.uniforms.addColor.value.set( v ); }
 	} );
 
 	Object.defineProperty( this, 'occlusion', {
@@ -8153,7 +8200,9 @@ THREE.PixelBoxUtil.meshDepthMaterial = new THREE.ShaderMaterial( {
 
 THREE.PixelBoxUtil.meshDepthMaterial._shadowPass = true;
 
+// override if needed
 THREE.PixelBoxUtil.globalViewPortScaleMultiplier = 1.0;
+
 THREE.PixelBoxUtil.updateViewPortUniform = function ( optCamera ) {
 
 	// get cam scale	
@@ -9439,7 +9488,7 @@ THREE.FxSprite = function() {
             return this.material.uniforms.tintColor.value;
         },
         set: function( val ) {
-            this.material.uniforms.tintColor.value = val;
+            this.material.uniforms.tintColor.value.set( val );
             this.cascadeColorChange();
         }
     });
@@ -9450,7 +9499,7 @@ THREE.FxSprite = function() {
             return this.material.uniforms.addColor.value;
         },
         set: function( val ) {
-            this.material.uniforms.addColor.value = val;
+            this.material.uniforms.addColor.value.set( val );
             this.cascadeColorChange();
         }
     });

@@ -916,6 +916,7 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 			obj3d.color.set( ( layer.color != undefined ) ? parseInt( layer.color, 16 ) : 0xFFFFFF );
 			obj3d.intensity = ( layer.intensity != undefined ) ? layer.intensity : 1.0;
 			obj3d.distance = ( layer.distance != undefined ) ? layer.distance : 100;
+			obj3d.castShadow = false;
 			if ( options.helpers ) {
 			
 				helper = new THREE.PointLightHelper( obj3d, 5 );
@@ -1287,9 +1288,9 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 			obj3d.scale.set( 1, 1, 1 );
 			
 		}
-		
-		obj3d.castShadow = ( layer.castShadow != undefined ) ? layer.castShadow : true;
-		obj3d.receiveShadow = ( layer.receiveShadow != undefined ) ? layer.receiveShadow : true;
+
+		if ( layer.castShadow != undefined ) obj3d.castShadow = layer.castShadow;
+		if ( layer.receiveShadow != undefined ) obj3d.receiveShadow = layer.receiveShadow;
 
 		if ( obj3d instanceof THREE.FxSprite ) obj3d.cascadeColorChange();
 
@@ -1667,6 +1668,12 @@ THREE.PixelBoxScene.prototype.makeGeometryObject = function ( layer, isCollShape
 	Also adds bodies and creates constraints
 	
 	Also links physics materials
+
+	skipProps:
+		true - don't populate properties
+		false - populate properties
+		function ( obj, propName, propValue ) - callback
+
 	
 */
 THREE.PixelBoxScene.prototype.linkObjects = function ( objs, top, skipProps ) {
@@ -1722,7 +1729,16 @@ THREE.PixelBoxScene.prototype.linkObjects = function ( objs, top, skipProps ) {
 		}
 		
 	}( top ); // bake "top" into func
-	
+
+	// set up for callback
+	var callBack = null;
+	if ( typeof( skipProps ) == 'function' ) {
+
+		callBack = skipProps;
+		skipProps = false;
+
+	}
+
 	// link light targets and custom props
 	for ( var i = 0, l = objs.length; i < l; i++ ) {
 	
@@ -1764,14 +1780,41 @@ THREE.PixelBoxScene.prototype.linkObjects = function ( objs, top, skipProps ) {
 					if ( nearestTemplate === undefined ) nearestTemplate = obj.nearestTemplate();
 					found = dereferenceObject( propVal.substr( 1 ), nearestTemplate ? nearestTemplate : top);
 					if ( found ) {
-						obj[ propName ] = found;
+
+						if ( callBack ) {
+
+							callBack( obj, propName, found );
+
+						} else {
+
+							obj[ propName ] = found;
+
+						}
+
 					} else {
-						obj[ propName ] = propVal;
+
+						if ( callBack ) {
+
+							callBack( obj, propName, propVal );
+
+						} else {
+
+							obj[ propName ] = propVal;
+
+						}
 					}
 					
 				} else {
 				
-					obj[ propName ] = propVal;
+					if ( callBack ) {
+
+						callBack( obj, propName, propVal );
+
+					} else {
+
+						obj[ propName ] = propVal;
+
+					}
 					
 				}
 				

@@ -1470,12 +1470,12 @@ THREE.PixelBox = function ( data ) {
 	
 	Object.defineProperty( this, 'tint', {
 		get: function () { return this.material.uniforms.tintColor.value; },
-		set: function ( v ) { this.material.uniforms.tintColor.value.copy( v ); }
+		set: function ( v ) { this.material.uniforms.tintColor.value.set( v ); }
 	} );
 
 	Object.defineProperty( this, 'addColor', {
 		get: function () { return this.material.uniforms.addColor.value; },
-		set: function ( v ) { this.material.uniforms.addColor.value.copy( v ); }
+		set: function ( v ) { this.material.uniforms.addColor.value.set( v ); }
 	} );
 
 	Object.defineProperty( this, 'occlusion', {
@@ -2049,7 +2049,9 @@ THREE.PixelBoxUtil.meshDepthMaterial = new THREE.ShaderMaterial( {
 
 THREE.PixelBoxUtil.meshDepthMaterial._shadowPass = true;
 
+// override if needed
 THREE.PixelBoxUtil.globalViewPortScaleMultiplier = 1.0;
+
 THREE.PixelBoxUtil.updateViewPortUniform = function ( optCamera ) {
 
 	// get cam scale	

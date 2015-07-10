@@ -417,7 +417,7 @@ THREE.FxSprite = function() {
             return this.material.uniforms.tintColor.value;
         },
         set: function( val ) {
-            this.material.uniforms.tintColor.value = val;
+            this.material.uniforms.tintColor.value.set( val );
             this.cascadeColorChange();
         }
     });
@@ -428,7 +428,7 @@ THREE.FxSprite = function() {
             return this.material.uniforms.addColor.value;
         },
         set: function( val ) {
-            this.material.uniforms.addColor.value = val;
+            this.material.uniforms.addColor.value.set( val );
             this.cascadeColorChange();
         }
     });

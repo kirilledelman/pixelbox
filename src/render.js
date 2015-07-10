@@ -376,8 +376,9 @@ THREE.PixelBoxSceneTransition = function ( sa, sb ) {
 	this.scene = new THREE.Scene();
 	
 	this.cameraOrtho = new THREE.OrthographicCamera( renderer.webgl.domElement.width / -2, renderer.webgl.domElement.width / 2,
-													 renderer.webgl.domElement.height / 2, renderer.webgl.domElement.height / -2, -1, 1 );
-	
+													 renderer.webgl.domElement.height / 2, renderer.webgl.domElement.height / -2, -1000, 1000 );
+	this.scene.add( this.cameraOrtho );
+
 	this.quadmaterial = new THREE.ShaderMaterial( {
 
 		uniforms: {
@@ -459,11 +460,6 @@ THREE.PixelBoxSceneTransition = function ( sa, sb ) {
 
 	} );		
 
-	quadgeometry = new THREE.PlaneBufferGeometry( 1, 1 );
-	
-	this.quad = new THREE.Mesh( quadgeometry, this.quadmaterial );
-	this.scene.add( this.quad );
-
 	this.init = function ( fromScene, toScene ) {
 	
 		this.onTransitionComplete = null;
@@ -478,8 +474,16 @@ THREE.PixelBoxSceneTransition = function ( sa, sb ) {
 		
 		var ww = renderer.webgl.domElement.width;
 		var hh = renderer.webgl.domElement.height;
-		
-		this.quad.scale.set( ww, hh );
+
+		if ( !this.quad ) {
+
+			var quadgeometry = new THREE.PlaneBufferGeometry( 1, 1 );
+			this.quad = new THREE.Mesh( quadgeometry, this.quadmaterial );
+			this.scene.add( this.quad );
+
+		}
+
+		this.quad.scale.set( ww, hh, 1.0 );
 		
 		this.quadmaterial.uniforms.tScale.value.set(
 			Math.min( ww / hh, 1 ),
@@ -491,7 +495,7 @@ THREE.PixelBoxSceneTransition = function ( sa, sb ) {
 		this.cameraOrtho.top = hh / 2;
 		this.cameraOrtho.bottom = hh / -2;
 		this.cameraOrtho.updateProjectionMatrix();
-				
+
 	}
 	
 	this.init( sa, sb );
@@ -548,9 +552,9 @@ THREE.PixelBoxSceneTransition = function ( sa, sb ) {
 			this.sceneB.render( delta, true );
 			
 			THREE.PixelBoxUtil.updateViewPortUniform();
-			
+
 			renderer.webgl.render( this.scene, this.cameraOrtho, null, true );
-			
+
 		}
 
 	}
@@ -560,7 +564,7 @@ THREE.PixelBoxSceneTransition = function ( sa, sb ) {
 		var ww = renderer.webgl.domElement.width;
 		var hh = renderer.webgl.domElement.height;
 		
-		this.quad.scale.set( ww, hh );
+		this.quad.scale.set( ww, hh, 1.0 );
 		
 		this.quadmaterial.uniforms.tScale.value.set(
 			Math.min( ww / hh, 1 ),
