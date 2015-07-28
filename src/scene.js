@@ -214,15 +214,45 @@ THREE.PixelBoxScene.prototype.recycle = function ( scrap ) {
 			obj.parent.remove( obj );
 			
 		}
-		
+
 		objs.push( obj );
 	
 		for ( var i = 0, l = objs.length; i < l; i++ ) {
 		
 			obj = objs[ i ];
+
+			// clear props
+			if ( obj.def ) {
+
+				var props;
+				if ( obj.def.props ) {
+
+					props = obj.def.props;
+
+				} else if ( obj.def.template && this.templates[ obj.def.template ] && this.templates[ obj.def.template ].props ) {
+
+					props = this.templates[ obj.def.template ].props;
+
+				}
+
+				for ( var propName in props ) {
+
+					delete obj[ propName ];
+
+				}
+
+			}
+
+			// clear def
+			obj.def = null;
+
 			var typeName = null;
 
-			if ( obj instanceof THREE.PixelBox ) {
+			if ( obj.overrideRecycleType !== undefined ) {
+
+				typeName = obj.overrideRecycleType;
+
+			} else if ( obj instanceof THREE.PixelBox ) {
 
 				typeName = obj.geometry.data.name;
 
@@ -262,7 +292,7 @@ THREE.PixelBoxScene.prototype.recycle = function ( scrap ) {
 			
 				typeName = 'LinePath';
 				
-			} else if ( obj instanceof THREE.Object3D && obj.isContainer ) {
+			} else if ( obj.isContainer ) {
 			
 				typeName = 'Object3D';
 				
@@ -787,7 +817,7 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 
 			if ( layer.isDefault && (this instanceof THREE.PixelBoxScene) && !this.camera.def ) { 
 			
-				this.camera.parent.remove( this.camera );
+				if ( this.camera.parent ) this.camera.parent.remove( this.camera );
 				this.camera = obj3d;
 				
 			}

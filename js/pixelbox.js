@@ -307,7 +307,7 @@ THREE.PixelBoxRenderer = function () {
 		THREE.PixelBoxUtil.updateViewPortUniform();
 
 		// call onResize callback
-		if(renderer.scene) renderer.scene.onResized();
+		if( renderer.scene ) renderer.scene.onResized( true );
 
 	};
 
@@ -474,6 +474,9 @@ THREE.PixelBoxSceneTransition = function ( sa, sb ) {
 		
 		var ww = renderer.webgl.domElement.width;
 		var hh = renderer.webgl.domElement.height;
+
+		if ( fromScene.fbo.width != ww || fromScene.fbo.height != hh ) fromScene.onResized( true );
+		if ( toScene.fbo.width != ww || toScene.fbo.height != hh ) toScene.onResized( true );
 
 		if ( !this.quad ) {
 
@@ -1133,15 +1136,45 @@ THREE.PixelBoxScene.prototype.recycle = function ( scrap ) {
 			obj.parent.remove( obj );
 			
 		}
-		
+
 		objs.push( obj );
 	
 		for ( var i = 0, l = objs.length; i < l; i++ ) {
 		
 			obj = objs[ i ];
+
+			// clear props
+			if ( obj.def ) {
+
+				var props;
+				if ( obj.def.props ) {
+
+					props = obj.def.props;
+
+				} else if ( obj.def.template && this.templates[ obj.def.template ] && this.templates[ obj.def.template ].props ) {
+
+					props = this.templates[ obj.def.template ].props;
+
+				}
+
+				for ( var propName in props ) {
+
+					delete obj[ propName ];
+
+				}
+
+			}
+
+			// clear def
+			obj.def = null;
+
 			var typeName = null;
 
-			if ( obj instanceof THREE.PixelBox ) {
+			if ( obj.overrideRecycleType !== undefined ) {
+
+				typeName = obj.overrideRecycleType;
+
+			} else if ( obj instanceof THREE.PixelBox ) {
 
 				typeName = obj.geometry.data.name;
 
@@ -1181,7 +1214,7 @@ THREE.PixelBoxScene.prototype.recycle = function ( scrap ) {
 			
 				typeName = 'LinePath';
 				
-			} else if ( obj instanceof THREE.Object3D && obj.isContainer ) {
+			} else if ( obj.isContainer ) {
 			
 				typeName = 'Object3D';
 				
@@ -1706,7 +1739,7 @@ THREE.PixelBoxScene.prototype.populateObject = function ( object, layers, option
 
 			if ( layer.isDefault && (this instanceof THREE.PixelBoxScene) && !this.camera.def ) { 
 			
-				this.camera.parent.remove( this.camera );
+				if ( this.camera.parent ) this.camera.parent.remove( this.camera );
 				this.camera = obj3d;
 				
 			}
@@ -5798,7 +5831,12 @@ THREE.Object3D.prototype.transplant = function ( newParent ) {
 
 THREE.Object3D.prototype.applyTween = function ( tweenObj ) {
 
-	if ( tweenObj.target instanceof THREE.Color ) {
+	if ( tweenObj.prop ) {
+
+		tweenObj.target[ tweenObj.prop ] =
+			tweenObj.easing( tweenObj.time, tweenObj.from, tweenObj.to - tweenObj.from, tweenObj.duration );
+
+	} else if ( tweenObj.target instanceof THREE.Color ) {
 	
 		tweenObj.target.r = tweenObj.easing( tweenObj.time, tweenObj.from.r, tweenObj.to.r - tweenObj.from.r, tweenObj.duration );
 		tweenObj.target.g = tweenObj.easing( tweenObj.time, tweenObj.from.g, tweenObj.to.g - tweenObj.from.g, tweenObj.duration );
@@ -5820,11 +5858,6 @@ THREE.Object3D.prototype.applyTween = function ( tweenObj ) {
 			tweenObj.easing( tweenObj.time, tweenObj.from.z, tweenObj.to.z - tweenObj.from.z, tweenObj.duration ), 'XYZ'
 		);
 		
-	} else if ( tweenObj.prop ) {
-	
-		tweenObj.target[ tweenObj.prop ] = 
-			tweenObj.easing( tweenObj.time, tweenObj.from, tweenObj.to - tweenObj.from, tweenObj.duration );
-			
 	}
 	
 }
@@ -5839,7 +5872,20 @@ THREE.Object3D.prototype.advanceTweenFrame = function ( deltaTime ) {
 		for ( var i = this._tweens.length - 1; i >= 0; i-- ) {
 		
 			var tweenObj = this._tweens[ i ];
-			
+
+			if ( tweenObj.delay > 0 ) {
+
+				tweenObj.delay -= deltaTime;
+
+				if ( tweenObj.start && tweenObj.delay <= 0 ) {
+
+					tweenObj.start( tweenObj );
+					
+				}
+				continue;
+
+			}
+
 			tweenObj.time = Math.min( tweenObj.time + deltaTime, tweenObj.duration );
 
 			this.applyTween( tweenObj );
@@ -5918,10 +5964,12 @@ THREE.Object3D.prototype.tween = function ( obj ) {
 		if ( tweenObj.easing === undefined ) tweenObj.easing = Math.linearTween;
 		
 		if ( tweenObj.numLoops === undefined ) tweenObj.numLoops = 0;
+
+		if ( tweenObj.delay === undefined ) tweenObj.delay = 0;
 		
 		if ( tweenObj.from === undefined ) {
 		
-			if ( tweenObj.target instanceof THREE.Color || tweenObj.target instanceof THREE.Vector3 || tweenObj.target instanceof THREE.Euler ) {
+			if ( ( tweenObj.target instanceof THREE.Color || tweenObj.target instanceof THREE.Vector3 || tweenObj.target instanceof THREE.Euler ) && !tweenObj.prop ) {
 			
 				tweenObj.from = tweenObj.target.clone();
 				
@@ -5937,7 +5985,11 @@ THREE.Object3D.prototype.tween = function ( obj ) {
 			
 		}
 		
-		if ( tweenObj.to === undefined ) {
+		if ( tweenObj.by !== undefined ) {
+
+			tweenObj.to = tweenObj.from + tweenObj.by;
+
+		} else if ( tweenObj.to === undefined ) {
 		
 			console.log( "tween object \'to\' parameter is missing: ", tweenObj );
 			objs.splice( i, 1 );

@@ -2361,8 +2361,10 @@ EditScene.prototype = {
 
 	/* redisplays animation rows in UI */
 	refreshAnimations: function(){
-		var prevSelected = $('#anim-list div.selected').attr('id');
-		$('#anim-list').children().remove();
+		var prevSelected = $('#anim-list div.selected', this.editorAnims).attr('id');
+		var prevScrollPos = $('#anim-list', this.editorAnims).prop('scrollTop');
+
+		$('#anim-list', this.editorAnims).children().remove();
 		$('#frame-thumbnails span.frame-label').remove();
 		
 		var rows = [];
@@ -2408,14 +2410,14 @@ EditScene.prototype = {
 			$('#frame-thumbnails span.frame-label-'+i).last().text(frameLabels[i]);
 		}
 		
-		$('#anim-list').append(rows);
+		$('#anim-list', this.editorAnims).append(rows);
 		
-		if(prevSelected) $('#'+prevSelected).trigger('click');
+		if(prevSelected) $('#'+prevSelected, this.editorAnims).trigger('click');
 		
-		if($('#anim-list div.selected').length){
-			$('#anim-details').show();
+		if($('#anim-list div.selected', this.editorAnims).length){
+			$('#anim-details', this.editorAnims).show();
 		} else {
-			$('#anim-details').hide();
+			$('#anim-details', this.editorAnims).hide();
 		}
 		
 		if(this.doc.anims.length) {
@@ -2423,6 +2425,10 @@ EditScene.prototype = {
 		} else {
 			$('#frame-thumbnails').removeClass('has-anims');
 		}
+
+		// scroll back
+		$( '#anim-list', this.editorAnims ).prop( 'scrollTop', prevScrollPos );
+
 	},
 
 	animSelect:function(e){
@@ -2649,6 +2655,9 @@ EditScene.prototype = {
 		var anim = this.doc.anims[index];
 		$('#frame-range-slider').slider('values',[anim.start + 1, anim.start + anim.length]);
 		if($('#editor-timeline').hasClass('collapsed')) this.toggleFrameRange();
+
+		// also go to frame
+		this.currentFrame = anim.start;
 	},
 	
 	updateAnimation:function(animIndex, newObject) {
@@ -4605,7 +4614,9 @@ EditScene.prototype = {
 		<label for="anim-meta" class="w2 right-align">Meta&nbsp;</label><input type="text" id="anim-meta" size="25"/>\
 		</div>\
 		</div>');
-		
+
+		editScene.editorAnims = $('#editor-anims');
+
 		$("#anim-add").button().click(editScene.animAdd.bind(editScene));
 		$("#anim-dupe").button().click(editScene.animDupe.bind(editScene));
 		$("#anim-list").click(editScene.animSelect.bind(editScene));
@@ -4729,7 +4740,7 @@ EditScene.prototype = {
 	// hide paste
 	    editScene.pasteUI.detach();
 	    
-		editScene.refreshAnchors();	    
+		editScene.refreshAnchors();
 	},
 	
 	/* dispose of main UI */

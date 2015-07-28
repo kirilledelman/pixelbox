@@ -307,7 +307,7 @@ THREE.PixelBoxRenderer = function () {
 		THREE.PixelBoxUtil.updateViewPortUniform();
 
 		// call onResize callback
-		if(renderer.scene) renderer.scene.onResized();
+		if( renderer.scene ) renderer.scene.onResized( true );
 
 	};
 
@@ -474,6 +474,9 @@ THREE.PixelBoxSceneTransition = function ( sa, sb ) {
 		
 		var ww = renderer.webgl.domElement.width;
 		var hh = renderer.webgl.domElement.height;
+
+		if ( fromScene.fbo.width != ww || fromScene.fbo.height != hh ) fromScene.onResized( true );
+		if ( toScene.fbo.width != ww || toScene.fbo.height != hh ) toScene.onResized( true );
 
 		if ( !this.quad ) {
 

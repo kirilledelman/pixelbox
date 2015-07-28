@@ -1103,7 +1103,30 @@ EditSceneScene.prototype = {
 			}
 		}
 		
-		this.linkObjects( addedObjects, pasteTarget, true );
+		this.linkObjects( addedObjects, pasteTarget, function ( obj, prop, val ){
+
+			if ( !obj.props ) obj.props = [];
+			var type = ( val instanceof THREE.Object3D ) ? 'Object3D' : 'JSON';
+
+			if ( type == 'JSON' ) {
+
+				if ( typeof ( val ) != 'string' ) {
+
+					val = JSON.stringify( val );
+
+				}
+
+			}
+
+			obj.props.push( {
+
+				name: prop,
+				type: type,
+				value: val
+
+			});
+
+		} );
 		
 		if ( importedAssetsUndoItem.length ) {
 			importedAssetsUndoItem.push( {
@@ -7340,14 +7363,14 @@ EditSceneScene.prototype = {
 					$( '#light-shadow-vol-width' ).attr( 'placeholder', 'M' ).val( '' ).data( 'prevVal', '' );
 					mults[ 'light-shadow-vol-width' ] = true;
 				} else if ( !mults[ 'light-shadow-vol-width' ] ) {
-					var newVal = notNaN( parseFloat( obj.shadowCameraRight ) ) * 2;
+					var newVal = notNaN( parseFloat( obj.shadowCameraRight ) );
 					$( '#light-shadow-vol-width:not(:focus)' ).attr( 'placeholder', '' ).val( newVal ).data( 'prevVal', newVal );
 				}
 				if ( prevObj && prevObj.shadowCameraTop != obj.shadowCameraTop ) {
 					$( '#light-shadow-vol-height' ).attr( 'placeholder', 'M' ).val( '' ).data( 'prevVal', '' );
 					mults[ 'light-shadow-vol-height' ] = true;
 				} else if ( !mults[ 'light-shadow-vol-height' ] ) {
-					var newVal = notNaN( parseFloat( obj.shadowCameraTop ) ) * 2;
+					var newVal = notNaN( parseFloat( obj.shadowCameraTop ) );
 					$( '#light-shadow-vol-height:not(:focus)' ).attr( 'placeholder', '' ).val( newVal ).data( 'prevVal', newVal );
 				}
 				if ( prevObj && prevObj.shadowMapWidth != obj.shadowMapWidth ) {
@@ -7630,7 +7653,7 @@ EditSceneScene.prototype = {
 					mults[ 'animOption' ] = true;
 				} else if ( !mults[ 'animOption' ] ) {
 					var animOption = obj.def[ 'animOption' ] ? obj.def[ 'animOption' ] : 'gotoAndStop';
-					$( '#panel-pixelbox input[value=' + animOption + ']' )[ 0 ].checked = true;
+					$( '#panel-pixelbox input[value="' + animOption + '"]' )[ 0 ].checked = true;
 				}
 				if ( prevObj && prevObj.animSpeed != obj.animSpeed ) {
 					$( '#pixelbox-animSpeed' ).attr( 'placeholder', 'M' ).val( '' ).data( 'prevVal', '' );
@@ -7643,9 +7666,9 @@ EditSceneScene.prototype = {
 				// add anims to anim name box
 				var sel = $( '#pixelbox-animName' );
 				for ( var aname in obj.asset.anims ) {
-					var opt = $( 'option[value=' + aname + ']' );
+					var opt = $( 'option[value="' + aname + '"]', sel );
 					if ( !opt.length ) {
-						opt = $( '<option/>' ).text( aname ).val( aname );
+						opt = $( '<option></option>' ).text( aname ).val( aname );
 						sel.append( opt );
 					}
 				}
@@ -7853,7 +7876,7 @@ EditSceneScene.prototype = {
 					mults[ 'animOption' ] = true;
 				} else if ( !mults[ 'animOption' ] ) {
 					var animOption = obj.def[ 'animOption' ] ? obj.def[ 'animOption' ] : 'gotoAndStop';
-					$( '#panel-fxsprite input[value=' + animOption + ']' )[ 0 ].checked = true;
+					$( '#panel-fxsprite input[value="' + animOption + '"]' )[ 0 ].checked = true;
 				}
 				if ( prevObj && prevObj.animSpeed != obj.animSpeed ) {
 					$( '#fxsprite-animSpeed' ).attr( 'placeholder', 'M' ).val( '' ).data( 'prevVal', '' );
@@ -9552,7 +9575,7 @@ EditSceneScene.prototype = {
 				break;
 			
 			case 'scene-add-point':
-				objDef = { asset: 'PointLight', name: 'pointlight', color: "ffffff", intensity: 0.5, distance: 10 };
+				objDef = { asset: 'PointLight', name: 'pointlight', color: "ffffff", castShadow: false, intensity: 0.5, distance: 10 };
 				break;
 			
 			case 'scene-add-camera':
